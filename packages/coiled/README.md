@@ -27,39 +27,31 @@ const spring = createSpring(0, { mass: 1, tension: 100, friction: 25 })
 The `createSpring` function takes the following arguments:
 
 - `initial: number`
-
   The initial value of the spring, and its target. All springs start in a resting state, but you can set `spring.target`
   at any time
 
 - `config: SpringConfig`
-
   The configuration for the spring. `SpringConfig` takes the following parameters:
 
   - `config.mass: number`
-
     How massive the spring is. A lower number will allow the spring to speed up and slow down more quickly than a
     larger number. Larger numbers are more likely to overshoot the `target`
 
   - `config.tension: number`
-
     How much force the spring experiences toward its `target`. A higher value will move the spring more quickly, and
     allow the spring to potentially overshoot.
 
   - `config.friction: number`
-
     How much dampening the spring experiences against its tension. A higher friction will make sure the spring doesn't
     move too quickly, and slows down dramatically as it approaches the `target`
 
 - `options: SpringOptions`
-
   Additional options for the spring. `SpringOptions` takes the following parameters:
 
   - `options.restingDistance: number`
-
     The minimum difference between the `target` and `value` at which the spring will consider itself "at" the `target`
 
   - `options.restingVelocity: number`
-
     The minimum velocity at which the spring will consider itself "not moving"
 
 #### Spring Config Tips
@@ -111,7 +103,7 @@ spring.state
 spring.velocity
 ```
 
-Additionally, `target` and `config can be updated whenever:
+Additionally, `target` and `config` can be updated whenever:
 
 ```typescript
 /**
