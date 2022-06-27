@@ -1,0 +1,45 @@
+{
+  "name": "coiled",
+  "version": "0.0.0",
+  "description": "Simulate values using spring physics",
+  "author": "Tim Morris <timthewebguy@gmail.com>",
+  "homepage": "https://github.com/tkofh/coiled#readme",
+  "license": "MIT",
+  "sideEffects": false,
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.cjs",
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tkofh/coiled.git"
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest watch",
+    "test:ui": "vitest --ui",
+    "prepublish": "yarn test && yarn build"
+  },
+  "bugs": {
+    "url": "https://github.com/tkofh/coiled/issues"
+  },
+  "devDependencies": {
+    "@vitest/ui": "^0.11.0",
+    "tsup": "^5.12.7",
+    "vitest": "^0.11.0"
+  }
+}

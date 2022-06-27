@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    // Project Options
+    "allowJs": true,
+    "declaration": true,
+    "downlevelIteration": true,
+    "lib": [
+      "ESNext",
+      "ESNext.AsyncIterable",
+    ],
+    "module": "ESNext",
+    "noEmit": false,
+    "sourceMap": true,
+    "target": "ES2018",
+
+    // Strict Checks
+    "strict": true,
+
+    // Module Resolution
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "moduleResolution": "node",
+
+    // Experimental
+    "experimentalDecorators": true
+  },
+  "exclude": ["node_modules"]
+}

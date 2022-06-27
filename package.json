@@ -1,0 +1,24 @@
+{
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "lint": "eslint --fix ./packages/",
+    "format": "prettier --write ./packages/*",
+    "release": "lerna publish",
+    "prepare": "husky install"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^16.2.1",
+    "@commitlint/config-conventional": "^16.2.1",
+    "@commitlint/config-lerna-scopes": "^16.2.2",
+    "@tkofh/eslint-config": "^0.3.1",
+    "@tkofh/prettier-config": "^0.1.0",
+    "eslint": "^8.11.0",
+    "husky": ">=7.0.4",
+    "lerna": "^4.0.0",
+    "lint-staged": "^13.0.3",
+    "prettier": "^2.6.0"
+  }
+}
