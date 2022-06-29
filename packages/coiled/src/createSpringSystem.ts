@@ -1,7 +1,7 @@
 import type { SimulateFn, Spring, SpringSystem } from './types'
 import { createSpringImpl } from './lib'
 
-export const createSystem = (): SpringSystem => {
+export const createSpringSystem = (): SpringSystem => {
   const springs: Map<Spring, SimulateFn> = new Map()
 
   return {

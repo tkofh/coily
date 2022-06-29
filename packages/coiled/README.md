@@ -158,10 +158,10 @@ console.log(spring.value) // 0
 Manually updating every spring with its `simulate` method would be tedious to say the least. Where possible, prefer using a `SpringSystem` to group springs together and provide a single call site for updating each spring:
 
 ```typescript
-import { createSystem } from 'coiled'
+import { createSpringSystem } from 'coiled'
 
 // First, create the system
-const system = createSystem()
+const system = createSpringSystem()
 
 // Then, create some springs
 const spring1 = system.createSpring(0, { mass: 1, tension: 100, friction: 20 })
@@ -174,9 +174,9 @@ system.simulate(16)
 Should a spring become irrelevant for some reason, remember to call the `cleanup` method so that the system stops updating it:
 
 ```typescript
-import { createSystem } from 'coiled'
+import { createSpringSystem } from 'coiled'
 
-const system = createSystem()
+const system = createSpringSystem()
 
 const spring = system.createSpring(0, { mass: 1, tension: 100, friction: 20 })
 

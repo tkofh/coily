@@ -1,9 +1,9 @@
 import { describe, test } from 'vitest'
-import { createSystem } from '../src'
+import { createSpringSystem } from '../src'
 
 describe('createSystem', () => {
   test('it creates a system', ({ expect }) => {
-    const system = createSystem()
+    const system = createSpringSystem()
 
     const config = {
       mass: 1,
