@@ -1,4 +1,12 @@
-import type { SimulateFn, Spring, SpringConfig, SpringOptions, SpringState } from '../types'
+import mitt from 'mitt'
+import type {
+  SimulateFn,
+  Spring,
+  SpringConfig,
+  SpringEmitter,
+  SpringOptions,
+  SpringState,
+} from '../types'
 
 export const createSpringImpl = (
   initial: number,
@@ -14,7 +22,12 @@ export const createSpringImpl = (
   const restingDistance = Math.max(options?.restingDistance ?? 0.0001, 0)
   const restingVelocity = Math.max(options?.restingVelocity ?? 0.0001, 0)
 
+  const emitter: SpringEmitter = mitt()
+
+  const { emit, ...emitterApi } = emitter
+
   const spring: Spring = {
+    ...emitterApi,
     get target() {
       return target
     },
@@ -22,6 +35,7 @@ export const createSpringImpl = (
       target = val
       if (Math.abs(value - target) > restingDistance) {
         state = 'moving'
+        emit('update:state', state)
       }
     },
     get value() {
@@ -41,9 +55,11 @@ export const createSpringImpl = (
     },
     freeze: () => {
       state = 'frozen'
+      emit('update:state', state)
     },
     unfreeze: () => {
       state = velocity > restingVelocity ? 'moving' : 'resting'
+      emit('update:state', state)
     },
   }
 
@@ -54,17 +70,20 @@ export const createSpringImpl = (
       for (let n = 0; n < iterations; n++) {
         const springForce = -config.tension * 0.000001 * (value - target)
         const dampingForce = -config.friction * 0.001 * velocity
-        const acceleration = (springForce + dampingForce) / config.mass // pt/ms^2
+        const acceleration = (springForce + dampingForce) / config.mass
 
-        velocity = velocity + acceleration // pt/ms
+        velocity = velocity + acceleration
         value = value + velocity
 
         if (Math.abs(value - target) < restingDistance && Math.abs(velocity) < restingVelocity) {
           value = target
           state = 'resting'
+          emit('update:state', state)
           break
         }
       }
+
+      emit('update:value', value)
     }
   }
 

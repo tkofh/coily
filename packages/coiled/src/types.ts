@@ -1,3 +1,5 @@
+import type { Emitter } from 'mitt'
+
 export interface SpringConfig {
   mass: number
   tension: number
@@ -11,7 +13,13 @@ export interface SpringOptions {
 
 export type SpringState = 'moving' | 'frozen' | 'resting'
 
-export interface Spring {
+export type SpringEmitter = Emitter<{
+  'update:value': number
+  'update:state': SpringState
+  '*': number | SpringState
+}>
+
+export interface Spring extends Omit<SpringEmitter, 'emit'> {
   target: number
   config: Readonly<SpringConfig>
   readonly value: number

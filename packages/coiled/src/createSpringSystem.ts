@@ -13,6 +13,9 @@ export const createSpringSystem = (): SpringSystem => {
     },
     cleanup: (spring) => {
       springs.delete(spring)
+      spring.off('*')
+      spring.off('update:state')
+      spring.off('update:value')
     },
     simulate: (delta) => {
       for (const simulate of springs.values()) {
