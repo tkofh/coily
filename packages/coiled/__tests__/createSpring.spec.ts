@@ -37,4 +37,26 @@ describe('createSpring', () => {
 
     expect(onUpdateState).toHaveBeenCalledTimes(3)
   })
+
+  test('it freezes and unfreezes', ({ expect }) => {
+    const spring = createSpring(10, { mass: 1, friction: 10, tension: 40 })
+
+    spring.target = 0
+
+    spring.simulate(10)
+
+    expect(spring.velocity).toBeLessThan(0)
+
+    const currentValue = spring.value
+
+    spring.freeze()
+
+    spring.simulate(10)
+
+    expect(spring.value).toBe(currentValue)
+
+    spring.unfreeze()
+
+    expect(spring.state).toBe('moving')
+  })
 })
