@@ -58,7 +58,7 @@ export const createSpringImpl = (
       emit('update:state', state)
     },
     unfreeze: () => {
-      state = velocity > restingVelocity ? 'moving' : 'resting'
+      state = Math.abs(velocity) > restingVelocity ? 'moving' : 'resting'
       emit('update:state', state)
     },
   }
