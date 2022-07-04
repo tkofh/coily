@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.3.1](https://github.com/tkofh/coiled/compare/coiled@0.3.0...coiled@0.3.1) (2022-07-04)
+
+### Bug Fixes
+
+- **coiled:** use absolute value for unfreeze velocity check ([d1e5dee](https://github.com/tkofh/coiled/commit/d1e5deed5e5ca865dca27e4dc4d5f16c0631357e))
+
 # [0.3.0](https://github.com/tkofh/coiled/compare/coiled@0.2.0...coiled@0.3.0) (2022-07-02)
 
 ### Features
