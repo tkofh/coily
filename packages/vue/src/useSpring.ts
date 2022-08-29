@@ -1,6 +1,6 @@
 import { computed, inject, onScopeDispose, ref, watch } from 'vue'
 import type { SpringConfig, SpringOptions } from 'coiled'
-import { SPRING_SYSTEM } from './injection'
+import { SPRING_SYSTEM } from './injections'
 import type { UseSpringReturn } from './types'
 
 export const useSpring = (
