@@ -37,6 +37,14 @@ export const useSpring = <
     { flush: 'sync' }
   )
 
+  watch(
+    configRef,
+    (config) => {
+      spring.config = config
+    },
+    { flush: 'sync' }
+  )
+
   const current = ref(spring.value)
   const velocity = ref(spring.velocity)
   spring.on('update:value', (value) => {
