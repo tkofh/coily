@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.3.0](https://github.com/tkofh/coiled/compare/coiled-vue@0.2.0...coiled-vue@0.3.0) (2022-08-30)
+
+### Features
+
+- **coiled-vue:** create plugin ([49ed71f](https://github.com/tkofh/coiled/commit/49ed71fb753e5f902a54bd2cda5d3fb182c2f3fb))
+- **coiled-vue:** make target, config, and frozen reactive ([f092179](https://github.com/tkofh/coiled/commit/f0921799380473597bb7e46de9676db88b0d23ea))
+
 # [0.2.0](https://github.com/tkofh/coiled/compare/coiled-vue@0.1.1...coiled-vue@0.2.0) (2022-07-04)
 
 ### Features

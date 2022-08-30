@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.4.0](https://github.com/tkofh/coiled/compare/coiled@0.3.1...coiled@0.4.0) (2022-08-30)
+
+### Features
+
+- **coiled:** arrival behavior ([56c7c72](https://github.com/tkofh/coiled/commit/56c7c72ceb469eb29ef8294e4ada521316a0cbd2))
+
 ## [0.3.1](https://github.com/tkofh/coiled/compare/coiled@0.3.0...coiled@0.3.1) (2022-07-04)
 
 ### Bug Fixes
