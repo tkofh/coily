@@ -1,6 +1,6 @@
 {
   "name": "coiled-vue",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Simulate values using spring physics in Vuejs",
   "author": "Tim Morris <timthewebguy@gmail.com>",
   "homepage": "https://github.com/tkofh/coiled#readme",
