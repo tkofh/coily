@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.3.1](https://github.com/tkofh/coiled/compare/coiled-vue@0.3.0...coiled-vue@0.3.1) (2022-08-30)
+
+### Bug Fixes
+
+- **coiled-vue:** create mutable ref when primitive is passed ([e104569](https://github.com/tkofh/coiled/commit/e1045696d272485469985024bed79a4e41fb3052))
+
 # [0.3.0](https://github.com/tkofh/coiled/compare/coiled-vue@0.2.0...coiled-vue@0.3.0) (2022-08-30)
 
 ### Features
