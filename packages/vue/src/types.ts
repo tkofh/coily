@@ -15,9 +15,7 @@ export interface UseSpringReturn<
   current: ComputedRef<number>
   velocity: ComputedRef<number>
   config: ComputedRef<SpringConfig>
-  target: TTarget extends number | (() => number) | ComputedRef<number>
-    ? ComputedRef<number>
-    : Ref<number>
+  target: TTarget extends (() => number) | ComputedRef<number> ? ComputedRef<number> : Ref<number>
   freeze: TOptions extends { frozen: Ref<boolean> } ? never : Spring['freeze']
   unfreeze: TOptions extends { frozen: Ref<boolean> } ? never : Spring['unfreeze']
 }

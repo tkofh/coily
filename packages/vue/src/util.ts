@@ -1,5 +1,5 @@
 import type { Ref } from 'vue'
-import { isRef, computed } from 'vue'
+import { isRef, computed, ref } from 'vue'
 import type { Reactable } from './types'
 
 export const paramToRef = <T>(param: Reactable<T>): Ref<T> => {
@@ -8,6 +8,6 @@ export const paramToRef = <T>(param: Reactable<T>): Ref<T> => {
   } else if (isRef(param)) {
     return param
   } else {
-    return computed(() => param)
+    return ref(param) as Ref<T>
   }
 }
