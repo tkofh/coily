@@ -6,9 +6,17 @@ export interface SpringConfig {
   friction: number
 }
 
+export type SpringArrivalBehavior =
+  | 'bounce'
+  | 'clamp'
+  | 'none'
+  | number
+  | ((velocity: number) => number)
+
 export interface SpringOptions {
-  restingDistance: number
-  restingVelocity: number
+  restingDistance?: number
+  restingVelocity?: number
+  arrivalBehavior?: SpringArrivalBehavior
 }
 
 export type SpringState = 'moving' | 'frozen' | 'resting'

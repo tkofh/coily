@@ -59,4 +59,21 @@ describe('createSpring', () => {
 
     expect(spring.state).toBe('moving')
   })
+
+  // test('it respects arrival behavior', ({ expect }) => {
+  //   const spring = createSpring(
+  //     1,
+  //     { mass: 1, friction: 1, tension: 120 },
+  //     {
+  //       arrivalBehavior: (velocity) => Math.max(0, Math.abs(velocity) - 3) * Math.sign(velocity),
+  //     }
+  //   )
+  //   spring.target = 0
+  //
+  //   for (let i = 0; i < 100; i++) {
+  //     spring.simulate(10)
+  //     console.log(Math.round(100 * spring.value) / 100)
+  //   }
+  //   console.log(spring.value)
+  // })
 })
