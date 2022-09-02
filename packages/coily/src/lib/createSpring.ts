@@ -59,7 +59,6 @@ export const createSpringImpl = (
       target = val
       if (Math.abs(value - target) > restingDistance) {
         state = 'moving'
-        emit('update:state', state)
       }
     },
     get value() {
@@ -82,7 +81,10 @@ export const createSpringImpl = (
       emit('update:state', state)
     },
     unfreeze: () => {
-      state = Math.abs(velocity) > restingVelocity ? 'moving' : 'resting'
+      state =
+        Math.abs(velocity) > restingVelocity || Math.abs(value - target) > restingDistance
+          ? 'moving'
+          : 'resting'
       emit('update:state', state)
     },
   }

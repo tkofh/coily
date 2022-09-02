@@ -43,8 +43,46 @@ export interface StandaloneSpring extends Spring {
   readonly simulate: SimulateFn
 }
 
+export type SpringChainLinkGetter =
+  | number
+  | ((
+      previousValue: number,
+      previousTarget: number,
+      currentValue?: number,
+      currentTarget?: number
+    ) => number)
+
+export type SpringChainEmitter = Emitter<{
+  'update:value': number[]
+  'update:state': SpringState
+  '*': number[] | SpringState
+}>
+
+export interface SpringChain extends Omit<SpringChainEmitter, 'emit'> {
+  target: number
+  links: SpringChainLinkGetter[]
+  config: Readonly<SpringConfig>
+  readonly targets: ReadonlyArray<number>
+  readonly values: ReadonlyArray<number>
+  readonly velocities: ReadonlyArray<number>
+  readonly state: SpringState
+  readonly states: ReadonlyArray<SpringState>
+  readonly freeze: () => void
+  readonly unfreeze: () => void
+}
+
+export interface StandaloneSpringChain extends SpringChain {
+  readonly simulate: SimulateFn
+}
+
 export interface SpringSystem {
   createSpring: (initial: number, config: SpringConfig, options?: SpringOptions) => Spring
-  cleanup: (spring: Spring) => void
+  createSpringChain: (
+    initial: number,
+    links: SpringChainLinkGetter[],
+    config: SpringConfig,
+    options?: SpringOptions
+  ) => SpringChain
+  cleanup: (spring: Spring | SpringChain) => void
   simulate: SimulateFn
 }

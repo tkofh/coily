@@ -1,23 +1,22 @@
 import { computed, inject, isRef, onBeforeUnmount, ref, watch } from 'vue'
-import type { SpringConfig } from 'coiled'
+import type { SpringConfig } from 'coily'
 import { SPRING_SYSTEM } from './injections'
 import type { Reactable, SpringOptions, UseSpringReturn } from './types'
 import { paramToRef } from './util'
 
 export const useSpring = <
   TTarget extends Reactable<number>,
+  TConfig extends Reactable<SpringConfig>,
   TOptions extends SpringOptions | undefined
 >(
   initial: TTarget,
-  config: Reactable<SpringConfig>,
+  config: TConfig,
   options?: TOptions
-): UseSpringReturn<TTarget, TOptions> => {
+): UseSpringReturn<TTarget, TConfig, TOptions> => {
   const system = inject(SPRING_SYSTEM)
 
   if (!system) {
-    throw new Error(
-      'useSpring called before useSpringSystem. Please use useStandaloneSpring if you wish to not use a spring system'
-    )
+    throw new Error('useSpring called before useSpringSystem.')
   }
 
   const target = paramToRef(initial)
@@ -63,7 +62,7 @@ export const useSpring = <
     current: computed(() => current.value),
     state: computed(() => state.value),
     velocity: computed(() => velocity.value),
-    config: computed(() => configRef.value),
+    config: isRef(config) ? config : configRef,
     target: isRef(initial) ? initial : target,
   }
 
@@ -80,9 +79,9 @@ export const useSpring = <
       { flush: 'sync' }
     )
   } else {
-    ;(result as UseSpringReturn<TTarget, undefined>).freeze = spring.freeze
-    ;(result as UseSpringReturn<TTarget, undefined>).unfreeze = spring.unfreeze
+    ;(result as UseSpringReturn<TTarget, TConfig, undefined>).freeze = spring.freeze
+    ;(result as UseSpringReturn<TTarget, TConfig, undefined>).unfreeze = spring.unfreeze
   }
 
-  return result as UseSpringReturn<TTarget, TOptions>
+  return result as UseSpringReturn<TTarget, TConfig, TOptions>
 }

@@ -9,7 +9,9 @@
   ],
   "command": {
     "version": {
-      "allowBranch": ["main"],
+      "allowBranch": [
+        "main"
+      ],
       "message": "chore(release): publish"
     },
     "publish": {
@@ -18,5 +20,6 @@
     "init": {
       "exact": true
     }
-  }
+  },
+  "useNx": false
 }

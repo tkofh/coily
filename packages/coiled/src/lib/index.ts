@@ -1,1 +1,0 @@
-export { createSpringImpl } from './createSpring'

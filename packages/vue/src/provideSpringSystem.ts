@@ -1,4 +1,4 @@
-import type { SpringSystem } from 'coiled'
+import type { SpringSystem } from 'coily'
 import { provide } from 'vue'
 import { SPRING_SYSTEM } from './injections'
 

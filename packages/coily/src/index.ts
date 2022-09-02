@@ -1,4 +1,5 @@
 export { createSpring } from './createSpring'
+export { createSpringChain } from './createSpringChain'
 export { createSpringSystem } from './createSpringSystem'
 export type {
   SpringConfig,
@@ -7,4 +8,9 @@ export type {
   Spring,
   SpringSystem,
   StandaloneSpring,
+  SpringChain,
+  StandaloneSpringChain,
+  SpringChainLinkGetter,
+  SpringArrivalBehavior,
+  SimulateFn,
 } from './types'

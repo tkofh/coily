@@ -1,4 +1,5 @@
 export { provideSpringSystem } from './provideSpringSystem'
 export { useSpring } from './useSpring'
+export { useSpringChain } from './useSpringChain'
 export { useSpringSystem } from './useSpringSystem'
-export { coiledPlugin } from './coiledPlugin'
+export { coilyPlugin } from './coilyPlugin'

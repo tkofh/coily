@@ -1,9 +1,9 @@
 {
-  "name": "coiled-vue",
-  "version": "0.3.2",
+  "name": "@coily/vue",
+  "version": "0.0.0",
   "description": "Simulate values using spring physics in Vuejs",
   "author": "Tim Morris <timthewebguy@gmail.com>",
-  "homepage": "https://github.com/tkofh/coiled#readme",
+  "homepage": "https://github.com/tkofh/coily#readme",
   "license": "MIT",
   "sideEffects": false,
   "type": "module",
@@ -25,7 +25,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/tkofh/coiled.git"
+    "url": "git+https://github.com/tkofh/coily.git"
   },
   "scripts": {
     "build": "tsup",
@@ -35,7 +35,7 @@
     "prepublish": "yarn test && yarn build"
   },
   "bugs": {
-    "url": "https://github.com/tkofh/coiled/issues"
+    "url": "https://github.com/tkofh/coily/issues"
   },
   "devDependencies": {
     "@tkofh/eslint-config-vue": "^0.4.1",
@@ -48,7 +48,7 @@
     "vue": "^3.2.37"
   },
   "dependencies": {
-    "coiled": "0.4.1"
+    "coily": "0.0.0"
   },
   "peerDependencies": {
     "vue": "^3.2.37"
