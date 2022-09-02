@@ -59,6 +59,7 @@ export const createSpringImpl = (
       target = val
       if (Math.abs(value - target) > restingDistance) {
         state = 'moving'
+        emit('update:state', state)
       }
     },
     get value() {
