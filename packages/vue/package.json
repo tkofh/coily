@@ -32,7 +32,7 @@
     "test": "vitest run",
     "test:watch": "vitest watch",
     "test:ui": "vitest --ui",
-    "prepublish": "yarn test && yarn build",
+    "prepublish": "pnpm test && pnpm build",
     "playground": "vite"
   },
   "bugs": {
