@@ -32,23 +32,28 @@
     "test": "vitest run",
     "test:watch": "vitest watch",
     "test:ui": "vitest --ui",
-    "prepublish": "yarn test && yarn build"
+    "prepublish": "yarn test && yarn build",
+    "playground": "vite"
   },
   "bugs": {
     "url": "https://github.com/tkofh/coily/issues"
   },
   "devDependencies": {
-    "@tkofh/eslint-config-vue": "^0.4.1",
-    "@vitejs/plugin-vue": "^2.3.3",
-    "@vitest/ui": "^0.11.0",
-    "@vue/test-utils": "^2.0.0",
-    "happy-dom": "^6.0.0",
-    "tsup": "^6.1.3",
-    "vitest": "^0.16.0",
-    "vue": "^3.2.37"
+    "@tkofh/eslint-config-vue": "^0.5.2",
+    "@vitejs/plugin-vue": "^4.0.0",
+    "@vitest/ui": "^0.27.1",
+    "@vue/test-utils": "^2.2.7",
+    "eslint": "^8.32.0",
+    "happy-dom": "^8.1.4",
+    "tickloop": "^0.5.0",
+    "tsup": "^6.5.0",
+    "typescript": "^4.9.4",
+    "vite": "^4.0.4",
+    "vitest": "^0.27.1",
+    "vue": "^3.2.45"
   },
   "dependencies": {
-    "coily": "0.1.1"
+    "coily": "workspace:0.1.1"
   },
   "peerDependencies": {
     "vue": "^3.2.37"
