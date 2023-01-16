@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.2.0](https://github.com/tkofh/coily/compare/@coily/vue@0.1.1...@coily/vue@0.2.0) (2023-01-16)
+
+### Features
+
+- **@coily/vue:** breaking: factory plugin, simplify frozen api ([b92cc66](https://github.com/tkofh/coily/commit/b92cc66cc47fb905d75954637cbd84d78877ccc0))
+- **@coily/vue:** event hooks ([90aeae5](https://github.com/tkofh/coily/commit/90aeae56f61b24ef8aeabe2c0c5c136d0e485ec3))
+- **@coily/vue:** onStateChange and onValueChange hooks ([eba265c](https://github.com/tkofh/coily/commit/eba265ccb833687750502473616bc00bded6a4b1))
+
 ## [0.1.1](https://github.com/tkofh/coily/compare/@coily/vue@0.1.0...@coily/vue@0.1.1) (2022-09-02)
 
 ### Bug Fixes
