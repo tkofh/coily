@@ -53,7 +53,7 @@
     "vue": "^3.2.45"
   },
   "dependencies": {
-    "coily": "workspace:0.1.1"
+    "coily": "0.1.1"
   },
   "peerDependencies": {
     "vue": "^3.2.37"

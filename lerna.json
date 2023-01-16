@@ -1,12 +1,8 @@
 {
   "version": "independent",
   "npmClient": "pnpm",
-  "useWorkspaces": true,
   "conventionalCommits": true,
   "exact": true,
-  "packages": [
-    "packages/*"
-  ],
   "command": {
     "version": {
       "allowBranch": [
