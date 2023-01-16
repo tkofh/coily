@@ -16,6 +16,9 @@ export type ReactableResult<TInput, T, TReadonly = T> = TInput extends (() => T)
   ? ComputedRef<TReadonly>
   : Ref<T>
 
+export type SpringEventHookCleanup = () => void
+export type SpringEventHook<TData> = (handler: (data: TData) => void) => SpringEventHookCleanup
+
 export interface UseSpringReturn<
   TTarget extends Reactable<number>,
   TConfig extends Reactable<SpringConfig>,
@@ -27,6 +30,8 @@ export interface UseSpringReturn<
   target: ReactableResult<TTarget, number>
   config: ReactableResult<TConfig, SpringConfig>
   frozen: ReactableResult<TOptions extends SpringOptions ? TOptions['frozen'] : boolean, boolean>
+  onValueChange: SpringEventHook<number>
+  onStateChange: SpringEventHook<SpringState>
 }
 
 export interface UseSpringChainReturn<
@@ -44,4 +49,6 @@ export interface UseSpringChainReturn<
   targets: ComputedRef<ReadonlyArray<number>>
   links: ReactableResult<TLinks, SpringChainLinkGetter[], ReadonlyArray<SpringChainLinkGetter>>
   frozen: ReactableResult<TOptions extends SpringOptions ? TOptions['frozen'] : boolean, boolean>
+  onValueChange: SpringEventHook<number[]>
+  onStateChange: SpringEventHook<SpringState>
 }

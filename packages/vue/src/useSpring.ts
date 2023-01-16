@@ -1,7 +1,13 @@
 import { computed, inject, isRef, onBeforeUnmount, ref, watch } from 'vue'
-import type { SpringConfig } from 'coily'
+import type { SpringConfig, SpringState } from 'coily'
 import { SPRING_SYSTEM } from './injections'
-import type { Reactable, ReactableResult, SpringOptions, UseSpringReturn } from './types'
+import type {
+  Reactable,
+  ReactableResult,
+  SpringEventHook,
+  SpringOptions,
+  UseSpringReturn,
+} from './types'
 import { paramToRef } from './util'
 
 export const useSpring = <
@@ -70,6 +76,16 @@ export const useSpring = <
     { flush: 'sync' }
   )
 
+  const onValueChange: SpringEventHook<number> = (handler) => {
+    spring.on('update:value', handler)
+    return () => spring.off('update:value', handler)
+  }
+
+  const onStateChange: SpringEventHook<SpringState> = (handler) => {
+    spring.on('update:state', handler)
+    return () => spring.off('update:state', handler)
+  }
+
   return {
     current: computed(() => current.value),
     state: computed(() => state.value),
@@ -80,5 +96,7 @@ export const useSpring = <
       TOptions extends SpringOptions ? TOptions['frozen'] : boolean,
       boolean
     >,
+    onValueChange,
+    onStateChange,
   }
 }

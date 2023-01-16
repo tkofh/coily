@@ -1,6 +1,12 @@
 import type { SpringChainLinkGetter, SpringConfig, SpringState } from 'coily'
 import { computed, customRef, inject, isRef, onBeforeUnmount, watch } from 'vue'
-import type { Reactable, ReactableResult, SpringOptions, UseSpringChainReturn } from './types'
+import type {
+  Reactable,
+  ReactableResult,
+  SpringEventHook,
+  SpringOptions,
+  UseSpringChainReturn,
+} from './types'
 import { SPRING_SYSTEM } from './injections'
 import { paramToRef } from './util'
 
@@ -142,6 +148,15 @@ export const useSpringChain = <
     { flush: 'sync' }
   )
 
+  const onValueChange: SpringEventHook<number[]> = (handler) => {
+    chain.on('update:value', handler)
+    return () => chain.off('update:value', handler)
+  }
+  const onStateChange: SpringEventHook<SpringState> = (handler) => {
+    chain.on('update:state', handler)
+    return () => chain.off('update:state', handler)
+  }
+
   return {
     state: computed(() => state.value),
     states: computed(() => states.value),
@@ -159,5 +174,7 @@ export const useSpringChain = <
       TOptions extends SpringOptions ? TOptions['frozen'] : boolean,
       boolean
     >,
+    onStateChange,
+    onValueChange,
   }
 }
