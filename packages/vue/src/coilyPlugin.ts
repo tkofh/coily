@@ -7,10 +7,10 @@ interface CoilyPluginOptions {
   system?: SpringSystem
 }
 
-export const coilyPlugin: Plugin = {
-  install: (app, options?: CoilyPluginOptions) => {
+export const createCoilyPlugin = (options?: CoilyPluginOptions): Plugin => ({
+  install: (app) => {
     const system = options != null && 'system' in options ? options.system : createSpringSystem()
 
     app.provide(SPRING_SYSTEM, system)
   },
-}
+})

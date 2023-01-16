@@ -1,6 +1,5 @@
 import type { ComputedRef, Ref } from 'vue'
 import type {
-  Spring,
   SpringConfig,
   SpringState,
   SpringOptions as SpringOptionsBase,
@@ -27,8 +26,7 @@ export interface UseSpringReturn<
   velocity: ComputedRef<number>
   target: ReactableResult<TTarget, number>
   config: ReactableResult<TConfig, SpringConfig>
-  freeze: TOptions extends { frozen: Ref<boolean> } ? never : Spring['freeze']
-  unfreeze: TOptions extends { frozen: Ref<boolean> } ? never : Spring['unfreeze']
+  frozen: ReactableResult<TOptions extends SpringOptions ? TOptions['frozen'] : boolean, boolean>
 }
 
 export interface UseSpringChainReturn<
@@ -45,6 +43,5 @@ export interface UseSpringChainReturn<
   config: ReactableResult<TConfig, SpringConfig>
   targets: ComputedRef<ReadonlyArray<number>>
   links: ReactableResult<TLinks, SpringChainLinkGetter[], ReadonlyArray<SpringChainLinkGetter>>
-  freeze: TOptions extends { frozen: Ref<boolean> } ? never : Spring['freeze']
-  unfreeze: TOptions extends { frozen: Ref<boolean> } ? never : Spring['unfreeze']
+  frozen: ReactableResult<TOptions extends SpringOptions ? TOptions['frozen'] : boolean, boolean>
 }

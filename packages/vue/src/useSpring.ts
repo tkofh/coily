@@ -1,7 +1,7 @@
 import { computed, inject, isRef, onBeforeUnmount, ref, watch } from 'vue'
 import type { SpringConfig } from 'coily'
 import { SPRING_SYSTEM } from './injections'
-import type { Reactable, SpringOptions, UseSpringReturn } from './types'
+import type { Reactable, ReactableResult, SpringOptions, UseSpringReturn } from './types'
 import { paramToRef } from './util'
 
 export const useSpring = <
@@ -56,32 +56,29 @@ export const useSpring = <
     state.value = value
   })
 
-  const { frozen = undefined } = options ?? {}
+  const frozen = paramToRef(options?.frozen ?? false)
 
-  const result = {
+  watch(
+    frozen,
+    (frozen) => {
+      if (frozen) {
+        spring.freeze()
+      } else {
+        spring.unfreeze()
+      }
+    },
+    { flush: 'sync' }
+  )
+
+  return {
     current: computed(() => current.value),
     state: computed(() => state.value),
     velocity: computed(() => velocity.value),
-    config: isRef(config) ? config : configRef,
-    target: isRef(initial) ? initial : target,
+    config: (isRef(config) ? config : configRef) as ReactableResult<TConfig, SpringConfig>,
+    target: (isRef(initial) ? initial : target) as ReactableResult<TTarget, number>,
+    frozen: frozen as ReactableResult<
+      TOptions extends SpringOptions ? TOptions['frozen'] : boolean,
+      boolean
+    >,
   }
-
-  if (frozen) {
-    watch(
-      frozen,
-      (frozen) => {
-        if (frozen) {
-          spring.freeze()
-        } else {
-          spring.unfreeze()
-        }
-      },
-      { flush: 'sync' }
-    )
-  } else {
-    ;(result as UseSpringReturn<TTarget, TConfig, undefined>).freeze = spring.freeze
-    ;(result as UseSpringReturn<TTarget, TConfig, undefined>).unfreeze = spring.unfreeze
-  }
-
-  return result as UseSpringReturn<TTarget, TConfig, TOptions>
 }

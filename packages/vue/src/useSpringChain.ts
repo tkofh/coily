@@ -1,6 +1,6 @@
 import type { SpringChainLinkGetter, SpringConfig, SpringState } from 'coily'
 import { computed, customRef, inject, isRef, onBeforeUnmount, watch } from 'vue'
-import type { Reactable, SpringOptions, UseSpringChainReturn } from './types'
+import type { Reactable, ReactableResult, SpringOptions, UseSpringChainReturn } from './types'
 import { SPRING_SYSTEM } from './injections'
 import { paramToRef } from './util'
 
@@ -128,35 +128,36 @@ export const useSpringChain = <
     updateStates()
   })
 
-  const { frozen = undefined } = options ?? {}
+  const frozen = paramToRef(options?.frozen ?? false)
 
-  const result = {
+  watch(
+    frozen,
+    (frozen) => {
+      if (frozen) {
+        chain.freeze()
+      } else {
+        chain.unfreeze()
+      }
+    },
+    { flush: 'sync' }
+  )
+
+  return {
     state: computed(() => state.value),
     states: computed(() => states.value),
     current: computed(() => current.value),
     velocities: computed(() => velocities.value),
-    config: isRef(config) ? config : configRef,
-    target: isRef(initial) ? initial : target,
+    config: (isRef(config) ? config : configRef) as ReactableResult<TConfig, SpringConfig>,
+    target: (isRef(initial) ? initial : target) as ReactableResult<TTarget, number>,
     targets: computed(() => targets.value),
-    links: isRef(links) ? links : linksRef,
+    links: (isRef(links) ? links : linksRef) as ReactableResult<
+      TLinks,
+      SpringChainLinkGetter[],
+      ReadonlyArray<SpringChainLinkGetter>
+    >,
+    frozen: frozen as ReactableResult<
+      TOptions extends SpringOptions ? TOptions['frozen'] : boolean,
+      boolean
+    >,
   }
-
-  if (frozen) {
-    watch(
-      frozen,
-      (frozen) => {
-        if (frozen) {
-          chain.freeze()
-        } else {
-          chain.unfreeze()
-        }
-      },
-      { flush: 'sync' }
-    )
-  } else {
-    ;(result as UseSpringChainReturn<TTarget, TLinks, TConfig, undefined>).freeze = chain.freeze
-    ;(result as UseSpringChainReturn<TTarget, TLinks, TConfig, undefined>).unfreeze = chain.unfreeze
-  }
-
-  return result as UseSpringChainReturn<TTarget, TLinks, TConfig, TOptions>
 }
