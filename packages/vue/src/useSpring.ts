@@ -98,5 +98,6 @@ export const useSpring = <
     >,
     onValueChange,
     onStateChange,
+    jumpTo: spring.jumpTo,
   }
 }

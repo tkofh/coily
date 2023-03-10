@@ -4,6 +4,7 @@ import type {
   SpringState,
   SpringOptions as SpringOptionsBase,
   SpringChainLinkGetter,
+  Spring,
 } from 'coily'
 
 export type Reactable<T> = T | Ref<T> | (() => T)
@@ -32,6 +33,7 @@ export interface UseSpringReturn<
   frozen: ReactableResult<TOptions extends SpringOptions ? TOptions['frozen'] : boolean, boolean>
   onValueChange: SpringEventHook<number>
   onStateChange: SpringEventHook<SpringState>
+  jumpTo: Spring['jumpTo']
 }
 
 export interface UseSpringChainReturn<

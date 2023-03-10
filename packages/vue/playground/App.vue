@@ -1,20 +1,16 @@
 <template>
-  <div>hey</div>
+  <div :style="`transform: translateX(${current}px)`">hey</div>
 </template>
 
 <script setup lang="ts">
-import { useSpring } from '../src'
 import { ref } from 'vue'
+import { useSpring } from '../src'
 
-const target = ref(10)
-const spring = useSpring(target, { friction: 100, tension: 10, mass: 1 })
+const { target, jumpTo, current } = useSpring(ref(10), { friction: 80, tension: 20, mass: 1 })
 
-spring.onValueChange((value) => {
-  console.log({ value })
-})
-spring.onStateChange((state) => {
-  console.log(state)
-})
+target.value = 450
 
-target.value = 100
+setTimeout(() => {
+  jumpTo(500, false)
+}, 2000)
 </script>
