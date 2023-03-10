@@ -29,10 +29,22 @@ export type SpringEmitter = Emitter<{
 
 export interface Spring extends Omit<SpringEmitter, 'emit'> {
   target: number
+  readonly getTarget: () => number
+
   config: Readonly<SpringConfig>
+  readonly getConfig: () => Readonly<SpringConfig>
+
   readonly value: number
+  readonly getValue: () => number
+
   readonly velocity: number
+  readonly getVelocity: () => number
+
   readonly state: SpringState
+  readonly getState: () => SpringState
+
+  readonly jumpTo: (value: number, killVelocity?: boolean) => void
+
   readonly freeze: () => void
   readonly unfreeze: () => void
 }
@@ -60,13 +72,28 @@ export type SpringChainEmitter = Emitter<{
 
 export interface SpringChain extends Omit<SpringChainEmitter, 'emit'> {
   target: number
+  readonly getTarget: () => number
+
   links: SpringChainLinkGetter[]
+
   config: Readonly<SpringConfig>
+  readonly getConfig: () => Readonly<SpringConfig>
+
   readonly targets: ReadonlyArray<number>
+  readonly getTargets: () => ReadonlyArray<number>
+
   readonly values: ReadonlyArray<number>
+  readonly getValues: () => ReadonlyArray<number>
+
   readonly velocities: ReadonlyArray<number>
+  readonly getVelocities: () => ReadonlyArray<number>
+
   readonly state: SpringState
+  readonly getState: () => SpringState
+
   readonly states: ReadonlyArray<SpringState>
+  readonly getStates: () => ReadonlyArray<SpringState>
+
   readonly freeze: () => void
   readonly unfreeze: () => void
 }

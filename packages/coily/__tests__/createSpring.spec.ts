@@ -60,20 +60,58 @@ describe('createSpring', () => {
     expect(spring.state).toBe('moving')
   })
 
-  // test('it respects arrival behavior', ({ expect }) => {
-  //   const spring = createSpring(
-  //     1,
-  //     { mass: 1, friction: 1, tension: 120 },
-  //     {
-  //       arrivalBehavior: (velocity) => Math.max(0, Math.abs(velocity) - 3) * Math.sign(velocity),
-  //     }
-  //   )
-  //   spring.target = 0
-  //
-  //   for (let i = 0; i < 100; i++) {
-  //     spring.simulate(10)
-  //     console.log(Math.round(100 * spring.value) / 100)
-  //   }
-  //   console.log(spring.value)
-  // })
+  test('it respects arrival behavior', ({ expect }) => {
+    const normalSpring = createSpring(
+      1,
+      { mass: 1, friction: 1, tension: 120 },
+      { arrivalBehavior: 1 }
+    )
+    const killedSpring = createSpring(
+      1,
+      { mass: 1, friction: 1, tension: 120 },
+      { arrivalBehavior: 0 }
+    )
+    normalSpring.target = 0
+    killedSpring.target = 0
+
+    for (let i = 0; i < 100; i++) {
+      normalSpring.simulate(10)
+      killedSpring.simulate(10)
+
+      if (killedSpring.state === 'resting') {
+        expect(normalSpring.state).toBe('moving')
+      }
+    }
+  })
+
+  test('it jumps', ({ expect }) => {
+    const spring = createSpring(0, { mass: 1, tension: 40, friction: 10 })
+
+    spring.target = 5
+
+    spring.simulate(60)
+
+    expect(spring.value).toBeGreaterThan(0)
+    expect(spring.state).toBe('moving')
+    expect(spring.velocity).toBeGreaterThan(0)
+
+    spring.jumpTo(6, true)
+
+    expect(spring.value).toBe(6)
+    expect(spring.velocity).toBe(0)
+    expect(spring.state).toBe('moving')
+
+    spring.simulate(30)
+
+    spring.jumpTo(5, false)
+
+    expect(spring.value).toBe(5)
+    expect(spring.velocity).toBeLessThan(0)
+    expect(spring.state).toBe('moving')
+
+    spring.jumpTo(5, true)
+
+    expect(spring.velocity).toBe(0)
+    expect(spring.state).toBe('resting')
+  })
 })

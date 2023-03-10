@@ -140,9 +140,13 @@ export const createSpringChainImpl = (
         currentTarget = val
         updateChainState(currentTarget, currentLinks)
       },
+      getTarget: () => targets[0],
+
       get targets() {
         return targets
       },
+      getTargets: () => targets,
+
       get links() {
         return links
       },
@@ -150,21 +154,32 @@ export const createSpringChainImpl = (
         currentLinks = val
         updateChainState(currentTarget, currentLinks)
       },
+
       get config() {
         return config
       },
+      getConfig: () => config,
+
       get values() {
         return values
       },
+      getValues: () => values,
+
       get velocities() {
         return velocities
       },
+      getVelocities: () => velocities,
+
       get state() {
         return state
       },
+      getState: () => state,
+
       get states() {
         return states
       },
+      getStates: () => states,
+
       freeze: () => {
         for (const spring of springs) {
           spring.freeze()

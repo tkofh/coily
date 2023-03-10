@@ -57,26 +57,49 @@ export const createSpringImpl = (
     },
     set target(val) {
       target = val
-      if (Math.abs(value - target) > restingDistance) {
+      if (state !== 'moving' && Math.abs(value - target) > restingDistance) {
         state = 'moving'
         emit('update:state', state)
       }
     },
+    getTarget: () => target,
+
     get value() {
       return value
     },
+    getValue: () => value,
+
     get velocity() {
       return velocity
     },
+    getVelocity: () => velocity,
+
     get state() {
       return state
     },
+    getState: () => state,
+
     get config() {
       return config
     },
     set config(value) {
       config = value
     },
+    getConfig: () => config,
+
+    jumpTo: (_value, killVelocity = true) => {
+      value = _value
+
+      if (killVelocity) {
+        velocity = 0
+      }
+
+      state =
+        Math.abs(velocity) > restingVelocity || Math.abs(value - target) > restingDistance
+          ? 'moving'
+          : 'resting'
+    },
+
     freeze: () => {
       state = 'frozen'
       emit('update:state', state)
@@ -90,6 +113,9 @@ export const createSpringImpl = (
     },
   }
 
+  const tension = -config.tension * 0.000001
+  const friction = -config.friction * 0.001
+
   const simulate: SimulateFn = (deltaTime) => {
     if (state === 'moving') {
       const iterations = Math.ceil(deltaTime)
@@ -97,8 +123,8 @@ export const createSpringImpl = (
       for (let n = 0; n < iterations; n++) {
         const previousDelta = value - target
 
-        const springForce = -config.tension * 0.000001 * previousDelta
-        const dampingForce = -config.friction * 0.001 * velocity
+        const springForce = tension * previousDelta
+        const dampingForce = friction * velocity
         const acceleration = (springForce + dampingForce) / config.mass
 
         velocity = velocity + acceleration
