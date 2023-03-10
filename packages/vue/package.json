@@ -41,22 +41,22 @@
   "devDependencies": {
     "@tkofh/eslint-config-vue": "^0.5.2",
     "@vitejs/plugin-vue": "^4.0.0",
-    "@vitest/ui": "^0.27.1",
-    "@vue/test-utils": "^2.2.7",
-    "eslint": "^8.32.0",
-    "happy-dom": "^8.1.4",
+    "@vitest/ui": "^0.29.2",
+    "@vue/test-utils": "^2.3.1",
+    "eslint": "^8.35.0",
+    "happy-dom": "^8.9.0",
     "tickloop": "^0.5.0",
-    "tsup": "^6.5.0",
-    "typescript": "^4.9.4",
-    "vite": "^4.0.4",
-    "vitest": "^0.27.1",
-    "vue": "^3.2.45"
+    "tsup": "^6.6.3",
+    "typescript": "^4.9.5",
+    "vite": "^4.1.4",
+    "vitest": "^0.29.2",
+    "vue": "^3.2.47"
   },
   "dependencies": {
-    "coily": "0.2.0"
+    "coily": "workspace:0.2.0"
   },
   "peerDependencies": {
-    "vue": "^3.2.37"
+    "vue": "^3.0.0"
   },
   "gitHead": "96019bee6135f93006c3fd52d23846afd6271c66"
 }
