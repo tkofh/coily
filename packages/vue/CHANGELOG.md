@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.3.0](https://github.com/tkofh/coily/compare/@coily/vue@0.2.0...@coily/vue@0.3.0) (2023-03-10)
+
+### Features
+
+- **@coily/vue:** jumpTo, function getters for props ([fa40fdb](https://github.com/tkofh/coily/commit/fa40fdbb22033b765dae1836e86cc6bfbf88103e))
+
 # [0.2.0](https://github.com/tkofh/coily/compare/@coily/vue@0.1.1...@coily/vue@0.2.0) (2023-01-16)
 
 ### Features

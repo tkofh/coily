@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.3.0](https://github.com/tkofh/coily/compare/coily@0.2.0...coily@0.3.0) (2023-03-10)
+
+### Features
+
+- **coily:** jumpTo, function getters for props ([7c5351d](https://github.com/tkofh/coily/commit/7c5351d43bfef32e328c203933c483c52ea740cb))
+
 # [0.2.0](https://github.com/tkofh/coily/compare/coily@0.1.1...coily@0.2.0) (2023-01-16)
 
 ### Features
