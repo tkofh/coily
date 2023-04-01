@@ -102,7 +102,13 @@ export interface StandaloneSpringChain extends SpringChain {
   readonly simulate: SimulateFn
 }
 
-export interface SpringSystem {
+export type SpringSystemEmitter = Emitter<{
+  // 'simulate:before': never
+  'simulate:after': number
+  '*': number
+}>
+
+export interface SpringSystem extends Omit<SpringSystemEmitter, 'emit'> {
   createSpring: (initial: number, config: SpringConfig, options?: SpringOptions) => Spring
   createSpringChain: (
     initial: number,

@@ -1,9 +1,13 @@
-import type { SimulateFn, Spring, SpringChain, SpringSystem } from './types'
+import mitt from 'mitt'
+import type { SimulateFn, Spring, SpringChain, SpringSystemEmitter, SpringSystem } from './types'
 import { createSpringChainImpl, createSpringImpl } from './lib'
 export const createSpringSystem = (): SpringSystem => {
   const springs: Map<Spring | SpringChain, SimulateFn> = new Map()
 
+  const { emit, ...emitterApi }: SpringSystemEmitter = mitt()
+
   return {
+    ...emitterApi,
     createSpring: (initial, config, options) => {
       const [spring, simulate] = createSpringImpl(initial, config, options)
       springs.set(spring, simulate)
@@ -29,6 +33,7 @@ export const createSpringSystem = (): SpringSystem => {
       for (const simulate of springs.values()) {
         simulate(delta)
       }
+      emit('simulate:after', delta)
     },
   }
 }
