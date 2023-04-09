@@ -113,9 +113,6 @@ export const createSpringImpl = (
     },
   }
 
-  const tension = -config.tension * 0.000001
-  const friction = -config.friction * 0.001
-
   const simulate: SimulateFn = (deltaTime) => {
     if (state === 'moving') {
       const iterations = Math.ceil(deltaTime)
@@ -123,8 +120,8 @@ export const createSpringImpl = (
       for (let n = 0; n < iterations; n++) {
         const previousDelta = value - target
 
-        const springForce = tension * previousDelta
-        const dampingForce = friction * velocity
+        const springForce = -config.tension * 0.000001 * previousDelta
+        const dampingForce = -config.friction * 0.001 * velocity
         const acceleration = (springForce + dampingForce) / config.mass
 
         velocity = velocity + acceleration
