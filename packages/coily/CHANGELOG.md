@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.4.1](https://github.com/tkofh/coily/compare/coily@0.4.0...coily@0.4.1) (2023-04-09)
+
+### Bug Fixes
+
+- keep obj reference to config to allow updating ([1e5f495](https://github.com/tkofh/coily/commit/1e5f49519be7f58c4806b337096f394048c859ea))
+
 # [0.4.0](https://github.com/tkofh/coily/compare/coily@0.3.0...coily@0.4.0) (2023-04-01)
 
 ### Features

@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.4.1](https://github.com/tkofh/coily/compare/@coily/vue@0.4.0...@coily/vue@0.4.1) (2023-04-09)
+
+**Note:** Version bump only for package @coily/vue
+
 # [0.4.0](https://github.com/tkofh/coily/compare/@coily/vue@0.3.0...@coily/vue@0.4.0) (2023-04-01)
 
 **Note:** Version bump only for package @coily/vue
