@@ -34,16 +34,16 @@ export interface Spring extends Omit<SpringEmitter, 'emit'> {
   config: Readonly<SpringConfig>
   readonly getConfig: () => Readonly<SpringConfig>
 
-  readonly value: number
+  value: number
   readonly getValue: () => number
+  readonly setValue: (value: number) => void
 
-  readonly velocity: number
+  velocity: number
   readonly getVelocity: () => number
+  readonly setVelocity: (velocity: number) => void
 
   readonly state: SpringState
   readonly getState: () => SpringState
-
-  readonly jumpTo: (value: number, killVelocity?: boolean) => void
 
   readonly freeze: () => void
   readonly unfreeze: () => void

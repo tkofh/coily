@@ -50,6 +50,19 @@ export const createSpringImpl = (
 
   const { emit, ...emitterApi } = emitter
 
+  const updateState = (unfreeze = false) => {
+    if (state !== 'frozen' || unfreeze) {
+      const newState =
+        Math.abs(velocity) > restingVelocity || Math.abs(value - target) > restingDistance
+          ? 'moving'
+          : 'resting'
+      if (newState !== state) {
+        state = newState
+        emit('update:state', state)
+      }
+    }
+  }
+
   const spring: Spring = {
     ...emitterApi,
     get target() {
@@ -67,12 +80,32 @@ export const createSpringImpl = (
     get value() {
       return value
     },
+    set value(_value: number) {
+      value = _value
+      emit('update:value', value)
+
+      updateState()
+    },
     getValue: () => value,
+    setValue: (_value: number) => {
+      value = _value
+      emit('update:value', value)
+
+      updateState()
+    },
 
     get velocity() {
       return velocity
     },
+    set velocity(_velocity: number) {
+      velocity = _velocity
+      updateState()
+    },
     getVelocity: () => velocity,
+    setVelocity: (_velocity: number) => {
+      velocity = _velocity
+      updateState()
+    },
 
     get state() {
       return state
@@ -87,29 +120,12 @@ export const createSpringImpl = (
     },
     getConfig: () => config,
 
-    jumpTo: (_value, killVelocity = true) => {
-      value = _value
-
-      if (killVelocity) {
-        velocity = 0
-      }
-
-      state =
-        Math.abs(velocity) > restingVelocity || Math.abs(value - target) > restingDistance
-          ? 'moving'
-          : 'resting'
-    },
-
     freeze: () => {
       state = 'frozen'
       emit('update:state', state)
     },
     unfreeze: () => {
-      state =
-        Math.abs(velocity) > restingVelocity || Math.abs(value - target) > restingDistance
-          ? 'moving'
-          : 'resting'
-      emit('update:state', state)
+      updateState(true)
     },
   }
 

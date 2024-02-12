@@ -84,34 +84,24 @@ describe('createSpring', () => {
     }
   })
 
-  test('it jumps', ({ expect }) => {
+  test('it allows current value to be set', ({ expect }) => {
     const spring = createSpring(0, { mass: 1, tension: 40, friction: 10 })
 
-    spring.target = 5
-
+    spring.value = 5
     spring.simulate(60)
+    expect(spring.value).toBeLessThan(5)
+    expect(spring.state).toBe('moving')
+    expect(Math.abs(spring.velocity)).toBeGreaterThan(0)
+  })
 
+  test('it allows velocity to be set', ({ expect }) => {
+    const spring = createSpring(0, { mass: 1, tension: 40, friction: 10 })
+
+    spring.velocity = 5
+    spring.simulate(60)
+    console.log(spring.value, spring.state, spring.velocity)
     expect(spring.value).toBeGreaterThan(0)
     expect(spring.state).toBe('moving')
-    expect(spring.velocity).toBeGreaterThan(0)
-
-    spring.jumpTo(6, true)
-
-    expect(spring.value).toBe(6)
-    expect(spring.velocity).toBe(0)
-    expect(spring.state).toBe('moving')
-
-    spring.simulate(30)
-
-    spring.jumpTo(5, false)
-
-    expect(spring.value).toBe(5)
-    expect(spring.velocity).toBeLessThan(0)
-    expect(spring.state).toBe('moving')
-
-    spring.jumpTo(5, true)
-
-    expect(spring.velocity).toBe(0)
-    expect(spring.state).toBe('resting')
+    expect(Math.abs(spring.velocity)).toBeGreaterThan(0)
   })
 })
