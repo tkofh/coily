@@ -1,5 +1,5 @@
 {
-  "name": "coily",
+  "name": "@coily/vue",
   "version": "0.4.1",
   "description": "Simulate values using spring physics",
   "author": "Tim Morris <timthewebguy@gmail.com>",
@@ -7,19 +7,19 @@
   "license": "MIT",
   "sideEffects": false,
   "type": "module",
-  "main": "./dist/api.cjs",
-  "module": "./dist/api.mjs",
-  "types": "./dist/api.d.ts",
+  "main": "./dist/spring.cjs",
+  "module": "./dist/spring.mjs",
+  "types": "./dist/spring.d.ts",
   "exports": {
     ".": {
-      "require": "./dist/api.cjs",
-      "import": "./dist/api.mjs",
-      "types": "./dist/api.d.ts"
+      "require": "./dist/spring.cjs",
+      "import": "./dist/spring.mjs",
+      "types": "./dist/spring.d.ts"
     },
-    "./loop": {
-      "require": "./dist/loop.cjs",
-      "import": "./dist/loop.mjs",
-      "types": "./dist/loop.d.ts"
+    "./system": {
+      "require": "./dist/system.cjs",
+      "import": "./dist/system.mjs",
+      "types": "./dist/system.d.ts"
     }
   },
   "files": ["dist"],
@@ -31,7 +31,10 @@
     "url": "git+https://github.com/tkofh/coily.git"
   },
   "scripts": {
-    "build": "unbuild"
+    "build": "unbuild",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:ui": "vitest --ui"
   },
   "bugs": {
     "url": "https://github.com/tkofh/coily/issues"
@@ -44,6 +47,7 @@
   },
   "gitHead": "96019bee6135f93006c3fd52d23846afd6271c66",
   "dependencies": {
-    "tickloop": "^0.5.0"
+    "coily": "workspace:*",
+    "vue": "^3.4.21"
   }
 }

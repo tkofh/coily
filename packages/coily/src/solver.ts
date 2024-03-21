@@ -1,3 +1,4 @@
+import { Emitter } from './emitter'
 import { State } from './state'
 
 interface SolverOptions {
@@ -23,6 +24,8 @@ export class Solver {
   #solverNeedsUpdate = false
   #solverNeedsReset = false
 
+  #emitter: Emitter<{ update: never }>
+
   constructor(options: SolverOptions) {
     this.#mass = options.mass
     this.#tension = options.tension
@@ -32,6 +35,8 @@ export class Solver {
       options.velocity,
       options.precision,
     )
+    this.#emitter = new Emitter()
+
     this.#updateSolver()
   }
 
@@ -135,7 +140,21 @@ export class Solver {
       this.#solverNeedsReset = false
     }
 
+    const previousPosition = this.#state.position
+    const previousVelocity = this.#state.velocity
+
     this.#currentSolver.tick(dt)
+
+    if (
+      this.#state.position !== previousPosition ||
+      this.#state.velocity !== previousVelocity
+    ) {
+      this.#emitter.emit('update')
+    }
+  }
+
+  onUpdate(callback: () => void) {
+    return this.#emitter.on('update', callback)
   }
 }
 

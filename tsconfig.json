@@ -6,7 +6,7 @@
     "esModuleInterop": true,
     "incremental": false,
     "isolatedModules": true,
-    "lib": ["ES2023"],
+    "lib": ["ESNext"],
     "module": "ESNext",
     "moduleDetection": "force",
     "moduleResolution": "Bundler",
@@ -16,6 +16,7 @@
     "strict": true,
     "strictNullChecks": true,
     "strictPropertyInitialization": true,
-    "target": "ES2022"
+    "target": "ESNext",
+    "useDefineForClassFields": true
   }
 }

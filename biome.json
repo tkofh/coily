@@ -6,6 +6,10 @@
     "useIgnoreFile": true,
     "defaultBranch": "main"
   },
+  "files": {
+    "ignoreUnknown": true,
+    "ignore": ["*.vue", "**/playground-vue/**"]
+  },
   "organizeImports": {
     "enabled": true
   },

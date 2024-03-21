@@ -151,4 +151,8 @@ export class Spring {
   get resting() {
     return this.#solver.resting
   }
+
+  onUpdate(callback: () => void) {
+    return this.#solver.onUpdate(callback)
+  }
 }
