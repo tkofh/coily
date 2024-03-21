@@ -1,28 +1,22 @@
 {
+  "$schema": "http://json.schemastore.org/tsconfig",
   "compilerOptions": {
-    // Project Options
-    "allowJs": true,
     "declaration": true,
-    "downlevelIteration": true,
-    "lib": [
-      "ESNext",
-      "ESNext.AsyncIterable",
-    ],
-    "module": "ESNext",
-    "noEmit": false,
-    "sourceMap": true,
-    "target": "ES2018",
-
-    // Strict Checks
-    "strict": true,
-
-    // Module Resolution
-    "allowSyntheticDefaultImports": true,
+    "declarationMap": true,
     "esModuleInterop": true,
-    "moduleResolution": "node",
-
-    // Experimental
-    "experimentalDecorators": true
-  },
-  "exclude": ["node_modules"]
+    "incremental": false,
+    "isolatedModules": true,
+    "lib": ["ESNext"],
+    "module": "ESNext",
+    "moduleDetection": "force",
+    "moduleResolution": "Bundler",
+    "noImplicitAny": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "strictNullChecks": true,
+    "strictPropertyInitialization": true,
+    "target": "ESNext",
+    "useDefineForClassFields": true
+  }
 }

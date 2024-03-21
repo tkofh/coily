@@ -1,0 +1,16 @@
+{
+  "name": "playground-vanilla",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "coily": "workspace:*",
+    "tickloop": "^0.5.0",
+    "typescript": "^5.4.2",
+    "vite": "^5.1.6"
+  }
+}
