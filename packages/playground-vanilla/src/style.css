@@ -1,0 +1,34 @@
+:root {
+  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  min-inline-size: 0;
+}
+
+#ball,
+#ball2 {
+  --x: 0;
+  --y: 0;
+  position: absolute;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  transform: translate(calc(var(--x) - 50%), calc(var(--y) - 50%));
+}

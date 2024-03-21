@@ -1,0 +1,83 @@
+{
+  "$schema": "https://biomejs.dev/schemas/1.6.0/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true,
+    "defaultBranch": "main"
+  },
+  "organizeImports": {
+    "enabled": true
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "complexity": {
+        "noExcessiveCognitiveComplexity": "warn",
+        "useSimplifiedLogicExpression": "warn"
+      },
+      "correctness": {
+        "noNewSymbol": "error",
+        "noUnusedVariables": "warn",
+        "noUnusedImports": "error"
+      },
+      "style": {
+        "noDefaultExport": "error",
+        "noNamespace": "error",
+        "useCollapsedElseIf": "error",
+        "useBlockStatements": "error",
+        "useNamingConvention": {
+          "level": "error",
+          "options": {
+            "strictCase": false
+          }
+        },
+        "useFilenamingConvention": {
+          "level": "error",
+          "options": {
+            "strictCase": false
+          }
+        },
+        "useImportType": "error",
+        "useExportType": "error",
+        "useConsistentArrayType": {
+          "level": "error",
+          "options": {
+            "syntax": "generic"
+          }
+        }
+      },
+      "suspicious": {
+        "noApproximativeNumericConstant": "error"
+      },
+      "nursery": {
+        "noUselessTernary": "warn"
+      }
+    }
+  },
+  "formatter": {
+    "enabled": true,
+    "formatWithErrors": true,
+    "indentStyle": "space",
+    "indentWidth": 2
+  },
+  "javascript": {
+    "formatter": {
+      "semicolons": "asNeeded",
+      "quoteStyle": "single"
+    }
+  },
+  "overrides": [
+    {
+      "include": ["*.config.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDefaultExport": "off"
+          }
+        }
+      }
+    }
+  ]
+}
