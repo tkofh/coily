@@ -6,7 +6,7 @@
     "check": "biome check --apply-unsafe .",
     "check:report": "biome check .",
     "prepare": "lefthook install",
-    "publish-packages": "bun check:report && turbo run build && changeset version && changeset publish"
+    "publish-packages": "pnpm check:report && turbo run build && changeset version && changeset publish"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.6.0",
@@ -18,5 +18,6 @@
     "vite": "^5.2.2",
     "vitest": "^1.3.1"
   },
-  "workspaces": ["packages/*"]
+  "workspaces": ["packages/*"],
+  "packageManager": "pnpm@8.15.5"
 }

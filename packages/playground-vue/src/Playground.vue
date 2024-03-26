@@ -13,14 +13,22 @@ onMounted(() => {
 })
 
 // biome-disable lint/correctness/noUnusedVariables: vue
-const { value: x } = useSpring(mouseX)
-const { value: y } = useSpring(mouseY)
+const { value: x, velocity: velocityX, resting: restingX } = useSpring(mouseX)
+// biome-disable lint/correctness/noUnusedVariables: vue
+const { value: y, velocity: velocityY, resting: restingY  } = useSpring(mouseY)
+
+
+function click() {
+  velocityX.value += (Math.random() - 0.5) * 2000
+  velocityY.value += (Math.random() - 0.5) * 2000
+}
 </script>
 
 <template>
   <div
     class="ball"
     :style="{ '--x': x, '--y': y, backgroundColor: 'blue' }"
+    @click="click"
   ></div>
 </template>
 

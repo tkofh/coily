@@ -21,10 +21,10 @@ export class Solver {
   #overdampedSolver: OverdampedSolver | null = null
   #currentSolver!: Solveable
 
-  #solverNeedsUpdate = false
-  #solverNeedsReset = false
+  #needsUpdate = false
+  #needsReset = false
 
-  #emitter: Emitter<{ update: never }>
+  #emitter: Emitter<{ update: never; rest: never }>
 
   constructor(options: SolverOptions) {
     this.#mass = options.mass
@@ -46,7 +46,7 @@ export class Solver {
 
   set mass(value: number) {
     this.#mass = value
-    this.#solverNeedsUpdate = true
+    this.#needsUpdate = true
   }
 
   get tension() {
@@ -55,7 +55,7 @@ export class Solver {
 
   set tension(value: number) {
     this.#tension = value
-    this.#solverNeedsUpdate = true
+    this.#needsUpdate = true
   }
 
   get damping() {
@@ -64,7 +64,7 @@ export class Solver {
 
   set damping(value: number) {
     this.#damping = value
-    this.#solverNeedsUpdate = true
+    this.#needsUpdate = true
   }
 
   get position() {
@@ -73,7 +73,7 @@ export class Solver {
 
   set position(value: number) {
     this.#state.position = value
-    this.#solverNeedsReset = true
+    this.#needsReset = true
   }
 
   get velocity() {
@@ -82,7 +82,7 @@ export class Solver {
 
   set velocity(value: number) {
     this.#state.velocity = value
-    this.#solverNeedsReset = true
+    this.#needsReset = true
   }
 
   get precision() {
@@ -129,19 +129,20 @@ export class Solver {
   }
 
   tick(dt: number) {
-    if (this.#solverNeedsUpdate) {
+    if (this.#needsUpdate) {
       this.#updateSolver()
 
-      this.#solverNeedsUpdate = false
+      this.#needsUpdate = false
     }
-    if (this.#solverNeedsReset) {
+    if (this.#needsReset) {
       this.#currentSolver.reset()
 
-      this.#solverNeedsReset = false
+      this.#needsReset = false
     }
 
     const previousPosition = this.#state.position
     const previousVelocity = this.#state.velocity
+    const previousResting = this.#state.resting
 
     this.#currentSolver.tick(dt)
 
@@ -151,10 +152,18 @@ export class Solver {
     ) {
       this.#emitter.emit('update')
     }
+
+    if (this.#state.resting !== previousResting) {
+      this.#emitter.emit('rest')
+    }
   }
 
   onUpdate(callback: () => void) {
     return this.#emitter.on('update', callback)
+  }
+
+  onRest(callback: () => void) {
+    return this.#emitter.on('rest', callback)
   }
 }
 

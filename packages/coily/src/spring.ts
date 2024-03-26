@@ -155,4 +155,8 @@ export class Spring {
   onUpdate(callback: () => void) {
     return this.#solver.onUpdate(callback)
   }
+
+  onRest(callback: () => void) {
+    return this.#solver.onRest(callback)
+  }
 }

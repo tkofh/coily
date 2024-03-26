@@ -1,9 +1,8 @@
 import {
   type MaybeRefOrGetter,
   type Ref,
+  customRef,
   inject,
-  onBeforeUnmount,
-  ref,
   toValue,
   watchEffect,
 } from 'vue'
@@ -17,8 +16,8 @@ interface SpringOptions {
 }
 
 interface UseSpringReturn {
-  readonly value: Readonly<Ref<number>>
-  readonly velocity: Readonly<Ref<number>>
+  readonly value: Ref<number>
+  readonly velocity: Ref<number>
   readonly resting: Readonly<Ref<boolean>>
 }
 
@@ -58,17 +57,47 @@ export function useSpring(
     }
   })
 
-  const value = ref(spring.value)
-  const velocity = ref(spring.velocity)
-  const resting = ref(spring.resting)
+  const value = customRef((track, trigger) => {
+    spring.onUpdate(trigger)
 
-  const stop = spring.onUpdate(() => {
-    value.value = spring.value
-    velocity.value = spring.velocity
-    resting.value = spring.resting
+    return {
+      get() {
+        track()
+        return spring.value
+      },
+      set(value: number) {
+        spring.value = value
+        trigger()
+      },
+    }
   })
 
-  onBeforeUnmount(stop)
+  const velocity = customRef((track, trigger) => {
+    spring.onUpdate(trigger)
+
+    return {
+      get() {
+        track()
+        return spring.velocity
+      },
+      set(value: number) {
+        spring.velocity = value
+        trigger()
+      },
+    }
+  })
+
+  const resting = customRef((track, trigger) => {
+    spring.onRest(trigger)
+
+    return {
+      get() {
+        track()
+        return spring.resting
+      },
+      set() {},
+    }
+  })
 
   return {
     value,

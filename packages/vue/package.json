@@ -1,6 +1,6 @@
 {
   "name": "@coily/vue",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Simulate values using spring physics",
   "author": "Tim Morris <timthewebguy@gmail.com>",
   "homepage": "https://github.com/tkofh/coily#readme",
@@ -44,7 +44,7 @@
     "vitest": "^1.3.1"
   },
   "dependencies": {
-    "coily": "^0.6.0",
+    "coily": "^0.7.0",
     "vue": "^3.4.21"
   }
 }

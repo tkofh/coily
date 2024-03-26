@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.7.0
+
+### Minor Changes
+
+- add mutable velocity and onRest handler
+
 ## 0.6.0
 
 ### Minor Changes
