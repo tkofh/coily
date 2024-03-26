@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { useSpringSystem } from '@coily/vue/system'
+import Playground from "./Playground.vue";
+import { useSpringSystem } from "@coily/vue/system";
 
-useSpringSystem()
+useSpringSystem();
 </script>
 
 <template>

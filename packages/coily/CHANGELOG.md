@@ -1,5 +1,23 @@
 # Change Log
 
+## 0.6.0
+
+### Minor Changes
+
+- use proper version for packages
+
+## 0.5.1
+
+### Patch Changes
+
+- fixing build script
+
+## 0.5.0
+
+### Minor Changes
+
+- refactor to improve math and performance
+
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 

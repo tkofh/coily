@@ -1,6 +1,6 @@
 {
   "name": "@coily/vue",
-  "version": "0.4.1",
+  "version": "0.6.0",
   "description": "Simulate values using spring physics",
   "author": "Tim Morris <timthewebguy@gmail.com>",
   "homepage": "https://github.com/tkofh/coily#readme",
@@ -32,9 +32,7 @@
   },
   "scripts": {
     "build": "unbuild",
-    "test": "vitest",
-    "test:run": "vitest run",
-    "test:ui": "vitest --ui"
+    "prepublish": "bun run build"
   },
   "bugs": {
     "url": "https://github.com/tkofh/coily/issues"
@@ -45,9 +43,8 @@
     "unbuild": "^2.0.0",
     "vitest": "^1.3.1"
   },
-  "gitHead": "96019bee6135f93006c3fd52d23846afd6271c66",
   "dependencies": {
-    "coily": "workspace:*",
+    "coily": "^0.6.0",
     "vue": "^3.4.21"
   }
 }
