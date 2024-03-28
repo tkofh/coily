@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.7.1
+
+### Patch Changes
+
+- ensure spring state is updated immediately upon mutating value or target
+
 ## 0.7.0
 
 ### Minor Changes

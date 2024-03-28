@@ -16,7 +16,7 @@ export class Spring {
   #solver: Solver
   #scheduler: Scheduler
 
-  #optimisticTarget: number
+  #newTarget: number
 
   constructor(scheduler: Scheduler, options: SpringOptions) {
     invariant(options.mass > 0, 'Mass must be greater than 0')
@@ -42,7 +42,7 @@ export class Spring {
     })
     this.#scheduler = scheduler
 
-    this.#optimisticTarget = this.#target
+    this.#newTarget = this.#target
 
     if (!this.#solver.resting) {
       this.#scheduler.add(this.#solver)
@@ -50,21 +50,18 @@ export class Spring {
   }
 
   get target() {
-    return this.#optimisticTarget
+    return this.#target
   }
 
   set target(value: number) {
-    if (value !== this.#optimisticTarget) {
-      this.#optimisticTarget = value
-      this.#scheduler.once(() => {
-        if (!this.#scheduler.has(this.#solver)) {
-          this.#scheduler.add(this.#solver)
-        }
+    if (value !== this.#target) {
+      if (!this.#scheduler.has(this.#solver)) {
+        this.#scheduler.add(this.#solver)
+      }
 
-        const currentValue = this.value
-        this.#target = this.#optimisticTarget
-        this.#solver.position = currentValue - this.#target
-      })
+      const currentValue = this.value
+      this.#target = value
+      this.#solver.position = currentValue - this.#target
     }
   }
 
