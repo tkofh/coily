@@ -8,7 +8,7 @@ interface SpringOptions {
   damping: number
   target: number
   value?: number
-  precsiion?: number
+  precision?: number
 }
 
 export class Spring {
@@ -26,7 +26,7 @@ export class Spring {
       'Damping must be greater than or equal to 0',
     )
     invariant(
-      options.precsiion === undefined || options.precsiion > 0,
+      options.precision === undefined || options.precision > 0,
       'Precision must be greater than 0',
     )
 
@@ -38,7 +38,7 @@ export class Spring {
       damping: options.damping,
       position: options.target + (options.value ?? 0),
       velocity: 0,
-      precision: options.precsiion ?? 2,
+      precision: options.precision ?? 2,
     })
     this.#scheduler = scheduler
 

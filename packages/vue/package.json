@@ -1,6 +1,6 @@
 {
   "name": "@coily/vue",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Simulate values using spring physics",
   "author": "Tim Morris <timthewebguy@gmail.com>",
   "homepage": "https://github.com/tkofh/coily#readme",
@@ -15,6 +15,15 @@
       "require": "./dist/spring.cjs",
       "import": "./dist/spring.mjs",
       "types": "./dist/spring.d.ts"
+    },
+    "./component": {
+      "require": "./dist/component.cjs",
+      "import": "./dist/component.mjs",
+      "types": "./dist/component.d.ts"
+    },
+    "./nuxt": {
+      "import": "./dist/nuxt.mjs",
+      "types": "./dist/nuxt.d.ts"
     },
     "./system": {
       "require": "./dist/system.cjs",
@@ -32,19 +41,21 @@
   },
   "scripts": {
     "build": "unbuild",
-    "prepublish": "bun run build"
+    "prepublish": "pnpm run build"
   },
   "bugs": {
     "url": "https://github.com/tkofh/coily/issues"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "^1.4.0",
-    "@vitest/ui": "^1.4.0",
+    "@vitest/coverage-v8": "^2.0.4",
+    "@vitest/ui": "^2.0.4",
     "unbuild": "^2.0.0",
-    "vitest": "^1.3.1"
+    "vitest": "^2.0.4"
   },
   "dependencies": {
-    "coily": "^0.7.0",
-    "vue": "^3.4.21"
+    "@nuxt/kit": "^3.12.4",
+    "@nuxt/schema": "^3.12.4",
+    "coily": "^0.7.2",
+    "vue": "^3.4.33"
   }
 }

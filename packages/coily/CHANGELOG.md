@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.7.2
+
+### Patch Changes
+
+- update dependencies
+
 ## 0.7.1
 
 ### Patch Changes
