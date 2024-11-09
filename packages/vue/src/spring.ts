@@ -88,7 +88,8 @@ export function useSpring(
   })
 
   const resting = customRef((track, trigger) => {
-    spring.onRest(trigger)
+    spring.onStart(trigger)
+    spring.onStop(trigger)
 
     return {
       get() {

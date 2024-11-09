@@ -1,7 +1,7 @@
-import { type SlotsType, type VNode, defineComponent, toRefs } from 'vue'
+import { type SlotsType, defineComponent, toRefs } from 'vue'
 import { useSpring } from './spring'
 
-interface SpringValueProps {
+export interface SpringValueProps {
   target: number
   mass?: number
   tension?: number
@@ -9,8 +9,19 @@ interface SpringValueProps {
   precision?: number
 }
 
-export const SpringValue = defineComponent(
-  (props: SpringValueProps, { slots }) => {
+export type SpringValueEmits = Record<string, never>
+
+export type SpringValueSlots = SlotsType<{
+  default: { value: number; velocity: number; resting: boolean }
+}>
+
+export const SpringValue = defineComponent<
+  SpringValueProps,
+  SpringValueEmits,
+  string,
+  SpringValueSlots
+>(
+  (props, { slots }) => {
     const { target, mass, tension, friction, precision } = toRefs(props)
     const spring = useSpring(target, () => ({
       mass: mass?.value ?? 1,
@@ -32,12 +43,5 @@ export const SpringValue = defineComponent(
   {
     name: 'SpringValue',
     props: ['target', 'mass', 'tension', 'friction', 'precision'],
-    slots: {} as SlotsType<{
-      default: (props: {
-        value: number
-        velocity: number
-        resting: boolean
-      }) => Array<VNode>
-    }>,
   },
 )

@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.7.3
+
+### Patch Changes
+
+- 2560306: add component and nuxt module to vue integration
+
 ## 0.7.2
 
 ### Patch Changes

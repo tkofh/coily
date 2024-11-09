@@ -13,10 +13,10 @@ interface SpringOptions {
 
 export class Spring {
   #target: number
-  #solver: Solver
-  #scheduler: Scheduler
+  readonly #solver: Solver
+  readonly #scheduler: Scheduler
 
-  #newTarget: number
+  // #newTarget: number
 
   constructor(scheduler: Scheduler, options: SpringOptions) {
     invariant(options.mass > 0, 'Mass must be greater than 0')
@@ -42,7 +42,7 @@ export class Spring {
     })
     this.#scheduler = scheduler
 
-    this.#newTarget = this.#target
+    // this.#newTarget = this.#target
 
     if (!this.#solver.resting) {
       this.#scheduler.add(this.#solver)
@@ -153,7 +153,11 @@ export class Spring {
     return this.#solver.onUpdate(callback)
   }
 
-  onRest(callback: () => void) {
-    return this.#solver.onRest(callback)
+  onStart(callback: () => void) {
+    return this.#solver.onStart(callback)
+  }
+
+  onStop(callback: () => void) {
+    return this.#solver.onStop(callback)
   }
 }

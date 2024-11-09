@@ -3,22 +3,34 @@
   "private": true,
   "scripts": {
     "build": "turbo run build",
-    "test": "turbo run test",
-    "check": "biome check --write --unsafe .",
-    "check:report": "biome check .",
+    "check": "biome check .",
+    "check:fix": "biome check --write --unsafe .",
+    "deps:reinstall": "pnpm dlx rimraf node_modules pnpm-lock.yaml ./**/node_modules && pnpm install",
+    "deps:update": "pnpm -r update && pnpm dedupe",
+    "deps:update:latest": "pnpm -r update --latest && pnpm dedupe",
     "prepare": "lefthook install",
-    "publish-packages": "pnpm check:report && turbo run build && changeset version && changeset publish && pnpm check"
+    "publish-packages": "pnpm check:report && turbo run build && changeset version && changeset publish && pnpm check:fix",
+    "test": "turbo run test"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.8.3",
-    "@changesets/cli": "^2.27.7",
+    "@biomejs/biome": "^1.9.4",
+    "@changesets/cli": "^2.27.9",
     "@tsconfig/node20": "^20.1.4",
-    "lefthook": "^1.7.5",
-    "turbo": "^2.0.9",
-    "typescript": "^5.5.3",
-    "vite": "^5.3.4",
-    "vitest": "^2.0.4"
+    "lefthook": "^1.8.2",
+    "turbo": "^2.2.3",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.4"
   },
-  "workspaces": ["packages/*"],
-  "packageManager": "pnpm@9.6.0"
+  "packageManager": "pnpm@9.12.3",
+  "pnpm": {
+    "allowedDeprecatedVersions": {
+      "are-we-there-yet": "2.0.0",
+      "gauge": "3.0.2",
+      "glob": "7.2.3 || 8.1.0",
+      "inflight": "1.0.6",
+      "npmlog": "5.0.1",
+      "rimraf": "3.0.2"
+    }
+  }
 }

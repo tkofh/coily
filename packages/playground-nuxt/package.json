@@ -3,7 +3,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "nuxt build",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
@@ -11,7 +10,7 @@
   },
   "dependencies": {
     "@coily/vue": "workspace:*",
-    "nuxt": "^3.12.4",
-    "vue": "latest"
+    "nuxt": "^3.14.159",
+    "vue": "^3.5.12"
   }
 }

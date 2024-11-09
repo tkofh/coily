@@ -3,15 +3,14 @@ import {
   addImports,
   addPluginTemplate,
   defineNuxtModule,
-} from '@nuxt/kit'
-// @ts-ignore
+} from '@nuxt/kit' // @ts-ignore
 import {} from '@nuxt/schema'
 
 const pluginTemplate = `import { createSpringSystem } from 'coily'
 import { start } from 'coily/loop'
 import { provideSpringSystem } from '@coily/vue/system'
 
-export default defineNuxtPlugin((nuxtApp) => {
+export default defineNuxtPlugin((nuxtApp) => 
   nuxtApp.hook('app:created', (vueApp) => {
     const system = createSpringSystem()
     provideSpringSystem(system, vueApp)
@@ -33,7 +32,7 @@ export default defineNuxtModule({
       name: '@coily/vue',
       filename: 'coily.plugin.mjs',
       mode: 'all',
-      write: true,
+      // write: true,
       getContents: () => pluginTemplate,
     })
 

@@ -11,7 +11,7 @@ interface SpringOptions {
 }
 
 export class SpringSystem {
-  #scheduler: Scheduler
+  readonly #scheduler: Scheduler
 
   constructor() {
     this.#scheduler = new Scheduler()

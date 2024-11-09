@@ -45,11 +45,8 @@ document.addEventListener('DOMContentLoaded', () => {
     spring2Y.target = springY.value
     system.tick(delta / 1000)
 
-    ball.style.setProperty('--x', `${springX.value}px`)
-    ball.style.setProperty('--y', `${springY.value}px`)
-    ball2.style.setProperty('--x', `${spring2X.value}px`)
-    ball2.style.setProperty('--y', `${spring2Y.value}px`)
-    // console.log(spring.target, spring.value)
+    ball.style.translate = `calc(${springX.value}px - 50%) calc(${springY.value}px - 50%)`
+    ball2.style.translate = `calc(${spring2X.value}px - 50%) calc(${spring2Y.value}px - 50%)`
   })
 
   document.addEventListener('mousemove', (event) => {

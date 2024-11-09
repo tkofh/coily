@@ -1,0 +1,13 @@
+{
+  "name": "@repo/tsconfig",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "exports": {
+    "./root.json": "./root.json",
+    "./workspace.json": "./workspace.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

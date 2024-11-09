@@ -1,14 +1,19 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalDependencies": ["**/.env.*local", "tsconfig.json"],
+  "ui": "tui",
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
-    "test:run": {
-      "dependsOn": ["^build"],
+    "test": {
       "cache": true
+    },
+    "//#check": {
+      "cache": true
+    },
+    "//#check:fix": {
+      "cache": false
     }
   }
 }
