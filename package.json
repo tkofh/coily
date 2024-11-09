@@ -9,7 +9,7 @@
     "deps:update": "pnpm -r update && pnpm dedupe",
     "deps:update:latest": "pnpm -r update --latest && pnpm dedupe",
     "prepare": "lefthook install",
-    "publish-packages": "pnpm check:report && turbo run build && changeset version && changeset publish && pnpm check:fix",
+    "publish-packages": "turbo run check build test && changeset version && changeset publish && turbo run check:fix",
     "test": "turbo run test"
   },
   "devDependencies": {
