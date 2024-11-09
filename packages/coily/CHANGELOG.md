@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.8.1
+
+### Patch Changes
+
+- 9a5f49c: fix: synchronous updates to both `target` and `value` now work properly
+
 ## 0.8.0
 
 ### Minor Changes

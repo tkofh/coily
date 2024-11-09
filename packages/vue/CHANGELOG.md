@@ -1,5 +1,12 @@
 # @coily/vue
 
+## 0.8.3
+
+### Patch Changes
+
+- Updated dependencies [9a5f49c]
+  - coily@0.8.1
+
 ## 0.8.2
 
 ### Patch Changes
