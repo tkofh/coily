@@ -19,6 +19,7 @@ interface UseSpringReturn {
   readonly value: Ref<number>
   readonly velocity: Ref<number>
   readonly resting: Readonly<Ref<boolean>>
+  readonly jumpTo: (value: number) => void
 }
 
 const defaultOptions: SpringOptions = {
@@ -115,5 +116,8 @@ export function useSpring(
     value,
     velocity,
     resting,
+    jumpTo: (value: number) => {
+      spring.jumpTo(value)
+    },
   }
 }

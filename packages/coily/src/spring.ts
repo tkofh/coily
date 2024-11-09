@@ -170,4 +170,11 @@ export class Spring {
   onStop(callback: () => void) {
     return this.#solver.onStop(callback)
   }
+
+  jumpTo(value: number) {
+    this.#target = value
+    this.#solver.position = 0
+    this.#solver.velocity = 0
+    this.#solver.tick(0)
+  }
 }

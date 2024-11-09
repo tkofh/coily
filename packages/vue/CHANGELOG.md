@@ -1,5 +1,13 @@
 # @coily/vue
 
+## 0.8.4
+
+### Patch Changes
+
+- 8827939: fix ref triggering for sync updates
+- Updated dependencies [8827939]
+  - coily@0.8.2
+
 ## 0.8.3
 
 ### Patch Changes
