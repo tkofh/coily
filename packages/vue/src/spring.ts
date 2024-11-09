@@ -4,7 +4,7 @@ import {
   customRef,
   inject,
   toValue,
-  watchEffect,
+  watchSyncEffect,
 } from 'vue'
 import { SpringSystemKey } from './injection'
 
@@ -44,11 +44,9 @@ export function useSpring(
     target: toValue(target),
   })
 
-  watchEffect(() => {
-    spring.target = toValue(target)
-  })
+  const triggers = new Set<() => void>()
 
-  watchEffect(() => {
+  watchSyncEffect(() => {
     const opts = toValue(options)
     if (opts) {
       spring.mass = opts.mass
@@ -59,6 +57,8 @@ export function useSpring(
 
   const value = customRef((track, trigger) => {
     spring.onUpdate(trigger)
+
+    triggers.add(trigger)
 
     return {
       get() {
@@ -74,6 +74,8 @@ export function useSpring(
 
   const velocity = customRef((track, trigger) => {
     spring.onUpdate(trigger)
+
+    triggers.add(trigger)
 
     return {
       get() {
@@ -91,12 +93,21 @@ export function useSpring(
     spring.onStart(trigger)
     spring.onStop(trigger)
 
+    triggers.add(trigger)
+
     return {
       get() {
         track()
         return spring.resting
       },
       set() {},
+    }
+  })
+
+  watchSyncEffect(() => {
+    spring.target = toValue(target)
+    for (const trigger of triggers) {
+      trigger()
     }
   })
 
