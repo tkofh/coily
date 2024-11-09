@@ -63,4 +63,50 @@ describe('scheduling', () => {
     expect(onStart).toHaveBeenCalled()
     expect(onStop).toHaveBeenCalled()
   })
+
+  test('setting target and value to the same number leaves the spring resting', () => {
+    const system = createSpringSystem()
+
+    const spring = system.createSpring({
+      damping: 1,
+      mass: 1,
+      tension: 2,
+      target: 0,
+      value: 0,
+    })
+
+    system.tick(0)
+
+    expect(spring.target).toBe(0)
+    expect(spring.value).toBe(0)
+    expect(spring.resting).toBe(true)
+
+    spring.target = 100
+
+    expect(spring.target).toBe(100)
+    expect(spring.value).toBe(0)
+    expect(spring.resting).toBe(false)
+
+    spring.value = 100
+
+    system.tick(0)
+
+    expect(spring.target).toBe(100)
+    expect(spring.value).toBe(100)
+    expect(spring.resting).toBe(true)
+
+    spring.value = 0
+
+    expect(spring.target).toBe(100)
+    expect(spring.value).toBe(0)
+    expect(spring.resting).toBe(false)
+
+    spring.target = 0
+
+    system.tick(0)
+
+    expect(spring.target).toBe(0)
+    expect(spring.value).toBe(0)
+    expect(spring.resting).toBe(true)
+  })
 })

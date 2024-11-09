@@ -55,6 +55,9 @@ export class Spring {
 
   set target(value: number) {
     if (value !== this.#target) {
+      if (this.#solver.position !== this.#solver.lazyPosition) {
+        this.#solver.tick(0, false)
+      }
       if (!this.#scheduler.has(this.#solver)) {
         this.#scheduler.add(this.#solver)
       }
@@ -70,11 +73,18 @@ export class Spring {
   }
 
   set value(value: number) {
-    if (!this.#scheduler.has(this.#solver)) {
-      this.#scheduler.add(this.#solver)
-    }
+    const position = value - this.#target
+    if (position !== this.#solver.position) {
+      if (this.#solver.position !== this.#solver.lazyPosition) {
+        this.#solver.tick(0, false)
+      }
 
-    this.#solver.position = this.#target - value
+      if (!this.#scheduler.has(this.#solver)) {
+        this.#scheduler.add(this.#solver)
+      }
+
+      this.#solver.position = position
+    }
   }
 
   get velocity() {
