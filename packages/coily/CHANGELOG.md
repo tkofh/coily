@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.8.0
+
+### Minor Changes
+
+- 48b49a1: [breaking] replace `onRest` handler with `onStart` and `onStop` handlers
+
 ## 0.7.3
 
 ### Patch Changes

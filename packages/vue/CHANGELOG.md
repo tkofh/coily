@@ -1,5 +1,13 @@
 # @coily/vue
 
+## 0.8.2
+
+### Patch Changes
+
+- 48b49a1: improve the types for `SpringValue`
+- Updated dependencies [48b49a1]
+  - coily@0.8.0
+
 ## 0.8.1
 
 ### Patch Changes
