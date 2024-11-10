@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.9.0
+
+### Minor Changes
+
+- 6fbd43a: add `jumpTo` method to springs, which sets target and value and clears velocity
+
 ## 0.8.2
 
 ### Patch Changes

@@ -1,5 +1,16 @@
 # @coily/vue
 
+## 0.9.0
+
+### Minor Changes
+
+- 6fbd43a: add `jumpTo` method to springs, which sets target and value and clears velocity
+
+### Patch Changes
+
+- Updated dependencies [6fbd43a]
+  - coily@0.9.0
+
 ## 0.8.4
 
 ### Patch Changes
