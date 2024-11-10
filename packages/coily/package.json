@@ -1,6 +1,6 @@
 {
   "name": "coily",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "Simulate values using spring physics",
   "author": "Tim Morris <timthewebguy@gmail.com>",
   "homepage": "https://github.com/tkofh/coily#readme",

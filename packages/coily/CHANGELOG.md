@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.10.1
+
+### Patch Changes
+
+- 3f6c1cc: ensure the initial value is correct regardless of whether `target`, `value`, or both are specified
+
 ## 0.10.0
 
 ### Minor Changes

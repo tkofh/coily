@@ -22,8 +22,6 @@ interface UseSpringReturn {
   readonly jumpTo: (value: number) => void
 }
 
-type Trigger = () => void
-
 const defaultOptions: SpringOptions = {
   mass: 1,
   tension: 100,

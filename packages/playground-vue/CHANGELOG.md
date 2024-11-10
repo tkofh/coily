@@ -1,5 +1,11 @@
 # playground-vue
 
+## 0.0.9
+
+### Patch Changes
+
+- @coily/vue@0.10.1
+
 ## 0.0.8
 
 ### Patch Changes
