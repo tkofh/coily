@@ -58,13 +58,13 @@ export class Spring {
       'Precision must be greater than 0',
     )
 
-    this.#target = options.target ?? 0
+    this.#target = options.target ?? options.value ?? 0
 
     this.#solver = new Solver({
       mass: options.mass,
       tension: options.tension,
       damping: options.damping,
-      position: this.#target + (options.value ?? 0),
+      position: (options.value ?? this.#target) - this.#target,
       velocity: 0,
       precision: options.precision ?? 2,
     })

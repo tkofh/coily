@@ -1,4 +1,7 @@
 {
   "extends": "@repo/tsconfig/workspace.json",
+  "compilerOptions": {
+    "types": ["@vitest/browser/providers/playwright"]
+  },
   "include": ["./build.config.ts", "src/**/*.ts"]
 }

@@ -36,15 +36,20 @@
     "url": "git+https://github.com/tkofh/coily.git"
   },
   "scripts": {
-    "build": "unbuild"
+    "build": "unbuild",
+    "test": "vitest run"
   },
   "bugs": {
     "url": "https://github.com/tkofh/coily/issues"
   },
   "devDependencies": {
     "@repo/tsconfig": "workspace:*",
+    "@vitejs/plugin-vue": "^5.1.4",
+    "@vitest/browser": "^2.1.4",
+    "playwright": "^1.48.2",
     "unbuild": "^2.0.0",
-    "vitest": "^2.1.4"
+    "vitest": "^2.1.4",
+    "vitest-browser-vue": "^0.0.1"
   },
   "dependencies": {
     "@nuxt/kit": "^3.14.159",

@@ -29,8 +29,7 @@
   },
   "scripts": {
     "build": "unbuild",
-    "test": "vitest run",
-    "prepublish": "bun run build"
+    "test": "vitest run"
   },
   "bugs": {
     "url": "https://github.com/tkofh/coily/issues"

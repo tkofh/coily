@@ -9,10 +9,7 @@ class SpringSystemImpl implements SpringSystem {
   }
 
   createSpring(options: SpringOptions) {
-    return new Spring(this.#scheduler, {
-      ...options,
-      target: options.target ?? 0,
-    })
+    return new Spring(this.#scheduler, options)
   }
 
   tick(dt: number) {

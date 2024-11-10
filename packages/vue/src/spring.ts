@@ -47,9 +47,12 @@ export function useSpring(
     target: toValue(target),
   })
 
-  let triggerValue: Trigger | undefined
-  let triggerVelocity: Trigger | undefined
-  let triggerResting: Trigger | undefined
+  console.log('init spring.target', spring.target, '\n')
+  console.log('init spring.value', spring.value, '\n')
+
+  // let triggerValue: Trigger | undefined
+  // let triggerVelocity: Trigger | undefined
+  // let triggerResting: Trigger | undefined
 
   watchSyncEffect(() => {
     const opts = toValue(options)
@@ -63,7 +66,7 @@ export function useSpring(
   const value = customRef((track, trigger) => {
     spring.onUpdate(trigger)
 
-    triggerValue = trigger
+    // triggerValue = trigger
 
     return {
       get() {
@@ -80,7 +83,7 @@ export function useSpring(
   const velocity = customRef((track, trigger) => {
     spring.onUpdate(trigger)
 
-    triggerVelocity = trigger
+    // triggerVelocity = trigger
 
     return {
       get() {
@@ -98,7 +101,7 @@ export function useSpring(
     spring.onStart(trigger)
     spring.onStop(trigger)
 
-    triggerResting = trigger
+    // triggerResting = trigger
 
     return {
       get() {
@@ -110,10 +113,14 @@ export function useSpring(
   })
 
   watchSyncEffect(() => {
+    console.log('spring.target', spring.target, '\n')
+    console.log('spring.value', spring.value, '\n')
     spring.target = toValue(target)
-    triggerValue?.()
-    triggerVelocity?.()
-    triggerResting?.()
+    console.log('spring.target', spring.target, '\n')
+    console.log('spring.value', spring.value, '\n')
+    // triggerValue?.()
+    // triggerVelocity?.()
+    // triggerResting?.()
   })
 
   return {
