@@ -1,5 +1,12 @@
 # playground-vue
 
+## 0.0.8
+
+### Patch Changes
+
+- Updated dependencies [14a6b8a]
+  - @coily/vue@0.10.0
+
 ## 0.0.7
 
 ### Patch Changes

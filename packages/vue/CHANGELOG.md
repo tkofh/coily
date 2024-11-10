@@ -1,5 +1,18 @@
 # @coily/vue
 
+## 0.10.0
+
+### Minor Changes
+
+- 14a6b8a: build as esm only
+
+### Patch Changes
+
+- Updated dependencies [14a6b8a]
+- Updated dependencies [14a6b8a]
+- Updated dependencies [14a6b8a]
+  - coily@0.10.0
+
 ## 0.9.0
 
 ### Minor Changes

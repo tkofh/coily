@@ -1,5 +1,16 @@
 # Change Log
 
+## 0.10.0
+
+### Minor Changes
+
+- 14a6b8a: build as esm only
+
+### Patch Changes
+
+- 14a6b8a: explicitly export `SpringSystem` as an interface to avoid typescript trying to infer private properties
+- 14a6b8a: immediately emit update events when changing value and target
+
 ## 0.9.0
 
 ### Minor Changes
