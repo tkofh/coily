@@ -1,16 +1,7 @@
 import { Scheduler } from './scheduler'
-import { Spring } from './spring'
+import { Spring, type SpringOptions } from './spring'
 
-interface SpringOptions {
-  mass: number
-  tension: number
-  damping: number
-  target?: number
-  value?: number
-  precision?: number
-}
-
-export class SpringSystem {
+class SpringSystemImpl implements SpringSystem {
   readonly #scheduler: Scheduler
 
   constructor() {
@@ -27,4 +18,13 @@ export class SpringSystem {
   tick(dt: number) {
     this.#scheduler.tick(dt)
   }
+}
+
+export interface SpringSystem {
+  createSpring(options: SpringOptions): Spring
+  tick(dt: number): void
+}
+
+export function createSpringSystem(): SpringSystem {
+  return new SpringSystemImpl()
 }

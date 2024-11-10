@@ -10,6 +10,7 @@
     "lib": ["esnext"],
     "moduleResolution": "bundler",
     "target": "esnext",
+    "useDefineForClassFields": true,
     "outDir": "dist",
     "sourceMap": true,
 

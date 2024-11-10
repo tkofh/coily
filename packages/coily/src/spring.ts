@@ -2,12 +2,42 @@ import type { Scheduler } from './scheduler'
 import { Solver } from './solver'
 import { invariant } from './util'
 
-interface SpringOptions {
+export interface SpringOptions {
+  /**
+   * The mass of the spring
+   *
+   * must be greater than 0
+   */
   mass: number
+  /**
+   * The tension of the spring
+   *
+   * must be greater than 0
+   */
   tension: number
+  /**
+   * The damping of the spring
+   *
+   * must be greater than or equal to 0
+   */
   damping: number
-  target: number
+  /**
+   * The target of the spring
+   *
+   * defaults to 0
+   */
+  target?: number
+  /**
+   * The current value of the spring
+   *
+   * defaults to the target
+   */
   value?: number
+  /**
+   * The precision of the solver
+   *
+   * defaults to 2
+   */
   precision?: number
 }
 
@@ -15,8 +45,6 @@ export class Spring {
   #target: number
   readonly #solver: Solver
   readonly #scheduler: Scheduler
-
-  // #newTarget: number
 
   constructor(scheduler: Scheduler, options: SpringOptions) {
     invariant(options.mass > 0, 'Mass must be greater than 0')
@@ -30,19 +58,17 @@ export class Spring {
       'Precision must be greater than 0',
     )
 
-    this.#target = options.target
+    this.#target = options.target ?? 0
 
     this.#solver = new Solver({
       mass: options.mass,
       tension: options.tension,
       damping: options.damping,
-      position: options.target + (options.value ?? 0),
+      position: this.#target + (options.value ?? 0),
       velocity: 0,
       precision: options.precision ?? 2,
     })
     this.#scheduler = scheduler
-
-    // this.#newTarget = this.#target
 
     if (!this.#solver.resting) {
       this.#scheduler.add(this.#solver)
@@ -55,9 +81,6 @@ export class Spring {
 
   set target(value: number) {
     if (value !== this.#target) {
-      if (this.#solver.position !== this.#solver.lazyPosition) {
-        this.#solver.tick(0)
-      }
       if (!this.#scheduler.has(this.#solver)) {
         this.#scheduler.add(this.#solver)
       }
@@ -65,6 +88,7 @@ export class Spring {
       const currentValue = this.value
       this.#target = value
       this.#solver.position = currentValue - this.#target
+      this.#solver.tick(0)
     }
   }
 
@@ -75,15 +99,12 @@ export class Spring {
   set value(value: number) {
     const position = value - this.#target
     if (position !== this.#solver.position) {
-      if (this.#solver.position !== this.#solver.lazyPosition) {
-        this.#solver.tick(0)
-      }
-
       if (!this.#scheduler.has(this.#solver)) {
         this.#scheduler.add(this.#solver)
       }
 
       this.#solver.position = position
+      this.#solver.tick(0)
     }
   }
 

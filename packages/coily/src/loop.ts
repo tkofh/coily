@@ -1,5 +1,5 @@
 import { createTicker } from 'tickloop'
-import type { SpringSystem } from './system'
+import type { SpringSystem } from './api'
 
 export function start(system: SpringSystem) {
   const ticker = createTicker()

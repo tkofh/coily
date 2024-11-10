@@ -22,6 +22,8 @@ interface UseSpringReturn {
   readonly jumpTo: (value: number) => void
 }
 
+type Trigger = () => void
+
 const defaultOptions: SpringOptions = {
   mass: 1,
   tension: 100,
@@ -45,7 +47,9 @@ export function useSpring(
     target: toValue(target),
   })
 
-  const triggers = new Set<() => void>()
+  let triggerValue: Trigger | undefined
+  let triggerVelocity: Trigger | undefined
+  let triggerResting: Trigger | undefined
 
   watchSyncEffect(() => {
     const opts = toValue(options)
@@ -59,7 +63,7 @@ export function useSpring(
   const value = customRef((track, trigger) => {
     spring.onUpdate(trigger)
 
-    triggers.add(trigger)
+    triggerValue = trigger
 
     return {
       get() {
@@ -76,7 +80,7 @@ export function useSpring(
   const velocity = customRef((track, trigger) => {
     spring.onUpdate(trigger)
 
-    triggers.add(trigger)
+    triggerVelocity = trigger
 
     return {
       get() {
@@ -94,7 +98,7 @@ export function useSpring(
     spring.onStart(trigger)
     spring.onStop(trigger)
 
-    triggers.add(trigger)
+    triggerResting = trigger
 
     return {
       get() {
@@ -107,9 +111,9 @@ export function useSpring(
 
   watchSyncEffect(() => {
     spring.target = toValue(target)
-    for (const trigger of triggers) {
-      trigger()
-    }
+    triggerValue?.()
+    triggerVelocity?.()
+    triggerResting?.()
   })
 
   return {

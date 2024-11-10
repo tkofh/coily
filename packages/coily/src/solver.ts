@@ -15,7 +15,6 @@ export class Solver {
   #tension: number
   #damping: number
   readonly #state: State
-  #lazyPosition: number
 
   #underdampedSolver: UnderdampedSolver | null = null
   #criticallyDampedSolver: CriticallyDampedSolver | null = null
@@ -36,7 +35,6 @@ export class Solver {
       options.velocity,
       options.precision,
     )
-    this.#lazyPosition = options.position
     this.#emitter = new Emitter()
 
     this.#updateSolver()
@@ -80,10 +78,6 @@ export class Solver {
     if (!this.#state.resting) {
       this.#emitter.emit('start')
     }
-  }
-
-  get lazyPosition() {
-    return this.#lazyPosition
   }
 
   get velocity() {
@@ -132,8 +126,6 @@ export class Solver {
     }
 
     this.#currentSolver.tick(dt)
-
-    this.#lazyPosition = this.#state.position
 
     if (emit) {
       this.#emitter.emit('update')

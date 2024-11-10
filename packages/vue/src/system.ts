@@ -19,7 +19,7 @@ export function useSpringSystem() {
   let stop!: () => void
 
   onMounted(() => {
-    stop = start(system as never)
+    stop = start(system)
   })
 
   onBeforeUnmount(stop)

@@ -1,11 +1,11 @@
 import { createTicker } from 'tickloop'
-import { SpringSystem } from '../../coily/src/system'
+import { createSpringSystem } from '../../coily/src/system'
 import './style.css'
 
 // const q = 1 - damping ** 2
 
 document.addEventListener('DOMContentLoaded', () => {
-  const system = new SpringSystem()
+  const system = createSpringSystem()
   const springX = system.createSpring({
     mass: 1,
     tension: 100,

@@ -7,19 +7,16 @@
   "license": "MIT",
   "sideEffects": false,
   "type": "module",
-  "main": "./dist/api.cjs",
   "module": "./dist/api.mjs",
-  "types": "./dist/api.d.ts",
+  "types": "./dist/api.d.mts",
   "exports": {
     ".": {
-      "require": "./dist/api.cjs",
       "import": "./dist/api.mjs",
-      "types": "./dist/api.d.ts"
+      "types": "./dist/api.d.mts"
     },
     "./loop": {
-      "require": "./dist/loop.cjs",
       "import": "./dist/loop.mjs",
-      "types": "./dist/loop.d.ts"
+      "types": "./dist/loop.d.mts"
     }
   },
   "files": ["dist"],
@@ -39,6 +36,7 @@
     "url": "https://github.com/tkofh/coily/issues"
   },
   "devDependencies": {
+    "@repo/tsconfig": "workspace:*",
     "unbuild": "^2.0.0",
     "vitest": "^2.1.4"
   },

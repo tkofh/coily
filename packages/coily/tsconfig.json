@@ -1,0 +1,4 @@
+{
+  "extends": "@repo/tsconfig/workspace.json",
+  "include": ["./build.config.ts", "src/**/*.ts", "test/**/*.ts"]
+}

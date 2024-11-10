@@ -7,17 +7,14 @@
   "license": "MIT",
   "sideEffects": false,
   "type": "module",
-  "main": "./dist/spring.cjs",
   "module": "./dist/spring.mjs",
   "types": "./dist/spring.d.ts",
   "exports": {
     ".": {
-      "require": "./dist/spring.cjs",
       "import": "./dist/spring.mjs",
       "types": "./dist/spring.d.ts"
     },
     "./component": {
-      "require": "./dist/component.cjs",
       "import": "./dist/component.mjs",
       "types": "./dist/component.d.ts"
     },
@@ -26,7 +23,6 @@
       "types": "./dist/nuxt.d.ts"
     },
     "./system": {
-      "require": "./dist/system.cjs",
       "import": "./dist/system.mjs",
       "types": "./dist/system.d.ts"
     }
@@ -46,6 +42,7 @@
     "url": "https://github.com/tkofh/coily/issues"
   },
   "devDependencies": {
+    "@repo/tsconfig": "workspace:*",
     "unbuild": "^2.0.0",
     "vitest": "^2.1.4"
   },
