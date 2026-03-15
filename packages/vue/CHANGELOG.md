@@ -1,5 +1,11 @@
 # @coily/vue
 
+## 0.10.2
+
+### Patch Changes
+
+- bec2137: remove accidental debug logs
+
 ## 0.10.1
 
 ### Patch Changes
