@@ -13,6 +13,10 @@ export class Solver {
   #overdampedSolver: OverdampedSolver | null = null
   #currentSolver: Solveable | null = null
 
+  #naturalFrequency = 0
+  #criticalDamping = 0
+  #dampingRatio = 0
+
   #needsUpdate = false
   #needsReset = false
 
@@ -97,15 +101,15 @@ export class Solver {
   }
 
   get naturalFrequency() {
-    return Math.sqrt(this.#tension / this.#mass)
+    return this.#naturalFrequency
   }
 
   get criticalDamping() {
-    return 2 * this.#mass * this.naturalFrequency
+    return this.#criticalDamping
   }
 
   get dampingRatio() {
-    return this.#damping / this.criticalDamping
+    return this.#dampingRatio
   }
 
   tick(dt: number, emit = true) {
@@ -154,7 +158,15 @@ export class Solver {
     this.#currentSolver = null
   }
 
+  #updateDerivedValues() {
+    this.#naturalFrequency = Math.sqrt(this.#tension / this.#mass)
+    this.#criticalDamping = 2 * this.#mass * this.#naturalFrequency
+    this.#dampingRatio = this.#damping / this.#criticalDamping
+  }
+
   #updateSolver() {
+    this.#updateDerivedValues()
+
     if (this.dampingRatio < 1) {
       this.#underdampedSolver ||= new UnderdampedSolver(this, this.#state)
 
