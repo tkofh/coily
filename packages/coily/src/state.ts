@@ -1,4 +1,4 @@
-import { roundTo } from './util'
+import { roundTo } from './util.ts'
 
 export class State {
   #precision: number

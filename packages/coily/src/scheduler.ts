@@ -1,4 +1,4 @@
-import type { Solver } from './solver'
+import type { Solver } from './solver.ts'
 
 export class Scheduler {
   #solvers = new Set<Solver>()

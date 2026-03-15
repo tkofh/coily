@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "import", "unicorn"],
+  "rules": {
+    "eqeqeq": "warn",
+    "no-unused-vars": "warn",
+    "typescript/no-unused-vars": "warn",
+    "import/no-cycle": "error"
+  },
+  "overrides": [
+    {
+      "files": ["*.config.ts", "*.config.mjs"],
+      "rules": {}
+    }
+  ],
+  "ignorePatterns": ["dist", ".nuxt", ".output", "node_modules"]
+}

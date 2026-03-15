@@ -1,0 +1,31 @@
+{
+  "lsp": {
+    "oxlint": {
+      "initialization_options": {
+        "settings": {
+          "configPath": null,
+          "run": "onType",
+          "disableNestedConfig": false,
+          "fixKind": "safe_fix",
+          "unusedDisableDirectives": "deny",
+        },
+      },
+    },
+    "oxfmt": {
+      "initialization_options": {
+        "settings": {
+          "fmt.configPath": null,
+          "run": "onSave",
+        },
+      },
+    },
+  },
+  "languages": {
+    "TypeScript": {
+      "language_servers": ["oxfmt", "oxlint", "vtsls"],
+    },
+    "Vue.js": {
+      "language_servers": ["oxfmt", "oxlint", "vtsls", "vue-language-server"],
+    },
+  },
+}

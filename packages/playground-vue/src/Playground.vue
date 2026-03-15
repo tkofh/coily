@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useSpring } from '@coily/vue'
+import { useSpring } from 'coily/vue'
 import { onMounted, ref } from 'vue'
 
 const mouseX = ref(0)
@@ -12,11 +12,8 @@ onMounted(() => {
   })
 })
 
-// biome-disable lint/correctness/noUnusedVariables: vue
 const { value: x, velocity: velocityX, resting: restingX } = useSpring(mouseX)
-// biome-disable lint/correctness/noUnusedVariables: vue
-const { value: y, velocity: velocityY, resting: restingY  } = useSpring(mouseY)
-
+const { value: y, velocity: velocityY, resting: restingY } = useSpring(mouseY)
 
 function click() {
   velocityX.value += (Math.random() - 0.5) * 2000
@@ -25,11 +22,7 @@ function click() {
 </script>
 
 <template>
-  <div
-    class="ball"
-    :style="{ '--x': x, '--y': y, backgroundColor: 'blue' }"
-    @click="click"
-  ></div>
+  <div class="ball" :style="{ '--x': x, '--y': y, backgroundColor: 'blue' }" @click="click"></div>
 </template>
 
 <style scoped>

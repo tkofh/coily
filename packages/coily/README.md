@@ -32,7 +32,6 @@ The `createSpring` function takes the following arguments:
 
 - `config: SpringConfig`
   The configuration for the spring. `SpringConfig` takes the following parameters:
-
   - `config.mass: number`
     How massive the spring is. A lower number will allow the spring to speed up and slow down more quickly than a
     larger number. Larger numbers are more likely to overshoot the `target`
@@ -47,7 +46,6 @@ The `createSpring` function takes the following arguments:
 
 - `options: SpringOptions`
   Additional options for the spring. `SpringOptions` takes the following parameters:
-
   - `options.restingDistance: number`
     The minimum difference between the `target` and `value` at which the spring will consider itself "at" the `target`
 
@@ -229,7 +227,7 @@ The links take one of two forms:
 const chain = createSpringChain(
   0, // initial
   [50, 50, (value) => value * 1.25],
-  { mass: 10, tension: 3000, friction: 300 } // config
+  { mass: 10, tension: 3000, friction: 300 }, // config
 )
 ```
 

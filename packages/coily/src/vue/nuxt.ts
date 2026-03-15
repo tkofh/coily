@@ -1,51 +1,46 @@
-import {
-  addComponent,
-  addImports,
-  addPluginTemplate,
-  defineNuxtModule,
-} from '@nuxt/kit' // @ts-ignore
-import {} from '@nuxt/schema'
+import { addComponent, addImports, addPluginTemplate, defineNuxtModule } from '@nuxt/kit'
+import type { NuxtModule } from '@nuxt/schema'
 
 const pluginTemplate = `import { createSpringSystem } from 'coily'
 import { start } from 'coily/loop'
-import { provideSpringSystem } from '@coily/vue/system'
+import { provideSpringSystem } from 'coily/vue'
 
 export default defineNuxtPlugin((nuxtApp) => {
   nuxtApp.hook('app:created', (vueApp) => {
     const system = createSpringSystem()
     provideSpringSystem(system, vueApp)
-    
+
     if(import.meta.client) {
       start(system)
     }
   })
 })`
 
-// biome-ignore lint/style/noDefaultExport: nuxt requires a default export
-export default defineNuxtModule({
+const coilyModule: NuxtModule = defineNuxtModule({
   meta: {
-    name: '@coily/vue',
+    name: 'coily',
     configKey: 'coily',
   },
   async setup() {
     addPluginTemplate({
-      name: '@coily/vue',
+      name: 'coily',
       filename: 'coily.plugin.mjs',
       mode: 'all',
-      // write: true,
       getContents: () => pluginTemplate,
     })
 
     addImports({
-      from: '@coily/vue',
+      from: 'coily/vue',
       name: 'useSpring',
     })
 
-    await addComponent({
+    addComponent({
       name: 'SpringValue',
-      filePath: '@coily/vue/component',
+      filePath: 'coily/vue',
       export: 'SpringValue',
       chunkName: 'placement',
     })
   },
 })
+
+export { coilyModule as default }

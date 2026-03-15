@@ -12,18 +12,12 @@ type EventHandlerMap<Events extends Record<EventType, unknown>> = Map<
 export class Emitter<Events extends Record<EventType, unknown>> {
   #handlers: EventHandlerMap<Events> = new Map()
 
-  on<Key extends keyof Events>(
-    type: Key,
-    handler: Handler<Events[keyof Events]>,
-  ) {
-    const handlers: Array<Handler<Events[keyof Events]>> | undefined =
-      this.#handlers.get(type)
+  on<Key extends keyof Events>(type: Key, handler: Handler<Events[keyof Events]>) {
+    const handlers: Array<Handler<Events[keyof Events]>> | undefined = this.#handlers.get(type)
     if (handlers) {
       handlers.push(handler)
     } else {
-      this.#handlers.set(type, [handler] as EventHandlerList<
-        Events[keyof Events]
-      >)
+      this.#handlers.set(type, [handler] as EventHandlerList<Events[keyof Events]>)
     }
 
     return () => {
@@ -31,12 +25,8 @@ export class Emitter<Events extends Record<EventType, unknown>> {
     }
   }
 
-  off<Key extends keyof Events>(
-    type: Key,
-    handler?: Handler<Events[keyof Events]>,
-  ) {
-    const handlers: Array<Handler<Events[keyof Events]>> | undefined =
-      this.#handlers.get(type)
+  off<Key extends keyof Events>(type: Key, handler?: Handler<Events[keyof Events]>) {
+    const handlers: Array<Handler<Events[keyof Events]>> | undefined = this.#handlers.get(type)
     if (handlers) {
       if (handler) {
         handlers.splice(handlers.indexOf(handler) >>> 0, 1)
