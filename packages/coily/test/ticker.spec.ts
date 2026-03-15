@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'vitest'
+import { describe, expect, test } from 'vitest'
 import { Ticker } from '../src/ticker'
 
 describe('Ticker', () => {
@@ -21,48 +21,6 @@ describe('Ticker', () => {
       ticker.tick()
       expect(ticker.time).toBeCloseTo(gap)
       expect(ticker.delta).toBeCloseTo(gap)
-    })
-
-    test('dispatches to registered listeners', () => {
-      const ticker = new Ticker()
-      const listener = vi.fn()
-
-      ticker.add(listener)
-      ticker.tick()
-
-      expect(listener).toHaveBeenCalledOnce()
-      expect(listener).toHaveBeenCalledWith(
-        expect.any(Number),
-        expect.any(Number),
-        1,
-      )
-    })
-  })
-
-  describe('add / remove / once', () => {
-    test('remove() stops dispatching to listener', () => {
-      const ticker = new Ticker()
-      const listener = vi.fn()
-
-      ticker.add(listener)
-      ticker.tick()
-      expect(listener).toHaveBeenCalledOnce()
-
-      ticker.remove(listener)
-      ticker.tick()
-      expect(listener).toHaveBeenCalledOnce()
-    })
-
-    test('once() fires exactly one time', () => {
-      const ticker = new Ticker()
-      const listener = vi.fn()
-
-      ticker.once(listener)
-      ticker.tick()
-      ticker.tick()
-      ticker.tick()
-
-      expect(listener).toHaveBeenCalledOnce()
     })
   })
 

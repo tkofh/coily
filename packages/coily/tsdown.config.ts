@@ -4,7 +4,6 @@ export default defineConfig({
   dts: true,
   entry: {
     index: 'src/index.ts',
-    loop: 'src/loop.ts',
     vue: 'src/vue/index.ts',
     nuxt: 'src/vue/nuxt.ts',
   },

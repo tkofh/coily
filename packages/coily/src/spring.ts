@@ -1,4 +1,4 @@
-import type { Scheduler } from './scheduler.ts'
+import type { Ticker } from './ticker.ts'
 import { Solver } from './solver.ts'
 import { invariant } from './util.ts'
 
@@ -44,9 +44,9 @@ export interface SpringOptions {
 export class Spring {
   #target: number
   readonly #solver: Solver
-  readonly #scheduler: Scheduler
+  readonly #ticker: Ticker
 
-  constructor(scheduler: Scheduler, options: SpringOptions) {
+  constructor(ticker: Ticker, options: SpringOptions) {
     invariant(options.mass > 0, 'Mass must be greater than 0')
     invariant(options.tension > 0, 'Tension must be greater than 0')
     invariant(options.damping >= 0, 'Damping must be greater than or equal to 0')
@@ -65,10 +65,10 @@ export class Spring {
       velocity: 0,
       precision: options.precision ?? 2,
     })
-    this.#scheduler = scheduler
+    this.#ticker = ticker
 
     if (!this.#solver.resting) {
-      this.#scheduler.add(this.#solver)
+      this.#ticker.add(this.#solver)
     }
   }
 
@@ -78,9 +78,7 @@ export class Spring {
 
   set target(value: number) {
     if (value !== this.#target) {
-      if (!this.#scheduler.has(this.#solver)) {
-        this.#scheduler.add(this.#solver)
-      }
+      this.#ticker.add(this.#solver)
 
       const currentValue = this.value
       this.#target = value
@@ -96,9 +94,7 @@ export class Spring {
   set value(value: number) {
     const position = value - this.#target
     if (position !== this.#solver.position) {
-      if (!this.#scheduler.has(this.#solver)) {
-        this.#scheduler.add(this.#solver)
-      }
+      this.#ticker.add(this.#solver)
 
       this.#solver.position = position
       this.#solver.tick(0)
@@ -110,8 +106,8 @@ export class Spring {
   }
 
   set velocity(value: number) {
-    if (!this.#scheduler.has(this.#solver)) {
-      this.#scheduler.add(this.#solver)
+    if (!this.#ticker.has(this.#solver)) {
+      this.#ticker.add(this.#solver)
     }
 
     this.#solver.velocity = value
@@ -124,8 +120,8 @@ export class Spring {
   set mass(value: number) {
     invariant(value > 0, 'Mass must be greater than 0')
 
-    if (!this.#scheduler.has(this.#solver)) {
-      this.#scheduler.add(this.#solver)
+    if (!this.#ticker.has(this.#solver)) {
+      this.#ticker.add(this.#solver)
     }
 
     this.#solver.mass = value
@@ -138,8 +134,8 @@ export class Spring {
   set tension(value: number) {
     invariant(value > 0, 'Tension must be greater than 0')
 
-    if (!this.#scheduler.has(this.#solver)) {
-      this.#scheduler.add(this.#solver)
+    if (!this.#ticker.has(this.#solver)) {
+      this.#ticker.add(this.#solver)
     }
 
     this.#solver.tension = value
@@ -152,8 +148,8 @@ export class Spring {
   set damping(value: number) {
     invariant(value >= 0, 'Damping must be greater than or equal to 0')
 
-    if (!this.#scheduler.has(this.#solver)) {
-      this.#scheduler.add(this.#solver)
+    if (!this.#ticker.has(this.#solver)) {
+      this.#ticker.add(this.#solver)
     }
 
     this.#solver.damping = value
@@ -166,8 +162,8 @@ export class Spring {
   set precision(value: number) {
     invariant(value > 0, 'Precision must be greater than 0')
 
-    if (!this.#scheduler.has(this.#solver)) {
-      this.#scheduler.add(this.#solver)
+    if (!this.#ticker.has(this.#solver)) {
+      this.#ticker.add(this.#solver)
     }
 
     this.#solver.precision = value
@@ -197,7 +193,7 @@ export class Spring {
   }
 
   dispose() {
-    this.#scheduler.remove(this.#solver)
+    this.#ticker.remove(this.#solver)
     this.#solver.dispose()
   }
 }

@@ -1,4 +1,4 @@
-export type TickCallback = (time: number, delta: number, frame: number) => void
+import type { Solver } from './solver.ts'
 
 export interface TickerOptions {
   fps?: number
@@ -22,7 +22,7 @@ export class Ticker {
   #lagThreshold: number
   #adjustedLag: number
 
-  #listeners = new Set<TickCallback>()
+  #solvers = new Set<Solver>()
 
   #frame = 0
   #time = 0
@@ -85,6 +85,10 @@ export class Ticker {
     return this.#delta / this.#gap
   }
 
+  get stopped() {
+    return this.#stopped
+  }
+
   start() {
     if (this.#stopped) {
       this.#stopped = false
@@ -100,20 +104,26 @@ export class Ticker {
     }
   }
 
-  add(callback: TickCallback) {
-    this.#listeners.add(callback)
+  add(solver: Solver) {
+    this.#solvers.add(solver)
   }
 
-  remove(callback: TickCallback) {
-    this.#listeners.delete(callback)
+  remove(solver: Solver) {
+    this.#solvers.delete(solver)
   }
 
-  once(callback: TickCallback) {
-    const wrapper = (time: number, delta: number, frame: number) => {
-      callback(time, delta, frame)
-      this.#listeners.delete(wrapper)
+  has(solver: Solver) {
+    return this.#solvers.has(solver)
+  }
+
+  /** Advance solvers by `dt` seconds, without affecting internal timing. */
+  step(dt: number) {
+    for (const solver of this.#solvers) {
+      solver.tick(dt)
+      if (solver.resting) {
+        this.#solvers.delete(solver)
+      }
     }
-    this.#listeners.add(wrapper)
   }
 
   /** Manually advance one frame. */
@@ -157,8 +167,11 @@ export class Ticker {
   }
 
   #dispatch() {
-    for (const listener of this.#listeners) {
-      listener(this.#time, this.#delta, this.#frame)
+    for (const solver of this.#solvers) {
+      solver.tick(this.#delta / 1000)
+      if (solver.resting) {
+        this.#solvers.delete(solver)
+      }
     }
   }
 }

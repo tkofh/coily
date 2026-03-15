@@ -94,3 +94,85 @@ describe('SpringSystem', () => {
     expect(c.value).toBeCloseTo(50, 0)
   })
 })
+
+describe('SpringSystem: transport controls', () => {
+  test('not running by default', () => {
+    const system = createSpringSystem()
+    expect(system.running).toBe(false)
+  })
+
+  test('running is true after start()', () => {
+    const system = createSpringSystem()
+    system.start()
+    expect(system.running).toBe(true)
+    system.stop()
+  })
+
+  test('running is false after stop()', () => {
+    const system = createSpringSystem()
+    system.start()
+    system.stop()
+    expect(system.running).toBe(false)
+  })
+
+  test('start() is idempotent', () => {
+    const system = createSpringSystem()
+    system.start()
+    system.start()
+    expect(system.running).toBe(true)
+    system.stop()
+  })
+
+  test('stop() is idempotent', () => {
+    const system = createSpringSystem()
+    system.stop()
+    expect(system.running).toBe(false)
+  })
+})
+
+describe('SpringSystem: ticker options', () => {
+  test('defaults fps to 60', () => {
+    const system = createSpringSystem()
+    expect(system.fps).toBe(60)
+  })
+
+  test('accepts fps via constructor options', () => {
+    const system = createSpringSystem({ fps: 30 })
+    expect(system.fps).toBe(30)
+  })
+
+  test('fps is writable at runtime', () => {
+    const system = createSpringSystem()
+    system.fps = 120
+    expect(system.fps).toBe(120)
+  })
+
+  test('lagThreshold defaults to 500', () => {
+    const system = createSpringSystem()
+    expect(system.lagThreshold).toBe(500)
+  })
+
+  test('lagThreshold is writable at runtime', () => {
+    const system = createSpringSystem()
+    system.lagThreshold = 1000
+    expect(system.lagThreshold).toBe(1000)
+  })
+
+  test('adjustedLag defaults to 33', () => {
+    const system = createSpringSystem()
+    expect(system.adjustedLag).toBe(33)
+  })
+
+  test('adjustedLag is writable at runtime', () => {
+    const system = createSpringSystem()
+    system.adjustedLag = 16
+    expect(system.adjustedLag).toBe(16)
+  })
+
+  test('accepts all ticker options via constructor', () => {
+    const system = createSpringSystem({ fps: 30, lagThreshold: 1000, adjustedLag: 50 })
+    expect(system.fps).toBe(30)
+    expect(system.lagThreshold).toBe(1000)
+    expect(system.adjustedLag).toBe(50)
+  })
+})
