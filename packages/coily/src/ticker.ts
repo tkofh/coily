@@ -1,166 +1,164 @@
-type Request = (callback: (v: number | boolean) => void) => number
-
 export type TickCallback = (time: number, delta: number, frame: number) => void
 
 export interface TickerOptions {
   fps?: number
   lagThreshold?: number
   adjustedLag?: number
-  stopped?: boolean
 }
 
-export interface Ticker {
-  fps: number
-  lagThreshold: number
-  adjustedLag: number
-  readonly time: number
-  readonly frame: number
-  readonly delta: number
-  readonly deltaRatio: number
-  start: () => void
-  stop: () => void
-  add: (callback: TickCallback) => void
-  remove: (callback: TickCallback) => void
-  once: (callback: TickCallback) => void
-  tick: () => void
-}
+const hasWindow = typeof window !== 'undefined'
 
-export const defaultOptions: Required<TickerOptions> = {
-  fps: 60,
-  lagThreshold: 500,
-  adjustedLag: 33,
-  stopped: false,
-}
+const request: (callback: FrameRequestCallback) => number = hasWindow
+  ? (cb) => window.requestAnimationFrame(cb)
+  : (cb) => setTimeout(cb, 1) as unknown as number
 
-export const createTicker = (options?: TickerOptions): Ticker => {
-  const getTime = Date.now
+const cancel: (id: number) => void = hasWindow
+  ? (id) => window.cancelAnimationFrame(id)
+  : (id) => clearTimeout(id)
 
-  let fps = options?.fps ?? defaultOptions.fps
+export class Ticker {
+  #fps: number
+  #gap: number
+  #lagThreshold: number
+  #adjustedLag: number
 
-  let lagThreshold = options?.lagThreshold ?? defaultOptions.lagThreshold
-  let adjustedLag = options?.adjustedLag ?? defaultOptions.adjustedLag
+  #listeners = new Set<TickCallback>()
 
-  let lagAdjustedStartTime = getTime()
-  let lagAdjustedLastUpdate = lagAdjustedStartTime
+  #frame = 0
+  #time = 0
+  #previousTime = 0
+  #delta = 0
+  #nextTime: number
+  #lastWallTime = 0
 
-  let gap = 1000 / fps
+  #id = 0
+  #stopped = true
 
-  const listeners = new Set<TickCallback>()
+  constructor(options?: TickerOptions) {
+    this.#fps = options?.fps ?? 60
+    this.#gap = 1000 / this.#fps
+    this.#lagThreshold = options?.lagThreshold ?? 500
+    this.#adjustedLag = options?.adjustedLag ?? 33
+    this.#nextTime = this.#gap
+  }
 
-  let frame = 0
+  get fps() {
+    return this.#fps
+  }
 
-  let previousTime = 0
-  let time = 0
-  let nextTime = gap
-  let delta = 0
+  set fps(value: number) {
+    this.#fps = value
+    this.#gap = 1000 / value
+    this.#nextTime = this.#previousTime + this.#gap
+  }
 
-  const hasWindow = typeof window !== 'undefined'
-  let id = 0
-  const request: Request = hasWindow
-    ? window.requestAnimationFrame
-    : (callback): number =>
-        (setTimeout as (typeof window)['setTimeout'])(callback, (nextTime - previousTime + 1) | 0)
-  const cancel = hasWindow ? window.cancelAnimationFrame : clearTimeout
+  get lagThreshold() {
+    return this.#lagThreshold
+  }
 
-  const tick = (v: boolean | number) => {
-    const elapsed = getTime() - lagAdjustedLastUpdate
-    const manual = v === true
-    if (elapsed > lagThreshold) {
-      lagAdjustedStartTime += elapsed - adjustedLag
-    }
-    lagAdjustedLastUpdate += elapsed
-    time = lagAdjustedLastUpdate - lagAdjustedStartTime
+  set lagThreshold(value: number) {
+    this.#lagThreshold = value === 0 ? 1e8 : value
+    this.#adjustedLag = Math.min(this.#adjustedLag, this.#lagThreshold)
+  }
 
-    let dispatch = false
+  get adjustedLag() {
+    return this.#adjustedLag
+  }
 
-    const overlap = time - nextTime
-    if (overlap > 0 || manual) {
-      frame++
-      delta = time - previousTime
-      previousTime = time
-      nextTime += overlap + (overlap >= gap ? 4 : gap - overlap)
-      dispatch = true
-    }
-    if (!manual) {
-      id = request(tick)
-    }
-    if (dispatch) {
-      for (const listener of listeners.values()) {
-        listener(time, delta, frame)
-      }
+  set adjustedLag(value: number) {
+    this.#adjustedLag = Math.min(value, this.#lagThreshold)
+  }
+
+  get time() {
+    return this.#time
+  }
+
+  get frame() {
+    return this.#frame
+  }
+
+  get delta() {
+    return this.#delta
+  }
+
+  get deltaRatio() {
+    return this.#delta / this.#gap
+  }
+
+  start() {
+    if (this.#stopped) {
+      this.#stopped = false
+      this.#lastWallTime = performance.now()
+      this.#id = request((t) => this.#tick(t))
     }
   }
 
-  let stopped = options?.stopped ?? defaultOptions.stopped
-
-  if (!stopped) {
-    tick(0)
+  stop() {
+    if (!this.#stopped) {
+      cancel(this.#id)
+      this.#stopped = true
+    }
   }
 
-  return {
-    get frame(): number {
-      return frame
-    },
-    get delta(): number {
-      return delta
-    },
-    get time(): number {
-      return time
-    },
-    get deltaRatio(): number {
-      return delta / gap
-    },
+  add(callback: TickCallback) {
+    this.#listeners.add(callback)
+  }
 
-    get fps(): number {
-      return fps
-    },
-    set fps(value: number) {
-      fps = value
-      gap = 1000 / fps
-      nextTime = previousTime + gap
-    },
-    get lagThreshold(): number {
-      return lagThreshold
-    },
-    set lagThreshold(value: number) {
-      lagThreshold = value === 0 ? 1e8 : value
-      adjustedLag = Math.min(adjustedLag, lagThreshold, 0)
-    },
-    get adjustedLag(): number {
-      return adjustedLag
-    },
-    set adjustedLag(value: number) {
-      adjustedLag = Math.min(value, lagThreshold, 0)
-    },
+  remove(callback: TickCallback) {
+    this.#listeners.delete(callback)
+  }
 
-    start: () => {
-      if (stopped) {
-        id = request(tick)
-        stopped = false
-      }
-    },
-    stop: () => {
-      if (!stopped) {
-        cancel(id)
-        stopped = true
-      }
-    },
+  once(callback: TickCallback) {
+    const wrapper = (time: number, delta: number, frame: number) => {
+      callback(time, delta, frame)
+      this.#listeners.delete(wrapper)
+    }
+    this.#listeners.add(wrapper)
+  }
 
-    add: (callback: TickCallback) => {
-      listeners.add(callback)
-    },
-    remove: (callback: TickCallback) => {
-      listeners.delete(callback)
-    },
-    once: (callback: TickCallback) => {
-      const cb = (...args: Parameters<TickCallback>) => {
-        callback(...args)
-        listeners.delete(cb)
-      }
-      listeners.add(cb)
-    },
-    tick: () => {
-      tick(true)
-    },
+  /** Manually advance one frame. */
+  tick() {
+    this.#advance(this.#gap)
+  }
+
+  #tick(timestamp: number) {
+    if (this.#stopped) return
+
+    const wallElapsed = timestamp - this.#lastWallTime
+    this.#lastWallTime = timestamp
+
+    // If the browser tab was backgrounded or the system lagged,
+    // clamp the elapsed time so the simulation doesn't jump.
+    const elapsed =
+      wallElapsed > this.#lagThreshold ? this.#adjustedLag : wallElapsed
+
+    this.#time += elapsed
+
+    const overlap = this.#time - this.#nextTime
+    if (overlap >= 0) {
+      this.#frame++
+      this.#delta = this.#time - this.#previousTime
+      this.#previousTime = this.#time
+      this.#nextTime += this.#gap
+
+      this.#dispatch()
+    }
+
+    this.#id = request((t) => this.#tick(t))
+  }
+
+  #advance(dt: number) {
+    this.#time += dt
+    this.#frame++
+    this.#delta = dt
+    this.#previousTime = this.#time
+
+    this.#dispatch()
+  }
+
+  #dispatch() {
+    for (const listener of this.#listeners) {
+      listener(this.#time, this.#delta, this.#frame)
+    }
   }
 }

@@ -36,12 +36,16 @@ export class Emitter<Events extends Record<EventType, unknown>> {
     }
   }
 
+  clear() {
+    this.#handlers.clear()
+  }
+
   emit<Key extends keyof Events>(type: Key, evt?: Events[Key]) {
     const handlers = this.#handlers?.get(type)
     if (handlers) {
-      handlers.slice().map((handler) => {
+      for (const handler of handlers.slice()) {
         handler(evt as Events[Key])
-      })
+      }
     }
   }
 }

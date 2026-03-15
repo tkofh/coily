@@ -114,6 +114,7 @@ export class Solver {
       this.#updateSolver()
 
       this.#needsUpdate = false
+      this.#needsReset = true
     }
     if (this.#needsReset) {
       this.#currentSolver.reset()
@@ -142,6 +143,10 @@ export class Solver {
 
   onStop(callback: () => void) {
     return this.#emitter.on('stop', callback)
+  }
+
+  dispose() {
+    this.#emitter.clear()
   }
 
   #updateSolver() {

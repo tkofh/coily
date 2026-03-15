@@ -17,11 +17,11 @@ export function useSpringSystem() {
 
   provideSpringSystem(system)
 
-  let stop!: () => void
+  let stop: (() => void) | undefined
 
   onMounted(() => {
     stop = start(system)
   })
 
-  onBeforeUnmount(stop)
+  onBeforeUnmount(() => stop?.())
 }
