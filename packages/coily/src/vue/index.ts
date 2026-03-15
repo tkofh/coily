@@ -1,4 +1,4 @@
-export { useSpring } from './spring'
-export { SpringValue } from './component'
-export type { SpringValueProps, SpringValueSlots } from './component'
-export { provideSpringSystem, useSpringSystem } from './system'
+export { useSpring } from './spring.ts'
+export { SpringValue } from './component.ts'
+export type { SpringValueProps, SpringValueSlots } from './component.ts'
+export { provideSpringSystem, useSpringSystem } from './system.ts'

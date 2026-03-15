@@ -1,5 +1,5 @@
-import { createTicker } from './ticker'
-import type { SpringSystem } from './index'
+import { createTicker } from './ticker.ts'
+import type { SpringSystem } from './system.ts'
 
 export function start(system: SpringSystem) {
   const ticker = createTicker()

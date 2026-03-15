@@ -1,6 +1,6 @@
 import { type App, type InjectionKey, onBeforeUnmount, onMounted, provide } from 'vue'
-import { type SpringSystem, createSpringSystem } from '../index'
-import { start } from '../loop'
+import { type SpringSystem, createSpringSystem } from '../system.ts'
+import { start } from '../loop.ts'
 
 export const SpringSystemKey: InjectionKey<SpringSystem> = Symbol.for('coily/spring-system')
 

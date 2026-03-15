@@ -28,16 +28,10 @@
       "language_servers": ["!tailwindcss-language-server", "..."],
     },
     "TypeScript": {
-      "language_servers": ["oxfmt", "oxlint", "tsgo"],
+      "language_servers": ["oxfmt", "oxlint", "vtsls"],
     },
     "Vue.js": {
-      "language_servers": [
-        "!tailwindcss-language-server",
-        "oxfmt",
-        "oxlint",
-        "vtsls",
-        "vue-language-server",
-      ],
+      "language_servers": ["oxfmt", "oxlint", "vtsls", "vue-language-server"],
       "code_actions_on_format": {},
       "format_on_save": "on",
       "prettier": {

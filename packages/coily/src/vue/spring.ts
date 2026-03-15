@@ -1,5 +1,5 @@
 import { type MaybeRefOrGetter, type Ref, customRef, inject, toValue, watchSyncEffect } from 'vue'
-import { SpringSystemKey } from './system'
+import { SpringSystemKey } from './system.ts'
 
 interface SpringOptions {
   mass: number

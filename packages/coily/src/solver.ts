@@ -1,5 +1,5 @@
-import { Emitter } from './emitter'
-import { State } from './state'
+import { Emitter } from './emitter.ts'
+import { State } from './state.ts'
 
 interface SolverOptions {
   mass: number

@@ -1,6 +1,6 @@
-import type { Scheduler } from './scheduler'
-import { Solver } from './solver'
-import { invariant } from './util'
+import type { Scheduler } from './scheduler.ts'
+import { Solver } from './solver.ts'
+import { invariant } from './util.ts'
 
 export interface SpringOptions {
   /**

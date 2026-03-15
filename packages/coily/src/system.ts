@@ -1,5 +1,5 @@
-import { Scheduler } from './scheduler'
-import { Spring, type SpringOptions } from './spring'
+import { Scheduler } from './scheduler.ts'
+import { Spring, type SpringOptions } from './spring.ts'
 
 class SpringSystemImpl implements SpringSystem {
   readonly #scheduler: Scheduler

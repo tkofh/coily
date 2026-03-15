@@ -1,4 +1,3 @@
-export { createSpringSystem } from './system'
+export { createSpringSystem, type SpringSystem } from './system.ts'
 
-export type { SpringSystem } from './system'
-export type { Spring } from './spring'
+export type { Spring } from './spring.ts'

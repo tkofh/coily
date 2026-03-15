@@ -1,5 +1,5 @@
 import { type SlotsType, defineComponent, toRefs } from 'vue'
-import { useSpring } from './spring'
+import { useSpring } from './spring.ts'
 
 export interface SpringValueProps {
   target: number
