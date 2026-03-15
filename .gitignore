@@ -7,6 +7,7 @@ node_modules
 
 # testing
 coverage
+bench-baseline.json
 
 # misc
 .DS_Store
@@ -37,3 +38,6 @@ dist
 .output
 
 .idea
+
+**/test/__screenshots__
+**/.vitest-attachments

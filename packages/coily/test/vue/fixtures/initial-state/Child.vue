@@ -3,7 +3,7 @@
 </template>
 
 <script lang="ts" setup>
-import { useSpring } from '../../../../src/vue/spring'
+import { useSpring } from '../../../../src/vue/spring.ts'
 
 const { value } = useSpring(1)
 

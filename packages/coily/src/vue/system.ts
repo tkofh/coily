@@ -1,6 +1,5 @@
 import { type App, type InjectionKey, onBeforeUnmount, onMounted, provide } from 'vue'
 import { type SpringSystem, createSpringSystem } from '../system.ts'
-import { start } from '../loop.ts'
 
 export const SpringSystemKey: InjectionKey<SpringSystem> = Symbol.for('coily/spring-system')
 
@@ -17,11 +16,11 @@ export function useSpringSystem() {
 
   provideSpringSystem(system)
 
-  let stop: (() => void) | undefined
-
   onMounted(() => {
-    stop = start(system)
+    system.start()
   })
 
-  onBeforeUnmount(() => stop?.())
+  onBeforeUnmount(() => {
+    system.stop()
+  })
 }

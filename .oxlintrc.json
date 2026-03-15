@@ -5,7 +5,8 @@
     "eqeqeq": "warn",
     "no-unused-vars": "warn",
     "typescript/no-unused-vars": "warn",
-    "import/no-cycle": "error"
+    "import/no-cycle": "error",
+    "import/extensions": ["error", "always", { "ignorePackages": true }]
   },
   "overrides": [
     {

@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { createSpringSystem } from '../src/index'
+import { createSpringSystem } from '../src/index.ts'
 
 describe('scheduling', () => {
   test('handles state updates when updating target', () => {
@@ -51,14 +51,14 @@ describe('scheduling', () => {
 
     spring.target = 100
 
-    system.tick(0)
+    system.advance(0)
 
     expect(onStart).toHaveBeenCalled()
     expect(onStop).not.toHaveBeenCalled()
 
     spring.target = 0
 
-    system.tick(0)
+    system.advance(0)
 
     expect(onStart).toHaveBeenCalled()
     expect(onStop).toHaveBeenCalled()
@@ -75,7 +75,7 @@ describe('scheduling', () => {
       value: 0,
     })
 
-    system.tick(0)
+    system.advance(0)
 
     expect(spring.target).toBe(0)
     expect(spring.value).toBe(0)
@@ -89,7 +89,7 @@ describe('scheduling', () => {
 
     spring.value = 100
 
-    system.tick(0)
+    system.advance(0)
 
     expect(spring.target).toBe(100)
     expect(spring.value).toBe(100)
@@ -103,7 +103,7 @@ describe('scheduling', () => {
 
     spring.target = 0
 
-    system.tick(0)
+    system.advance(0)
 
     expect(spring.target).toBe(0)
     expect(spring.value).toBe(0)

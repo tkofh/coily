@@ -19,7 +19,6 @@
   "sideEffects": false,
   "exports": {
     ".": "./dist/index.js",
-    "./loop": "./dist/loop.js",
     "./nuxt": "./dist/nuxt.js",
     "./vue": "./dist/vue.js",
     "./package.json": "./package.json"
@@ -29,13 +28,24 @@
   },
   "scripts": {
     "build": "tsdown",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "bench": "vitest bench --run",
+    "bench:baseline": "vitest bench --run --outputJson bench-baseline.json",
+    "bench:compare": "vitest bench --run --compare bench-baseline.json"
   },
   "devDependencies": {
     "@nuxt/kit": "^4.4.2",
     "@nuxt/schema": "^4.4.2",
+    "@vitejs/plugin-vue": "^6.0.5",
+    "@vitest/browser-playwright": "^4.1.0",
+    "@vitest/coverage-v8": "^4.1.0",
+    "@vue/test-utils": "^2.4.6",
+    "fast-check": "^4.6.0",
+    "happy-dom": "^20.8.4",
     "tsdown": "^0.21.3",
     "vitest": "^4.1.0",
+    "vitest-browser-vue": "^2.1.0",
     "vue": "^3.5.30"
   },
   "peerDependencies": {

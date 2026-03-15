@@ -1,9 +1,28 @@
-export type TickCallback = (time: number, delta: number, frame: number) => void
+import type { SolverSet } from './solver-set.ts'
+import { invariant } from './util.ts'
 
 export interface TickerOptions {
-  fps?: number
-  lagThreshold?: number
-  adjustedLag?: number
+  /**
+   * The target frames per second for the simulation loop
+   *
+   * must be greater than 0, defaults to 60
+   */
+  fps?: number | undefined
+  /**
+   * The maximum elapsed time (in ms) before a frame is considered a lag spike
+   * (e.g. from a backgrounded tab). When exceeded, `adjustedLag` is used instead
+   * of the real elapsed time. Set to 0 to disable lag detection.
+   *
+   * must be greater than or equal to 0, defaults to 500
+   */
+  lagThreshold?: number | undefined
+  /**
+   * The substitute elapsed time (in ms) used when a lag spike is detected.
+   * Clamped to be at most `lagThreshold`.
+   *
+   * must be greater than or equal to 0, defaults to 33
+   */
+  adjustedLag?: number | undefined
 }
 
 const hasWindow = typeof window !== 'undefined'
@@ -22,7 +41,7 @@ export class Ticker {
   #lagThreshold: number
   #adjustedLag: number
 
-  #listeners = new Set<TickCallback>()
+  readonly #solvers: SolverSet
 
   #frame = 0
   #time = 0
@@ -34,11 +53,21 @@ export class Ticker {
   #id = 0
   #stopped = true
 
-  constructor(options?: TickerOptions) {
-    this.#fps = options?.fps ?? 60
-    this.#gap = 1000 / this.#fps
-    this.#lagThreshold = options?.lagThreshold ?? 500
-    this.#adjustedLag = options?.adjustedLag ?? 33
+  constructor(solvers: SolverSet, options?: TickerOptions) {
+    this.#solvers = solvers
+
+    const fps = options?.fps ?? 60
+    const lagThreshold = options?.lagThreshold ?? 500
+    const adjustedLag = options?.adjustedLag ?? 33
+
+    invariant(fps > 0, 'FPS must be greater than 0')
+    invariant(lagThreshold >= 0, 'Lag threshold must be greater than or equal to 0')
+    invariant(adjustedLag >= 0, 'Adjusted lag must be greater than or equal to 0')
+
+    this.#fps = fps
+    this.#gap = 1000 / fps
+    this.#lagThreshold = lagThreshold === 0 ? 1e8 : lagThreshold
+    this.#adjustedLag = Math.min(adjustedLag, this.#lagThreshold)
     this.#nextTime = this.#gap
   }
 
@@ -47,6 +76,7 @@ export class Ticker {
   }
 
   set fps(value: number) {
+    invariant(value > 0, 'FPS must be greater than 0')
     this.#fps = value
     this.#gap = 1000 / value
     this.#nextTime = this.#previousTime + this.#gap
@@ -57,6 +87,7 @@ export class Ticker {
   }
 
   set lagThreshold(value: number) {
+    invariant(value >= 0, 'Lag threshold must be greater than or equal to 0')
     this.#lagThreshold = value === 0 ? 1e8 : value
     this.#adjustedLag = Math.min(this.#adjustedLag, this.#lagThreshold)
   }
@@ -66,6 +97,7 @@ export class Ticker {
   }
 
   set adjustedLag(value: number) {
+    invariant(value >= 0, 'Adjusted lag must be greater than or equal to 0')
     this.#adjustedLag = Math.min(value, this.#lagThreshold)
   }
 
@@ -85,11 +117,15 @@ export class Ticker {
     return this.#delta / this.#gap
   }
 
+  get stopped() {
+    return this.#stopped
+  }
+
   start() {
     if (this.#stopped) {
       this.#stopped = false
       this.#lastWallTime = performance.now()
-      this.#id = request((t) => this.#tick(t))
+      this.#id = request((t) => this.#onFrame(t))
     }
   }
 
@@ -100,28 +136,12 @@ export class Ticker {
     }
   }
 
-  add(callback: TickCallback) {
-    this.#listeners.add(callback)
-  }
-
-  remove(callback: TickCallback) {
-    this.#listeners.delete(callback)
-  }
-
-  once(callback: TickCallback) {
-    const wrapper = (time: number, delta: number, frame: number) => {
-      callback(time, delta, frame)
-      this.#listeners.delete(wrapper)
-    }
-    this.#listeners.add(wrapper)
-  }
-
   /** Manually advance one frame. */
   tick() {
-    this.#advance(this.#gap)
+    this.#step(this.#gap)
   }
 
-  #tick(timestamp: number) {
+  #onFrame(timestamp: number) {
     if (this.#stopped) return
 
     const wallElapsed = timestamp - this.#lastWallTime
@@ -129,8 +149,7 @@ export class Ticker {
 
     // If the browser tab was backgrounded or the system lagged,
     // clamp the elapsed time so the simulation doesn't jump.
-    const elapsed =
-      wallElapsed > this.#lagThreshold ? this.#adjustedLag : wallElapsed
+    const elapsed = wallElapsed > this.#lagThreshold ? this.#adjustedLag : wallElapsed
 
     this.#time += elapsed
 
@@ -141,24 +160,18 @@ export class Ticker {
       this.#previousTime = this.#time
       this.#nextTime += this.#gap
 
-      this.#dispatch()
+      this.#solvers.tick(this.#delta / 1000)
     }
 
-    this.#id = request((t) => this.#tick(t))
+    this.#id = request((t) => this.#onFrame(t))
   }
 
-  #advance(dt: number) {
+  #step(dt: number) {
     this.#time += dt
     this.#frame++
     this.#delta = dt
     this.#previousTime = this.#time
 
-    this.#dispatch()
-  }
-
-  #dispatch() {
-    for (const listener of this.#listeners) {
-      listener(this.#time, this.#delta, this.#frame)
-    }
+    this.#solvers.tick(dt / 1000)
   }
 }

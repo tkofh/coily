@@ -2,7 +2,6 @@ import { addComponent, addImports, addPluginTemplate, defineNuxtModule } from '@
 import type { NuxtModule } from '@nuxt/schema'
 
 const pluginTemplate = `import { createSpringSystem } from 'coily'
-import { start } from 'coily/loop'
 import { provideSpringSystem } from 'coily/vue'
 
 export default defineNuxtPlugin((nuxtApp) => {
@@ -11,7 +10,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     provideSpringSystem(system, vueApp)
 
     if(import.meta.client) {
-      start(system)
+      system.start()
     }
   })
 })`

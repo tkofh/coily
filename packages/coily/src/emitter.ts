@@ -1,51 +1,52 @@
-type EventType = string | symbol
+type Handler = () => void
 
-type Handler<T = unknown> = (event: T) => void
+export class Emitter {
+  #update: Handler[] = []
+  #start: Handler[] = []
+  #stop: Handler[] = []
 
-type EventHandlerList<T = unknown> = Array<Handler<T>>
-
-type EventHandlerMap<Events extends Record<EventType, unknown>> = Map<
-  keyof Events,
-  EventHandlerList<Events[keyof Events]>
->
-
-export class Emitter<Events extends Record<EventType, unknown>> {
-  #handlers: EventHandlerMap<Events> = new Map()
-
-  on<Key extends keyof Events>(type: Key, handler: Handler<Events[keyof Events]>) {
-    const handlers: Array<Handler<Events[keyof Events]>> | undefined = this.#handlers.get(type)
-    if (handlers) {
-      handlers.push(handler)
-    } else {
-      this.#handlers.set(type, [handler] as EventHandlerList<Events[keyof Events]>)
-    }
+  on(type: 'update' | 'start' | 'stop', handler: Handler) {
+    this.#list(type).push(handler)
 
     return () => {
       this.off(type, handler)
     }
   }
 
-  off<Key extends keyof Events>(type: Key, handler?: Handler<Events[keyof Events]>) {
-    const handlers: Array<Handler<Events[keyof Events]>> | undefined = this.#handlers.get(type)
-    if (handlers) {
-      if (handler) {
-        handlers.splice(handlers.indexOf(handler) >>> 0, 1)
-      } else {
-        this.#handlers.set(type, [])
-      }
+  off(type: 'update' | 'start' | 'stop', handler?: Handler) {
+    const list = this.#list(type)
+    if (handler) {
+      list.splice(list.indexOf(handler) >>> 0, 1)
+    } else {
+      list.length = 0
     }
   }
 
   clear() {
-    this.#handlers.clear()
+    this.#update.length = 0
+    this.#start.length = 0
+    this.#stop.length = 0
   }
 
-  emit<Key extends keyof Events>(type: Key, evt?: Events[Key]) {
-    const handlers = this.#handlers?.get(type)
-    if (handlers) {
-      for (const handler of handlers.slice()) {
-        handler(evt as Events[Key])
+  emit(type: 'update' | 'start' | 'stop') {
+    const list = this.#list(type)
+    if (list.length === 1) {
+      list[0]()
+    } else if (list.length > 1) {
+      for (const handler of list.slice()) {
+        handler()
       }
+    }
+  }
+
+  #list(type: 'update' | 'start' | 'stop') {
+    switch (type) {
+      case 'update':
+        return this.#update
+      case 'start':
+        return this.#start
+      case 'stop':
+        return this.#stop
     }
   }
 }

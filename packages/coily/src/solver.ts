@@ -1,14 +1,6 @@
 import { Emitter } from './emitter.ts'
 import { State } from './state.ts'
-
-interface SolverOptions {
-  mass: number
-  tension: number
-  damping: number
-  position: number
-  velocity: number
-  precision: number
-}
+import { invariant } from './util.ts'
 
 export class Solver {
   #mass: number
@@ -21,16 +13,27 @@ export class Solver {
   #overdampedSolver: OverdampedSolver | null = null
   #currentSolver: Solveable | null = null
 
+  #naturalFrequency = 0
+  #criticalDamping = 0
+  #dampingRatio = 0
+
   #needsUpdate = false
   #needsReset = false
 
-  #emitter: Emitter<{ update: never; start: never; stop: never }>
+  readonly #emitter: Emitter
 
-  constructor(options: SolverOptions) {
-    this.#mass = options.mass
-    this.#tension = options.tension
-    this.#damping = options.damping
-    this.#state = new State(options.position, options.velocity, options.precision)
+  constructor(
+    mass: number,
+    tension: number,
+    damping: number,
+    position: number,
+    velocity: number,
+    precision: number,
+  ) {
+    this.#mass = mass
+    this.#tension = tension
+    this.#damping = damping
+    this.#state = new State(position, velocity, precision)
     this.#emitter = new Emitter()
 
     this.#updateSolver()
@@ -98,19 +101,19 @@ export class Solver {
   }
 
   get naturalFrequency() {
-    return Math.sqrt(this.#tension / this.#mass)
+    return this.#naturalFrequency
   }
 
   get criticalDamping() {
-    return 2 * this.#mass * this.naturalFrequency
+    return this.#criticalDamping
   }
 
   get dampingRatio() {
-    return this.#damping / this.criticalDamping
+    return this.#dampingRatio
   }
 
   tick(dt: number, emit = true) {
-    if (!this.#currentSolver) return
+    invariant(this.#currentSolver, 'Cannot tick a disposed solver')
 
     if (this.#needsUpdate) {
       this.#updateSolver()
@@ -119,12 +122,12 @@ export class Solver {
       this.#needsReset = true
     }
     if (this.#needsReset) {
-      this.#currentSolver!.reset()
+      this.#currentSolver.reset()
 
       this.#needsReset = false
     }
 
-    this.#currentSolver!.tick(dt)
+    this.#currentSolver.tick(dt)
 
     if (emit) {
       this.#emitter.emit('update')
@@ -155,7 +158,15 @@ export class Solver {
     this.#currentSolver = null
   }
 
+  #updateDerivedValues() {
+    this.#naturalFrequency = Math.sqrt(this.#tension / this.#mass)
+    this.#criticalDamping = 2 * this.#mass * this.#naturalFrequency
+    this.#dampingRatio = this.#damping / this.#criticalDamping
+  }
+
   #updateSolver() {
+    this.#updateDerivedValues()
+
     if (this.dampingRatio < 1) {
       this.#underdampedSolver ||= new UnderdampedSolver(this, this.#state)
 
@@ -182,6 +193,7 @@ class UnderdampedSolver implements Solveable {
   #state: State
 
   #dampedFrequency!: number
+  #decayRate!: number
   #t = 0
   #c1 = 0
   #c2 = 0
@@ -194,14 +206,13 @@ class UnderdampedSolver implements Solveable {
   }
 
   reset() {
+    this.#decayRate = this.#solver.dampingRatio * this.#solver.naturalFrequency
     this.#dampedFrequency =
       this.#solver.naturalFrequency * Math.sqrt(1 - this.#solver.dampingRatio ** 2)
     this.#t = 0
     this.#c1 = this.#state.position
     this.#c2 =
-      (this.#state.velocity +
-        this.#solver.dampingRatio * this.#solver.naturalFrequency * this.#state.position) /
-      this.#dampedFrequency
+      (this.#state.velocity + this.#decayRate * this.#state.position) / this.#dampedFrequency
 
     this.tick(0)
   }
@@ -212,8 +223,8 @@ class UnderdampedSolver implements Solveable {
     const sin = Math.sin(this.#dampedFrequency * this.#t)
     const cos = Math.cos(this.#dampedFrequency * this.#t)
 
-    const decay = Math.exp(-this.#solver.dampingRatio * this.#solver.naturalFrequency * this.#t)
-    const decayVelocity = -this.#solver.dampingRatio * this.#solver.naturalFrequency * decay
+    const decay = Math.exp(-this.#decayRate * this.#t)
+    const decayVelocity = -this.#decayRate * decay
 
     const oscillation = this.#c1 * cos + this.#c2 * sin
     const oscillationVelocity =
@@ -228,6 +239,7 @@ class CriticallyDampedSolver implements Solveable {
   #solver: Solver
   #state: State
 
+  #naturalFrequency!: number
   #t = 0
   #c1 = 0
   #c2 = 0
@@ -240,9 +252,10 @@ class CriticallyDampedSolver implements Solveable {
   }
 
   reset() {
+    this.#naturalFrequency = this.#solver.naturalFrequency
     this.#t = 0
     this.#c1 = this.#state.position
-    this.#c2 = this.#state.velocity + this.#solver.naturalFrequency * this.#state.position
+    this.#c2 = this.#state.velocity + this.#naturalFrequency * this.#state.position
 
     this.tick(0)
   }
@@ -250,8 +263,8 @@ class CriticallyDampedSolver implements Solveable {
   tick(dt: number) {
     this.#t += dt
 
-    const decay = Math.exp(-this.#solver.naturalFrequency * this.#t)
-    const decayVelocity = -this.#solver.naturalFrequency * decay
+    const decay = Math.exp(-this.#naturalFrequency * this.#t)
+    const decayVelocity = -this.#naturalFrequency * decay
 
     const scale = this.#c1 + this.#c2 * this.#t
     const scaleVelocity = this.#c2
@@ -266,6 +279,7 @@ class OverdampedSolver implements Solveable {
   #state: State
 
   #dampedFrequency!: number
+  #decayRate!: number
   #t = 0
   #c1 = 0
   #c2 = 0
@@ -278,20 +292,19 @@ class OverdampedSolver implements Solveable {
   }
 
   reset() {
+    this.#decayRate = this.#solver.dampingRatio * this.#solver.naturalFrequency
     this.#dampedFrequency =
       this.#solver.naturalFrequency * Math.sqrt(this.#solver.dampingRatio ** 2 - 1)
     this.#t = 0
-    this.#c1 =
-      this.#state.velocity +
-      this.#solver.dampingRatio * this.#solver.naturalFrequency * this.#state.position
+    this.#c1 = this.#state.velocity + this.#decayRate * this.#state.position
     this.#c2 = this.#state.position * this.#dampedFrequency
   }
 
   tick(dt: number) {
     this.#t += dt
 
-    const decay = Math.exp(-this.#solver.dampingRatio * this.#solver.naturalFrequency * this.#t)
-    const decayVelocity = -this.#solver.dampingRatio * this.#solver.naturalFrequency * decay
+    const decay = Math.exp(-this.#decayRate * this.#t)
+    const decayVelocity = -this.#decayRate * decay
 
     const clamped = Math.min(this.#dampedFrequency * this.#t, 300)
 
@@ -300,7 +313,7 @@ class OverdampedSolver implements Solveable {
 
     const scale = this.#c1 * sinh + this.#c2 * cosh
     const scaleVelocity =
-      -this.#c1 * this.#dampedFrequency * sinh + this.#c2 * this.#dampedFrequency * cosh
+      this.#c1 * this.#dampedFrequency * cosh + this.#c2 * this.#dampedFrequency * sinh
 
     this.#state.position = (scale * decay) / this.#dampedFrequency
     this.#state.velocity = (scale * decayVelocity + scaleVelocity * decay) / this.#dampedFrequency

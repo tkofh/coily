@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { createSpringSystem } from '../src/index'
+import { createSpringSystem } from '../src/index.ts'
 
 describe('initial conditions', () => {
   test('correct initial state with only target defined', () => {

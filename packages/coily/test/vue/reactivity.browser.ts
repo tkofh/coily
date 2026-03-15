@@ -6,7 +6,6 @@ describe('initial state', () => {
   test('springs start with the correct value', async () => {
     const { getByText } = render(Parent)
 
-    // @ts-expect-error - unclear why it's missing the types
     await expect.element(getByText('1')).toBeInTheDocument()
   })
 })
