@@ -37,11 +37,15 @@
   "devDependencies": {
     "@nuxt/kit": "^4.4.2",
     "@nuxt/schema": "^4.4.2",
+    "@vitejs/plugin-vue": "^6.0.5",
     "@vitest/browser-playwright": "^4.1.0",
     "@vitest/coverage-v8": "^4.1.0",
+    "@vue/test-utils": "^2.4.6",
     "fast-check": "^4.6.0",
+    "happy-dom": "^20.8.4",
     "tsdown": "^0.21.3",
     "vitest": "^4.1.0",
+    "vitest-browser-vue": "^2.1.0",
     "vue": "^3.5.30"
   },
   "peerDependencies": {

@@ -1,5 +1,4 @@
 import { createSpringSystem } from 'coily'
-import { start } from 'coily/loop'
 import './style.css'
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -33,7 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const ball = document.querySelector('#ball') as HTMLDivElement
   const ball2 = document.querySelector('#ball2') as HTMLDivElement
 
-  const stop = start(system)
+  system.start()
 
   document.addEventListener('mousemove', (event) => {
     spring2X.target = springX.value

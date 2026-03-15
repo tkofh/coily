@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
-import { SolverSet } from '../src/solver-set'
-import { Ticker } from '../src/ticker'
+import { SolverSet } from '../src/solver-set.ts'
+import { Ticker } from '../src/ticker.ts'
 
 describe('Ticker', () => {
   describe('manual tick()', () => {

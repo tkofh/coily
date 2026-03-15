@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { State } from '../src/state'
+import { State } from '../src/state.ts'
 
 describe('State', () => {
   describe('output rounding', () => {

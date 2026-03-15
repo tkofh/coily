@@ -7,25 +7,25 @@
           "run": "onType",
           "disableNestedConfig": false,
           "fixKind": "safe_fix",
-          "unusedDisableDirectives": "deny",
-        },
-      },
+          "unusedDisableDirectives": "deny"
+        }
+      }
     },
     "oxfmt": {
       "initialization_options": {
         "settings": {
           "fmt.configPath": null,
-          "run": "onSave",
-        },
-      },
-    },
+          "run": "onSave"
+        }
+      }
+    }
   },
   "languages": {
     "TypeScript": {
-      "language_servers": ["oxfmt", "oxlint", "vtsls"],
+      "language_servers": ["oxfmt", "oxlint", "vtsls"]
     },
     "Vue.js": {
-      "language_servers": ["oxfmt", "oxlint", "vtsls", "vue-language-server"],
-    },
-  },
+      "language_servers": ["oxfmt", "oxlint", "vtsls", "vue-language-server"]
+    }
+  }
 }

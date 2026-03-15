@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { createSpringSystem } from '../src/index'
+import { createSpringSystem } from '../src/index.ts'
 
 describe('scheduling', () => {
   test('handles state updates when updating target', () => {

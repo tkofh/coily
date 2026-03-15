@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import fc from 'fast-check'
-import { createSpringSystem } from '../src/index'
-import { settlingTime } from '../src/util'
+import { createSpringSystem } from '../src/index.ts'
+import { settlingTime } from '../src/util.ts'
 
 /**
  * Number of iterations for convergence tests.
@@ -30,7 +30,13 @@ const springParamsArb = fc
   })
   .map(({ mass, tension, dampingRatio, displacement, target, sign }) => {
     const cc = 2 * Math.sqrt(mass * tension)
-    return { mass, tension, damping: dampingRatio * cc, value: target + sign * displacement, target }
+    return {
+      mass,
+      tension,
+      damping: dampingRatio * cc,
+      value: target + sign * displacement,
+      target,
+    }
   })
 
 /**
@@ -156,7 +162,13 @@ describe('property-based: monotonicity for overdamped springs', () => {
     fc.assert(
       fc.property(overdampedArb, ({ mass, tension, damping, displacement }) => {
         const system = createSpringSystem()
-        const spring = system.createSpring({ mass, tension, damping, target: 0, value: displacement })
+        const spring = system.createSpring({
+          mass,
+          tension,
+          damping,
+          target: 0,
+          value: displacement,
+        })
 
         const est = settlingTime({ mass, tension, damping, displacement })
         const dt = (est * 1000) / ITERATIONS
@@ -197,7 +209,13 @@ describe('property-based: energy', () => {
     fc.assert(
       fc.property(underdampedArb, ({ mass, tension, damping, displacement }) => {
         const system = createSpringSystem()
-        const spring = system.createSpring({ mass, tension, damping, target: 0, value: displacement })
+        const spring = system.createSpring({
+          mass,
+          tension,
+          damping,
+          target: 0,
+          value: displacement,
+        })
 
         const est = settlingTime({ mass, tension, damping, displacement })
         const dt = (est * 1000) / ITERATIONS
@@ -217,7 +235,7 @@ describe('property-based: energy', () => {
 
         let decreases = 0
         for (let i = 1; i < energies.length; i++) {
-          if (energies[i] < energies[i - 1] + 0.01) decreases++
+          if (energies[i]! < energies[i - 1]! + 0.01) decreases++
         }
 
         expect(decreases / (energies.length - 1)).toBeGreaterThan(0.8)

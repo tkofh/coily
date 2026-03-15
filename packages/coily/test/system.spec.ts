@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { createSpringSystem } from '../src/index'
+import { createSpringSystem } from '../src/index.ts'
 
 describe('SpringSystem', () => {
   test('single tick() updates all active springs', () => {
@@ -19,7 +19,13 @@ describe('SpringSystem', () => {
     const system = createSpringSystem()
 
     const resting = system.createSpring({ mass: 1, tension: 170, damping: 10, target: 0, value: 0 })
-    const active = system.createSpring({ mass: 1, tension: 170, damping: 10, target: 100, value: 0 })
+    const active = system.createSpring({
+      mass: 1,
+      tension: 170,
+      damping: 10,
+      target: 100,
+      value: 0,
+    })
 
     const restingUpdate = vi.fn()
     const activeUpdate = vi.fn()
@@ -35,7 +41,11 @@ describe('SpringSystem', () => {
   test('springs that come to rest are removed from scheduler', () => {
     const system = createSpringSystem()
     const spring = system.createSpring({
-      mass: 1, tension: 170, damping: 26, target: 0, value: 1,
+      mass: 1,
+      tension: 170,
+      damping: 26,
+      target: 0,
+      value: 1,
     })
 
     const onStop = vi.fn()
@@ -59,7 +69,11 @@ describe('SpringSystem', () => {
   test('setting target re-adds a resting spring to the scheduler', () => {
     const system = createSpringSystem()
     const spring = system.createSpring({
-      mass: 1, tension: 170, damping: 26, target: 0, value: 0,
+      mass: 1,
+      tension: 170,
+      damping: 26,
+      target: 0,
+      value: 0,
     })
 
     expect(spring.resting).toBe(true)

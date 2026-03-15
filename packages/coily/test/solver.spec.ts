@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { createSpringSystem } from '../src/index'
+import { createSpringSystem } from '../src/index.ts'
 
 /**
  * Helper: simulate a spring for a given duration at a fixed time step.
@@ -67,9 +67,9 @@ describe('physics: underdamped (ζ < 1)', () => {
     // Find successive local maxima (positive peaks) and verify each is smaller than the last
     const maxima: number[] = []
     for (let i = 1; i < snapshots.length - 1; i++) {
-      const prev = snapshots[i - 1].value
-      const curr = snapshots[i].value
-      const next = snapshots[i + 1].value
+      const prev = snapshots[i - 1]!.value
+      const curr = snapshots[i]!.value
+      const next = snapshots[i + 1]!.value
       if (curr > prev && curr > next && curr > 0.5) {
         maxima.push(curr)
       }
@@ -78,7 +78,7 @@ describe('physics: underdamped (ζ < 1)', () => {
     // Should have at least 2 positive peaks to verify decay
     expect(maxima.length).toBeGreaterThanOrEqual(2)
     for (let i = 1; i < maxima.length; i++) {
-      expect(maxima[i]).toBeLessThan(maxima[i - 1])
+      expect(maxima[i]).toBeLessThan(maxima[i - 1]!)
     }
   })
 })
@@ -113,10 +113,10 @@ describe('physics: critically damped (ζ = 1)', () => {
     const { snapshots } = simulate(params, 5000)
 
     // Distance from target should generally decrease (allowing small floating point noise)
-    let maxDistance = Math.abs(snapshots[0].value)
+    let maxDistance = Math.abs(snapshots[0]!.value)
     let violations = 0
     for (let i = 1; i < snapshots.length; i++) {
-      const distance = Math.abs(snapshots[i].value)
+      const distance = Math.abs(snapshots[i]!.value)
       if (distance > maxDistance + 0.01) {
         violations++
       }
@@ -182,17 +182,17 @@ describe('physics: general properties', () => {
     // Amplitude should remain roughly constant (conservation of energy in undamped case)
     const maxima: number[] = []
     for (let i = 1; i < snapshots.length - 1; i++) {
-      const prev = snapshots[i - 1].value
-      const curr = snapshots[i].value
-      const next = snapshots[i + 1].value
+      const prev = snapshots[i - 1]!.value
+      const curr = snapshots[i]!.value
+      const next = snapshots[i + 1]!.value
       if (curr > prev && curr > next) {
         maxima.push(Math.abs(curr))
       }
     }
 
     if (maxima.length >= 2) {
-      const first = maxima[0]
-      const last = maxima[maxima.length - 1]
+      const first = maxima[0]!
+      const last = maxima[maxima.length - 1]!
       // Should be within ~5% (some rounding error from State class)
       expect(last / first).toBeGreaterThan(0.9)
     }
@@ -206,7 +206,7 @@ describe('physics: general properties', () => {
     function zeroCrossings(snaps: { value: number }[]) {
       let crossings = 0
       for (let i = 1; i < snaps.length; i++) {
-        if (Math.sign(snaps[i].value) !== Math.sign(snaps[i - 1].value)) {
+        if (Math.sign(snaps[i]!.value) !== Math.sign(snaps[i - 1]!.value)) {
           crossings++
         }
       }
@@ -223,7 +223,7 @@ describe('physics: general properties', () => {
     function zeroCrossings(snaps: { value: number }[]) {
       let crossings = 0
       for (let i = 1; i < snaps.length; i++) {
-        if (Math.sign(snaps[i].value) !== Math.sign(snaps[i - 1].value)) {
+        if (Math.sign(snaps[i]!.value) !== Math.sign(snaps[i - 1]!.value)) {
           crossings++
         }
       }
@@ -239,7 +239,7 @@ describe('physics: general properties', () => {
 
     // Values should be exact negations of each other
     for (let i = 0; i < positive.snapshots.length; i++) {
-      expect(positive.snapshots[i].value).toBeCloseTo(-negative.snapshots[i].value, 5)
+      expect(positive.snapshots[i]!.value).toBeCloseTo(-negative.snapshots[i]!.value, 5)
     }
   })
 

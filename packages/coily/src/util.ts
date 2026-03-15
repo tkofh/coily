@@ -59,5 +59,5 @@ export function settlingTime(options: SettlingTimeOptions): number {
 
   if (sigma <= 0) return Infinity
 
-  return 2 * Math.log(a0 / threshold) / sigma
+  return (2 * Math.log(a0 / threshold)) / sigma
 }

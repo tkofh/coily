@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
-import { invariant, settlingTime } from '../src/util'
-import { createSpringSystem } from '../src/index'
+import { invariant, settlingTime } from '../src/util.ts'
+import { createSpringSystem } from '../src/index.ts'
 
 describe('invariant', () => {
   test('does not throw when condition is true', () => {
@@ -37,7 +37,9 @@ describe('settlingTime', () => {
   })
 
   test('returns nonzero when displacement exceeds threshold', () => {
-    expect(settlingTime({ mass: 1, tension: 100, damping: 10, displacement: 0.02 })).toBeGreaterThan(0)
+    expect(
+      settlingTime({ mass: 1, tension: 100, damping: 10, displacement: 0.02 }),
+    ).toBeGreaterThan(0)
   })
 
   test('returns Infinity for zero damping', () => {

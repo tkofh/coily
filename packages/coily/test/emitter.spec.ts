@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { Emitter } from '../src/emitter'
+import { Emitter } from '../src/emitter.ts'
 
 describe('Emitter', () => {
   test('calls registered handler on emit', () => {

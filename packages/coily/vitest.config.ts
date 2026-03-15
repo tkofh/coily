@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config'
 import { playwright } from '@vitest/browser-playwright'
+import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
   test: {
@@ -19,6 +20,14 @@ export default defineConfig({
         },
       },
       {
+        test: {
+          name: 'vue',
+          environment: 'happy-dom',
+          include: ['test/vue/**/*.spec.ts'],
+        },
+      },
+      {
+        plugins: [vue()],
         test: {
           name: 'browser',
           include: ['test/**/*.browser.ts'],

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { createSpringSystem } from '../src/index'
+import { createSpringSystem } from '../src/index.ts'
 
 function waitForStop(spring: { onStop: (cb: () => void) => () => void }, timeout = 5000) {
   return new Promise<void>((resolve, reject) => {
@@ -27,13 +27,21 @@ function frames(n: number) {
 
 function blockMainThread(ms: number) {
   const end = performance.now() + ms
-  while (performance.now() < end) { /* busy wait */ }
+  while (performance.now() < end) {
+    /* busy wait */
+  }
 }
 
 describe('ticker with requestAnimationFrame', () => {
   test('start() drives spring updates via rAF', async () => {
     const system = createSpringSystem()
-    const spring = system.createSpring({ mass: 1, tension: 170, damping: 26, target: 0, value: 100 })
+    const spring = system.createSpring({
+      mass: 1,
+      tension: 170,
+      damping: 26,
+      target: 0,
+      value: 100,
+    })
 
     system.start()
     await frames(5)
@@ -59,7 +67,13 @@ describe('ticker with requestAnimationFrame', () => {
 
   test('stop() halts the animation loop', async () => {
     const system = createSpringSystem()
-    const spring = system.createSpring({ mass: 1, tension: 170, damping: 26, target: 0, value: 100 })
+    const spring = system.createSpring({
+      mass: 1,
+      tension: 170,
+      damping: 26,
+      target: 0,
+      value: 100,
+    })
 
     system.start()
     await frames(3)
@@ -74,8 +88,20 @@ describe('ticker with requestAnimationFrame', () => {
 
   test('multiple springs settle independently', async () => {
     const system = createSpringSystem()
-    const springA = system.createSpring({ mass: 1, tension: 170, damping: 26, target: 50, value: 0 })
-    const springB = system.createSpring({ mass: 1, tension: 80, damping: 20, target: -30, value: 0 })
+    const springA = system.createSpring({
+      mass: 1,
+      tension: 170,
+      damping: 26,
+      target: 50,
+      value: 0,
+    })
+    const springB = system.createSpring({
+      mass: 1,
+      tension: 80,
+      damping: 20,
+      target: -30,
+      value: 0,
+    })
 
     const settledA = waitForStop(springA)
     const settledB = waitForStop(springB)
@@ -92,7 +118,13 @@ describe('ticker with requestAnimationFrame', () => {
 
   test('changing target mid-animation settles at new target', async () => {
     const system = createSpringSystem()
-    const spring = system.createSpring({ mass: 1, tension: 170, damping: 26, target: 100, value: 0 })
+    const spring = system.createSpring({
+      mass: 1,
+      tension: 170,
+      damping: 26,
+      target: 100,
+      value: 0,
+    })
 
     system.start()
     await frames(5)
@@ -109,8 +141,20 @@ describe('ticker with requestAnimationFrame', () => {
 
   test('dispose() during animation does not cause errors', async () => {
     const system = createSpringSystem()
-    const springA = system.createSpring({ mass: 1, tension: 170, damping: 26, target: 100, value: 0 })
-    const springB = system.createSpring({ mass: 1, tension: 170, damping: 26, target: 50, value: 0 })
+    const springA = system.createSpring({
+      mass: 1,
+      tension: 170,
+      damping: 26,
+      target: 100,
+      value: 0,
+    })
+    const springB = system.createSpring({
+      mass: 1,
+      tension: 170,
+      damping: 26,
+      target: 50,
+      value: 0,
+    })
 
     const settledB = waitForStop(springB)
 
@@ -127,10 +171,18 @@ describe('ticker with requestAnimationFrame', () => {
 
   test('onUpdate fires each frame during animation', async () => {
     const system = createSpringSystem()
-    const spring = system.createSpring({ mass: 1, tension: 170, damping: 26, target: 0, value: 100 })
+    const spring = system.createSpring({
+      mass: 1,
+      tension: 170,
+      damping: 26,
+      target: 0,
+      value: 100,
+    })
 
     let updateCount = 0
-    spring.onUpdate(() => { updateCount++ })
+    spring.onUpdate(() => {
+      updateCount++
+    })
 
     const settled = waitForStop(spring)
     system.start()
