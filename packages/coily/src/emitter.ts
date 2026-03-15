@@ -42,7 +42,7 @@ export class Emitter<Events extends Record<EventType, unknown>> {
 
   emit<Key extends keyof Events>(type: Key, evt?: Events[Key]) {
     const handlers = this.#handlers?.get(type)
-    if (handlers) {
+    if (handlers && handlers.length) {
       for (const handler of handlers.slice()) {
         handler(evt as Events[Key])
       }
