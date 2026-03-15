@@ -1,19 +1,22 @@
+import { SolverSet } from './solver-set.ts'
 import { Spring, type SpringOptions } from './spring.ts'
 import { Ticker, type TickerOptions } from './ticker.ts'
 
 class SpringSystemImpl implements SpringSystem {
+  readonly #solvers: SolverSet
   readonly #ticker: Ticker
 
   constructor(options?: TickerOptions) {
-    this.#ticker = new Ticker(options)
+    this.#solvers = new SolverSet()
+    this.#ticker = new Ticker(this.#solvers, options)
   }
 
   createSpring(options: SpringOptions) {
-    return new Spring(this.#ticker, options)
+    return new Spring(this.#solvers, options)
   }
 
   advance(dt: number) {
-    this.#ticker.advance(dt)
+    this.#solvers.tick(dt / 1000)
   }
 
   start() {

@@ -37,3 +37,6 @@ dist
 .output
 
 .idea
+
+**/test/__screenshots__
+**/.vitest-attachments

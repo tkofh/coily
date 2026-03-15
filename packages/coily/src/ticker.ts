@@ -1,4 +1,4 @@
-import type { Solver } from './solver.ts'
+import type { SolverSet } from './solver-set.ts'
 import { invariant } from './util.ts'
 
 export interface TickerOptions {
@@ -41,7 +41,7 @@ export class Ticker {
   #lagThreshold: number
   #adjustedLag: number
 
-  #solvers = new Set<Solver>()
+  readonly #solvers: SolverSet
 
   #frame = 0
   #time = 0
@@ -53,7 +53,9 @@ export class Ticker {
   #id = 0
   #stopped = true
 
-  constructor(options?: TickerOptions) {
+  constructor(solvers: SolverSet, options?: TickerOptions) {
+    this.#solvers = solvers
+
     const fps = options?.fps ?? 60
     const lagThreshold = options?.lagThreshold ?? 500
     const adjustedLag = options?.adjustedLag ?? 33
@@ -123,7 +125,7 @@ export class Ticker {
     if (this.#stopped) {
       this.#stopped = false
       this.#lastWallTime = performance.now()
-      this.#id = request((t) => this.#tick(t))
+      this.#id = request((t) => this.#onFrame(t))
     }
   }
 
@@ -134,34 +136,12 @@ export class Ticker {
     }
   }
 
-  add(solver: Solver) {
-    this.#solvers.add(solver)
-  }
-
-  remove(solver: Solver) {
-    this.#solvers.delete(solver)
-  }
-
-  has(solver: Solver) {
-    return this.#solvers.has(solver)
-  }
-
-  /** Advance solvers by `dt` milliseconds, without affecting internal timing. */
-  advance(dt: number) {
-    for (const solver of this.#solvers) {
-      solver.tick(dt / 1000)
-      if (solver.resting) {
-        this.#solvers.delete(solver)
-      }
-    }
-  }
-
   /** Manually advance one frame. */
   tick() {
-    this.#advance(this.#gap)
+    this.#step(this.#gap)
   }
 
-  #tick(timestamp: number) {
+  #onFrame(timestamp: number) {
     if (this.#stopped) return
 
     const wallElapsed = timestamp - this.#lastWallTime
@@ -180,27 +160,18 @@ export class Ticker {
       this.#previousTime = this.#time
       this.#nextTime += this.#gap
 
-      this.#dispatch()
+      this.#solvers.tick(this.#delta / 1000)
     }
 
-    this.#id = request((t) => this.#tick(t))
+    this.#id = request((t) => this.#onFrame(t))
   }
 
-  #advance(dt: number) {
+  #step(dt: number) {
     this.#time += dt
     this.#frame++
     this.#delta = dt
     this.#previousTime = this.#time
 
-    this.#dispatch()
-  }
-
-  #dispatch() {
-    for (const solver of this.#solvers) {
-      solver.tick(this.#delta / 1000)
-      if (solver.resting) {
-        this.#solvers.delete(solver)
-      }
-    }
+    this.#solvers.tick(dt / 1000)
   }
 }

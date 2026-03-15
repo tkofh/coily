@@ -1,14 +1,6 @@
 import { Emitter } from './emitter.ts'
 import { State } from './state.ts'
-
-interface SolverOptions {
-  mass: number
-  tension: number
-  damping: number
-  position: number
-  velocity: number
-  precision: number
-}
+import { invariant } from './util.ts'
 
 export class Solver {
   #mass: number
@@ -24,13 +16,20 @@ export class Solver {
   #needsUpdate = false
   #needsReset = false
 
-  #emitter: Emitter<{ update: never; start: never; stop: never }>
+  readonly #emitter: Emitter<{ update: never; start: never; stop: never }>
 
-  constructor(options: SolverOptions) {
-    this.#mass = options.mass
-    this.#tension = options.tension
-    this.#damping = options.damping
-    this.#state = new State(options.position, options.velocity, options.precision)
+  constructor(
+    mass: number,
+    tension: number,
+    damping: number,
+    position: number,
+    velocity: number,
+    precision: number,
+  ) {
+    this.#mass = mass
+    this.#tension = tension
+    this.#damping = damping
+    this.#state = new State(position, velocity, precision)
     this.#emitter = new Emitter()
 
     this.#updateSolver()
@@ -110,7 +109,7 @@ export class Solver {
   }
 
   tick(dt: number, emit = true) {
-    if (!this.#currentSolver) return
+    invariant(this.#currentSolver, 'Cannot tick a disposed solver')
 
     if (this.#needsUpdate) {
       this.#updateSolver()
@@ -119,12 +118,12 @@ export class Solver {
       this.#needsReset = true
     }
     if (this.#needsReset) {
-      this.#currentSolver!.reset()
+      this.#currentSolver.reset()
 
       this.#needsReset = false
     }
 
-    this.#currentSolver!.tick(dt)
+    this.#currentSolver.tick(dt)
 
     if (emit) {
       this.#emitter.emit('update')
@@ -300,7 +299,7 @@ class OverdampedSolver implements Solveable {
 
     const scale = this.#c1 * sinh + this.#c2 * cosh
     const scaleVelocity =
-      -this.#c1 * this.#dampedFrequency * sinh + this.#c2 * this.#dampedFrequency * cosh
+      this.#c1 * this.#dampedFrequency * cosh + this.#c2 * this.#dampedFrequency * sinh
 
     this.#state.position = (scale * decay) / this.#dampedFrequency
     this.#state.velocity = (scale * decayVelocity + scaleVelocity * decay) / this.#dampedFrequency

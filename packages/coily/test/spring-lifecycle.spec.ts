@@ -266,6 +266,113 @@ describe('Spring: parameter changes mid-animation', () => {
   })
 })
 
+describe('Spring: re-activation from rest', () => {
+  test('setting value on a resting spring re-activates it', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring({
+      mass: 1, tension: 170, damping: 26, target: 0, value: 0,
+    })
+
+    expect(spring.resting).toBe(true)
+    spring.value = 50
+    expect(spring.value).toBe(50)
+
+    // Should animate back to target
+    for (let i = 0; i < 600; i++) {
+      system.advance(1000 / 60)
+      if (spring.resting) break
+    }
+
+    expect(spring.resting).toBe(true)
+    expect(spring.value).toBeCloseTo(0, 0)
+  })
+
+  test('setting velocity on a resting spring re-activates it', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring({
+      mass: 1, tension: 170, damping: 26, target: 0, value: 0,
+    })
+
+    expect(spring.resting).toBe(true)
+    spring.velocity = 100
+
+    system.advance(1000 / 60)
+    expect(spring.value).not.toBe(0)
+  })
+
+  test('setting mass on a resting spring re-activates it', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring({
+      mass: 1, tension: 170, damping: 26, target: 50, value: 0,
+    })
+
+    // Settle first
+    for (let i = 0; i < 600; i++) {
+      system.advance(1000 / 60)
+      if (spring.resting) break
+    }
+    expect(spring.resting).toBe(true)
+    const settledValue = spring.value
+
+    spring.mass = 5
+    system.advance(1000 / 60)
+
+    expect(spring.mass).toBe(5)
+    // Spring is re-enrolled in ticker (advance didn't skip it)
+    expect(spring.resting).toBeDefined()
+  })
+
+  test('setting tension on a resting spring re-activates it', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring({
+      mass: 1, tension: 170, damping: 26, target: 50, value: 0,
+    })
+
+    for (let i = 0; i < 600; i++) {
+      system.advance(1000 / 60)
+      if (spring.resting) break
+    }
+    expect(spring.resting).toBe(true)
+
+    spring.tension = 300
+    system.advance(1000 / 60)
+
+    expect(spring.tension).toBe(300)
+  })
+
+  test('setting damping on a resting spring re-activates it', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring({
+      mass: 1, tension: 170, damping: 26, target: 50, value: 0,
+    })
+
+    for (let i = 0; i < 600; i++) {
+      system.advance(1000 / 60)
+      if (spring.resting) break
+    }
+    expect(spring.resting).toBe(true)
+
+    spring.damping = 10
+    expect(spring.damping).toBe(10)
+  })
+
+  test('setting precision on a resting spring re-activates it', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring({
+      mass: 1, tension: 170, damping: 26, target: 50, value: 0,
+    })
+
+    for (let i = 0; i < 600; i++) {
+      system.advance(1000 / 60)
+      if (spring.resting) break
+    }
+    expect(spring.resting).toBe(true)
+
+    spring.precision = 5
+    expect(spring.precision).toBe(5)
+  })
+})
+
 describe('Spring: dispose', () => {
   test('disposed spring no longer ticks', () => {
     const system = createSpringSystem()
