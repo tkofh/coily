@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { invariant, roundTo, settlingTime } from '../src/util'
+import { invariant, settlingTime } from '../src/util'
 import { createSpringSystem } from '../src/index'
 
 describe('invariant', () => {
@@ -26,27 +26,6 @@ describe('invariant', () => {
     expect(() => invariant('')).toThrow()
     expect(() => invariant(null)).toThrow()
     expect(() => invariant(undefined)).toThrow()
-  })
-})
-
-describe('roundTo', () => {
-  test('rounds to specified decimal places', () => {
-    expect(roundTo(1.23456, 2)).toBe(1.23)
-    expect(roundTo(1.23456, 3)).toBe(1.235)
-    expect(roundTo(1.23456, 0)).toBe(1)
-  })
-
-  test('rounds 0.5 up', () => {
-    expect(roundTo(1.235, 2)).toBe(1.24)
-    expect(roundTo(1.5, 0)).toBe(2)
-  })
-
-  test('handles negative numbers', () => {
-    expect(roundTo(-1.23456, 2)).toBe(-1.23)
-  })
-
-  test('handles zero', () => {
-    expect(roundTo(0, 5)).toBe(0)
   })
 })
 

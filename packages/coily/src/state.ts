@@ -1,7 +1,6 @@
-import { roundTo } from './util.ts'
-
 export class State {
   #precision: number
+  #precisionMultiplier: number
   #restingMagnitude: number
 
   #position: number
@@ -9,7 +8,8 @@ export class State {
 
   constructor(position: number, velocity: number, precision: number) {
     this.#precision = precision
-    this.#restingMagnitude = 1 / 10 ** this.#precision
+    this.#precisionMultiplier = 10 ** precision
+    this.#restingMagnitude = 1 / this.#precisionMultiplier
 
     this.#position = position
     this.#velocity = velocity
@@ -17,7 +17,7 @@ export class State {
 
   /** Returns the position rounded to the configured precision. */
   get position() {
-    return roundTo(this.#position, this.#precision)
+    return Math.round(this.#position * this.#precisionMultiplier) / this.#precisionMultiplier
   }
 
   set position(value: number) {
@@ -26,7 +26,7 @@ export class State {
 
   /** Returns the velocity rounded to the configured precision. */
   get velocity() {
-    return roundTo(this.#velocity, this.#precision)
+    return Math.round(this.#velocity * this.#precisionMultiplier) / this.#precisionMultiplier
   }
 
   set velocity(value: number) {
@@ -39,7 +39,8 @@ export class State {
 
   set precision(value: number) {
     this.#precision = value
-    this.#restingMagnitude = 1 / 10 ** this.#precision
+    this.#precisionMultiplier = 10 ** value
+    this.#restingMagnitude = 1 / this.#precisionMultiplier
   }
 
   /** Uses raw (unrounded) values so resting detection isn't affected by output quantization. */

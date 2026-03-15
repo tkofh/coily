@@ -5,11 +5,6 @@ export function invariant(condition: unknown, message?: string): asserts conditi
   throw new Error(message ?? 'Invariant Failed')
 }
 
-export function roundTo(value: number, precision: number) {
-  const p = 10 ** precision
-  return Math.round(value * p) / p
-}
-
 interface SettlingTimeOptions {
   mass: number
   tension: number
