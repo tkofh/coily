@@ -30,6 +30,15 @@ export default defineConfig({
           },
         },
       },
+      {
+        test: {
+          name: 'bench',
+          include: [],
+          benchmark: {
+            include: ['test/**/*.bench.ts'],
+          },
+        },
+      },
     ],
   },
 })

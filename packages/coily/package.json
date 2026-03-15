@@ -29,7 +29,10 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "bench": "vitest bench --run",
+    "bench:baseline": "vitest bench --run --outputJson bench-baseline.json",
+    "bench:compare": "vitest bench --run --compare bench-baseline.json"
   },
   "devDependencies": {
     "@nuxt/kit": "^4.4.2",
