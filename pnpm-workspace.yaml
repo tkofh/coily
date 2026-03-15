@@ -1,3 +1,13 @@
 packages:
-  - "packages/*"
-  - "tooling/*"
+  - 'packages/*'
+
+allowBuilds:
+  '@parcel/watcher': true
+  esbuild: true
+
+allowedDeprecatedVersions:
+  'glob': '10.5.0'
+
+publicHoistPattern:
+  - '@types/*'
+  - typescript

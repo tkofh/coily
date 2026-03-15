@@ -1,7 +1,8 @@
-import { type SpringSystem, createSpringSystem } from 'coily'
-import { start } from 'coily/loop'
-import { type App, onBeforeUnmount, onMounted, provide } from 'vue'
-import { SpringSystemKey } from './injection'
+import { type App, type InjectionKey, onBeforeUnmount, onMounted, provide } from 'vue'
+import { type SpringSystem, createSpringSystem } from '../index'
+import { start } from '../loop'
+
+export const SpringSystemKey: InjectionKey<SpringSystem> = Symbol.for('coily/spring-system')
 
 export function provideSpringSystem(system: SpringSystem, app?: App) {
   if (app) {

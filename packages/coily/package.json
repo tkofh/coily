@@ -2,44 +2,55 @@
   "name": "coily",
   "version": "0.10.1",
   "description": "Simulate values using spring physics",
-  "author": "Tim Morris <timthewebguy@gmail.com>",
   "homepage": "https://github.com/tkofh/coily#readme",
+  "bugs": {
+    "url": "https://github.com/tkofh/coily/issues"
+  },
   "license": "MIT",
-  "sideEffects": false,
-  "type": "module",
-  "module": "./dist/api.mjs",
-  "types": "./dist/api.d.mts",
-  "exports": {
-    ".": {
-      "import": "./dist/api.mjs",
-      "types": "./dist/api.d.mts"
-    },
-    "./loop": {
-      "import": "./dist/loop.mjs",
-      "types": "./dist/loop.d.mts"
-    }
-  },
-  "files": ["dist"],
-  "publishConfig": {
-    "access": "public"
-  },
+  "author": "Tim Morris <timthewebguy@gmail.com>",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tkofh/coily.git"
   },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.js",
+    "./loop": "./dist/loop.js",
+    "./nuxt": "./dist/nuxt.js",
+    "./vue": "./dist/vue.js",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "build": "unbuild",
+    "build": "tsdown",
     "test": "vitest run"
   },
-  "bugs": {
-    "url": "https://github.com/tkofh/coily/issues"
-  },
   "devDependencies": {
-    "@repo/tsconfig": "workspace:*",
-    "unbuild": "^2.0.0",
-    "vitest": "^2.1.4"
+    "@nuxt/kit": "^4.4.2",
+    "@nuxt/schema": "^4.4.2",
+    "tsdown": "^0.21.3",
+    "vitest": "^4.1.0",
+    "vue": "^3.5.30"
   },
-  "dependencies": {
-    "tickloop": "^0.5.0"
+  "peerDependencies": {
+    "@nuxt/kit": "^4.0.0",
+    "vue": "^3.4.0"
+  },
+  "peerDependenciesMeta": {
+    "vue": {
+      "optional": true
+    },
+    "@nuxt/kit": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=24.10.0"
   }
 }

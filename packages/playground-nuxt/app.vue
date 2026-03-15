@@ -1,6 +1,6 @@
 <template>
   <SpringValue v-slot="{ value }" :target="toggle ? 100 : 0">
-    <p>{{value}}</p>
+    <p>{{ value }}</p>
   </SpringValue>
 </template>
 
@@ -32,5 +32,4 @@ onMounted(() => {
 })
 
 // const { value } = useSpring(() => toggle.value ? 0 : 100, { mass: 1, tension: 100, damping: 10 })
-
 </script>

@@ -32,4 +32,8 @@ yarn-error.log*
 
 dist
 
+# nuxt
+.nuxt
+.output
+
 .idea

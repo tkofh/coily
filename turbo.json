@@ -7,13 +7,7 @@
       "outputs": ["dist/**"]
     },
     "test": {
-      "cache": true
-    },
-    "//#check": {
-      "cache": true
-    },
-    "//#check:fix": {
-      "cache": false
+      "dependsOn": ["build"]
     }
   }
 }

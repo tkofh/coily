@@ -1,5 +1,5 @@
 {
-  "name": "nuxt-app",
+  "name": "playground-nuxt",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,8 +9,11 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
-    "@coily/vue": "workspace:*",
-    "nuxt": "^3.14.159",
-    "vue": "^3.5.12"
+    "coily": "workspace:^0.10.1",
+    "nuxt": "^4.4.2",
+    "vue": "^3.5.30"
+  },
+  "devDependencies": {
+    "vite": "7.3.1"
   }
 }

@@ -1,12 +1,5 @@
-import {
-  type MaybeRefOrGetter,
-  type Ref,
-  customRef,
-  inject,
-  toValue,
-  watchSyncEffect,
-} from 'vue'
-import { SpringSystemKey } from './injection'
+import { type MaybeRefOrGetter, type Ref, customRef, inject, toValue, watchSyncEffect } from 'vue'
+import { SpringSystemKey } from './system'
 
 interface SpringOptions {
   mass: number

@@ -49,10 +49,7 @@ export class Spring {
   constructor(scheduler: Scheduler, options: SpringOptions) {
     invariant(options.mass > 0, 'Mass must be greater than 0')
     invariant(options.tension > 0, 'Tension must be greater than 0')
-    invariant(
-      options.damping >= 0,
-      'Damping must be greater than or equal to 0',
-    )
+    invariant(options.damping >= 0, 'Damping must be greater than or equal to 0')
     invariant(
       options.precision === undefined || options.precision > 0,
       'Precision must be greater than 0',
