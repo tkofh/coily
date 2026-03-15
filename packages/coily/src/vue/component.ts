@@ -5,7 +5,7 @@ export interface SpringValueProps {
   target: number
   mass?: number
   tension?: number
-  friction?: number
+  damping?: number
   precision?: number
 }
 
@@ -22,11 +22,11 @@ export const SpringValue = defineComponent<
   SpringValueSlots
 >(
   (props, { slots }) => {
-    const { target, mass, tension, friction, precision } = toRefs(props)
+    const { target, mass, tension, damping, precision } = toRefs(props)
     const spring = useSpring(target, () => ({
       mass: mass?.value ?? 1,
       tension: tension?.value ?? 100,
-      damping: friction?.value ?? 10,
+      damping: damping?.value ?? 10,
       precision: precision?.value ?? 2,
     }))
 
@@ -42,6 +42,6 @@ export const SpringValue = defineComponent<
   },
   {
     name: 'SpringValue',
-    props: ['target', 'mass', 'tension', 'friction', 'precision'],
+    props: ['target', 'mass', 'tension', 'damping', 'precision'],
   },
 )

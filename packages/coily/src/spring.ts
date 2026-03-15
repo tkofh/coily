@@ -195,4 +195,9 @@ export class Spring {
     this.#solver.velocity = 0
     this.#solver.tick(0)
   }
+
+  dispose() {
+    this.#scheduler.remove(this.#solver)
+    this.#solver.dispose()
+  }
 }

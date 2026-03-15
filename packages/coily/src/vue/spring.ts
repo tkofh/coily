@@ -44,11 +44,22 @@ export function useSpring(
       spring.mass = opts.mass
       spring.tension = opts.tension
       spring.damping = opts.damping
+      if (opts.precision !== undefined) {
+        spring.precision = opts.precision
+      }
     }
   })
 
+  let triggerValue: (() => void) | undefined
+  let triggerVelocity: (() => void) | undefined
+
+  spring.onUpdate(() => {
+    triggerValue?.()
+    triggerVelocity?.()
+  })
+
   const value = customRef((track, trigger) => {
-    spring.onUpdate(trigger)
+    triggerValue = trigger
 
     return {
       get() {
@@ -63,7 +74,7 @@ export function useSpring(
   })
 
   const velocity = customRef((track, trigger) => {
-    spring.onUpdate(trigger)
+    triggerVelocity = trigger
 
     return {
       get() {
