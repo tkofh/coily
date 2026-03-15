@@ -20,7 +20,7 @@ export class Solver {
   #needsUpdate = false
   #needsReset = false
 
-  readonly #emitter: Emitter<{ update: never; start: never; stop: never }>
+  readonly #emitter: Emitter
 
   constructor(
     mass: number,

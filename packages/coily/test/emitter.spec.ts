@@ -3,96 +3,96 @@ import { Emitter } from '../src/emitter'
 
 describe('Emitter', () => {
   test('calls registered handler on emit', () => {
-    const emitter = new Emitter<{ foo: string }>()
+    const emitter = new Emitter()
     const handler = vi.fn()
 
-    emitter.on('foo', handler)
-    emitter.emit('foo', 'bar')
+    emitter.on('update', handler)
+    emitter.emit('update')
 
-    expect(handler).toHaveBeenCalledWith('bar')
+    expect(handler).toHaveBeenCalledOnce()
   })
 
   test('supports multiple handlers for the same event', () => {
-    const emitter = new Emitter<{ foo: never }>()
+    const emitter = new Emitter()
     const a = vi.fn()
     const b = vi.fn()
 
-    emitter.on('foo', a)
-    emitter.on('foo', b)
-    emitter.emit('foo')
+    emitter.on('update', a)
+    emitter.on('update', b)
+    emitter.emit('update')
 
     expect(a).toHaveBeenCalledOnce()
     expect(b).toHaveBeenCalledOnce()
   })
 
   test('on() returns an unsubscribe function', () => {
-    const emitter = new Emitter<{ foo: never }>()
+    const emitter = new Emitter()
     const handler = vi.fn()
 
-    const unsub = emitter.on('foo', handler)
+    const unsub = emitter.on('update', handler)
     unsub()
-    emitter.emit('foo')
+    emitter.emit('update')
 
     expect(handler).not.toHaveBeenCalled()
   })
 
   test('off() removes a specific handler', () => {
-    const emitter = new Emitter<{ foo: never }>()
+    const emitter = new Emitter()
     const a = vi.fn()
     const b = vi.fn()
 
-    emitter.on('foo', a)
-    emitter.on('foo', b)
-    emitter.off('foo', a)
-    emitter.emit('foo')
+    emitter.on('update', a)
+    emitter.on('update', b)
+    emitter.off('update', a)
+    emitter.emit('update')
 
     expect(a).not.toHaveBeenCalled()
     expect(b).toHaveBeenCalledOnce()
   })
 
   test('off() without handler removes all handlers for that event', () => {
-    const emitter = new Emitter<{ foo: never }>()
+    const emitter = new Emitter()
     const a = vi.fn()
     const b = vi.fn()
 
-    emitter.on('foo', a)
-    emitter.on('foo', b)
-    emitter.off('foo')
-    emitter.emit('foo')
+    emitter.on('update', a)
+    emitter.on('update', b)
+    emitter.off('update')
+    emitter.emit('update')
 
     expect(a).not.toHaveBeenCalled()
     expect(b).not.toHaveBeenCalled()
   })
 
   test('clear() removes all handlers for all events', () => {
-    const emitter = new Emitter<{ foo: never; bar: never }>()
-    const fooHandler = vi.fn()
-    const barHandler = vi.fn()
+    const emitter = new Emitter()
+    const updateHandler = vi.fn()
+    const startHandler = vi.fn()
 
-    emitter.on('foo', fooHandler)
-    emitter.on('bar', barHandler)
+    emitter.on('update', updateHandler)
+    emitter.on('start', startHandler)
     emitter.clear()
-    emitter.emit('foo')
-    emitter.emit('bar')
+    emitter.emit('update')
+    emitter.emit('start')
 
-    expect(fooHandler).not.toHaveBeenCalled()
-    expect(barHandler).not.toHaveBeenCalled()
+    expect(updateHandler).not.toHaveBeenCalled()
+    expect(startHandler).not.toHaveBeenCalled()
   })
 
   test('emit on unregistered event does not throw', () => {
-    const emitter = new Emitter<{ foo: never }>()
-    expect(() => emitter.emit('foo')).not.toThrow()
+    const emitter = new Emitter()
+    expect(() => emitter.emit('update')).not.toThrow()
   })
 
   test('handler removed during emit does not affect current dispatch', () => {
-    const emitter = new Emitter<{ foo: never }>()
+    const emitter = new Emitter()
     const second = vi.fn()
 
-    emitter.on('foo', () => {
-      emitter.off('foo', second)
+    emitter.on('update', () => {
+      emitter.off('update', second)
     })
-    emitter.on('foo', second)
-    emitter.emit('foo')
+    emitter.on('update', second)
+    emitter.emit('update')
 
     // The slice() in emit should protect the iteration
     expect(second).toHaveBeenCalledOnce()

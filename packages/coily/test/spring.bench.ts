@@ -93,6 +93,66 @@ describe('advance to rest', () => {
       system.advance(FRAME)
     }
   })
+
+  bench('settle 100 springs to rest (with onUpdate)', () => {
+    const system = createSpringSystem()
+    let sum = 0
+    const springs = Array.from({ length: 100 }, () => {
+      const spring = system.createSpring({
+        mass: 1,
+        tension: 170,
+        damping: 26,
+        target: 100,
+        value: 0,
+      })
+      spring.onUpdate(() => {
+        sum += spring.value
+      })
+      return spring
+    })
+    while (springs.some((s) => !s.resting)) {
+      system.advance(FRAME)
+    }
+  })
+
+  bench('settle 100 springs to rest (noop onUpdate)', () => {
+    const system = createSpringSystem()
+    const noop = () => {}
+    const springs = Array.from({ length: 100 }, () => {
+      const spring = system.createSpring({
+        mass: 1,
+        tension: 170,
+        damping: 26,
+        target: 100,
+        value: 0,
+      })
+      spring.onUpdate(noop)
+      return spring
+    })
+    while (springs.some((s) => !s.resting)) {
+      system.advance(FRAME)
+    }
+  })
+
+  bench('settle 100 springs to rest (no listeners)', () => {
+    const system = createSpringSystem()
+    const springs = Array.from({ length: 100 }, () =>
+      system.createSpring({
+        mass: 1,
+        tension: 170,
+        damping: 26,
+        target: 100,
+        value: 0,
+      }),
+    )
+    while (springs.some((s) => !s.resting)) {
+      system.advance(FRAME)
+    }
+    // read final values after settling
+    for (const spring of springs) {
+      void spring.value
+    }
+  })
 })
 
 describe('target changes', () => {
