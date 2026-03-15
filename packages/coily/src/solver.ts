@@ -19,7 +19,7 @@ export class Solver {
   #underdampedSolver: UnderdampedSolver | null = null
   #criticallyDampedSolver: CriticallyDampedSolver | null = null
   #overdampedSolver: OverdampedSolver | null = null
-  #currentSolver!: Solveable
+  #currentSolver: Solveable | null = null
 
   #needsUpdate = false
   #needsReset = false
@@ -110,6 +110,8 @@ export class Solver {
   }
 
   tick(dt: number, emit = true) {
+    if (!this.#currentSolver) return
+
     if (this.#needsUpdate) {
       this.#updateSolver()
 
@@ -117,12 +119,12 @@ export class Solver {
       this.#needsReset = true
     }
     if (this.#needsReset) {
-      this.#currentSolver.reset()
+      this.#currentSolver!.reset()
 
       this.#needsReset = false
     }
 
-    this.#currentSolver.tick(dt)
+    this.#currentSolver!.tick(dt)
 
     if (emit) {
       this.#emitter.emit('update')
@@ -147,6 +149,10 @@ export class Solver {
 
   dispose() {
     this.#emitter.clear()
+    this.#underdampedSolver = null
+    this.#criticallyDampedSolver = null
+    this.#overdampedSolver = null
+    this.#currentSolver = null
   }
 
   #updateSolver() {
