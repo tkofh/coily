@@ -11,24 +11,26 @@ export class State {
     this.#precision = precision
     this.#restingMagnitude = 1 / 10 ** this.#precision
 
-    this.#position = roundTo(position, this.#precision)
-    this.#velocity = roundTo(velocity, this.#precision)
+    this.#position = position
+    this.#velocity = velocity
   }
 
+  /** Returns the position rounded to the configured precision. */
   get position() {
-    return this.#position
+    return roundTo(this.#position, this.#precision)
   }
 
   set position(value: number) {
-    this.#position = roundTo(value, this.#precision)
+    this.#position = value
   }
 
+  /** Returns the velocity rounded to the configured precision. */
   get velocity() {
-    return this.#velocity
+    return roundTo(this.#velocity, this.#precision)
   }
 
   set velocity(value: number) {
-    this.#velocity = roundTo(value, this.#precision)
+    this.#velocity = value
   }
 
   get precision() {
@@ -38,10 +40,9 @@ export class State {
   set precision(value: number) {
     this.#precision = value
     this.#restingMagnitude = 1 / 10 ** this.#precision
-    this.#position = roundTo(this.#position, this.#precision)
-    this.#velocity = roundTo(this.#velocity, this.#precision)
   }
 
+  /** Uses raw (unrounded) values so resting detection isn't affected by output quantization. */
   get resting() {
     return (
       Math.abs(this.#velocity) < this.#restingMagnitude &&
