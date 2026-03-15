@@ -74,9 +74,9 @@ describe('settlingTime', () => {
     const spring = system.createSpring({ ...params, target: 0, value: displacement })
 
     let t = 0
-    const dt = 1 / 60
-    while (t < est && !spring.resting) {
-      system.tick(dt)
+    const dt = 1000 / 60
+    while (t < est * 1000 && !spring.resting) {
+      system.advance(dt)
       t += dt
     }
 
@@ -94,9 +94,9 @@ describe('settlingTime', () => {
     const spring = system.createSpring({ ...params, target: 0, value: displacement })
 
     let t = 0
-    const dt = 1 / 60
-    while (t < est && !spring.resting) {
-      system.tick(dt)
+    const dt = 1000 / 60
+    while (t < est * 1000 && !spring.resting) {
+      system.advance(dt)
       t += dt
     }
 
@@ -112,9 +112,9 @@ describe('settlingTime', () => {
     const spring = system.createSpring({ ...params, target: 0, value: displacement })
 
     let t = 0
-    const dt = 1 / 60
-    while (t < est && !spring.resting) {
-      system.tick(dt)
+    const dt = 1000 / 60
+    while (t < est * 1000 && !spring.resting) {
+      system.advance(dt)
       t += dt
     }
 

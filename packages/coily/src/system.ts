@@ -12,8 +12,8 @@ class SpringSystemImpl implements SpringSystem {
     return new Spring(this.#ticker, options)
   }
 
-  tick(dt: number) {
-    this.#ticker.step(dt)
+  advance(dt: number) {
+    this.#ticker.advance(dt)
   }
 
   start() {
@@ -55,14 +55,36 @@ class SpringSystemImpl implements SpringSystem {
 
 export interface SpringSystem {
   createSpring(options: SpringOptions): Spring
-  tick(dt: number): void
+  /** Advance all springs by `dt` milliseconds, without affecting internal timing. */
+  advance(dt: number): void
 
+  /** Start the animation loop. */
   start(): void
+  /** Stop the animation loop. */
   stop(): void
+  /** Whether the animation loop is currently running. */
   readonly running: boolean
 
+  /**
+   * The target frames per second for the simulation loop.
+   *
+   * must be greater than 0
+   */
   fps: number
+  /**
+   * The maximum elapsed time (in ms) before a frame is considered a lag spike
+   * (e.g. from a backgrounded tab). When exceeded, `adjustedLag` is used instead
+   * of the real elapsed time. Set to 0 to disable lag detection.
+   *
+   * must be greater than or equal to 0
+   */
   lagThreshold: number
+  /**
+   * The substitute elapsed time (in ms) used when a lag spike is detected.
+   * Clamped to be at most `lagThreshold`.
+   *
+   * must be greater than or equal to 0
+   */
   adjustedLag: number
 }
 

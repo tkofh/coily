@@ -8,7 +8,7 @@ describe('SpringSystem', () => {
     const a = system.createSpring({ mass: 1, tension: 170, damping: 10, target: 100, value: 0 })
     const b = system.createSpring({ mass: 1, tension: 170, damping: 10, target: -50, value: 0 })
 
-    system.tick(1 / 60)
+    system.advance(1000 / 60)
 
     // Both should have moved from their initial values
     expect(a.value).not.toBe(0)
@@ -26,7 +26,7 @@ describe('SpringSystem', () => {
     resting.onUpdate(restingUpdate)
     active.onUpdate(activeUpdate)
 
-    system.tick(1 / 60)
+    system.advance(1000 / 60)
 
     expect(restingUpdate).not.toHaveBeenCalled()
     expect(activeUpdate).toHaveBeenCalled()
@@ -43,7 +43,7 @@ describe('SpringSystem', () => {
 
     // Simulate until rest
     for (let i = 0; i < 600; i++) {
-      system.tick(1 / 60)
+      system.advance(1000 / 60)
       if (spring.resting) break
     }
 
@@ -52,7 +52,7 @@ describe('SpringSystem', () => {
     // Subsequent ticks should not fire update
     const onUpdate = vi.fn()
     spring.onUpdate(onUpdate)
-    system.tick(1 / 60)
+    system.advance(1000 / 60)
     expect(onUpdate).not.toHaveBeenCalled()
   })
 
@@ -68,12 +68,12 @@ describe('SpringSystem', () => {
     spring.onUpdate(onUpdate)
 
     // Not being ticked
-    system.tick(1 / 60)
+    system.advance(1000 / 60)
     expect(onUpdate).not.toHaveBeenCalled()
 
     // Set new target — should re-enter scheduler
     spring.target = 100
-    system.tick(1 / 60)
+    system.advance(1000 / 60)
     expect(onUpdate).toHaveBeenCalled()
   })
 
@@ -85,7 +85,7 @@ describe('SpringSystem', () => {
     const c = system.createSpring({ mass: 1, tension: 170, damping: 26, target: 50, value: 50 })
 
     for (let i = 0; i < 600; i++) {
-      system.tick(1 / 60)
+      system.advance(1000 / 60)
       if (a.resting && b.resting && c.resting) break
     }
 

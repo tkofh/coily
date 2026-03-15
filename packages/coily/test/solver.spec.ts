@@ -8,7 +8,7 @@ import { createSpringSystem } from '../src/index'
 function simulate(
   params: { mass: number; tension: number; damping: number; target: number; value: number },
   duration: number,
-  dt = 1 / 60,
+  dt = 1000 / 60,
 ) {
   const system = createSpringSystem()
   const spring = system.createSpring({ ...params })
@@ -19,7 +19,7 @@ function simulate(
   snapshots.push({ time: 0, value: spring.value, velocity: spring.velocity })
 
   while (t < duration) {
-    system.tick(dt)
+    system.advance(dt)
     t += dt
     snapshots.push({ time: t, value: spring.value, velocity: spring.velocity })
   }
@@ -45,7 +45,7 @@ describe('physics: underdamped (ζ < 1)', () => {
   })
 
   test('overshoots the target (oscillates past zero)', () => {
-    const { snapshots } = simulate(params, 3)
+    const { snapshots } = simulate(params, 3000)
     const values = snapshots.map((s) => s.value)
 
     // Should cross zero (target) at some point, meaning some values are negative
@@ -54,7 +54,7 @@ describe('physics: underdamped (ζ < 1)', () => {
   })
 
   test('eventually comes to rest at target', () => {
-    const { spring } = simulate(params, 10)
+    const { spring } = simulate(params, 10000)
     expect(spring.resting).toBe(true)
     expect(spring.value).toBeCloseTo(0, 1)
   })
@@ -62,7 +62,7 @@ describe('physics: underdamped (ζ < 1)', () => {
   test('oscillation amplitude decays over time', () => {
     // Use lower damping to get more visible oscillations
     const bouncy = { mass: 1, tension: 170, damping: 5, target: 0, value: 100 }
-    const { snapshots } = simulate(bouncy, 5)
+    const { snapshots } = simulate(bouncy, 5000)
 
     // Find successive local maxima (positive peaks) and verify each is smaller than the last
     const maxima: number[] = []
@@ -94,7 +94,7 @@ describe('physics: critically damped (ζ = 1)', () => {
   })
 
   test('does not overshoot target', () => {
-    const { snapshots } = simulate(params, 5)
+    const { snapshots } = simulate(params, 5000)
 
     // Starting at value=100 targeting 0: all values should remain >= 0
     // (no overshoot past target)
@@ -104,13 +104,13 @@ describe('physics: critically damped (ζ = 1)', () => {
   })
 
   test('eventually comes to rest at target', () => {
-    const { spring } = simulate(params, 10)
+    const { spring } = simulate(params, 10000)
     expect(spring.resting).toBe(true)
     expect(spring.value).toBeCloseTo(0, 1)
   })
 
   test('approaches target monotonically', () => {
-    const { snapshots } = simulate(params, 5)
+    const { snapshots } = simulate(params, 5000)
 
     // Distance from target should generally decrease (allowing small floating point noise)
     let maxDistance = Math.abs(snapshots[0].value)
@@ -137,7 +137,7 @@ describe('physics: overdamped (ζ > 1)', () => {
   })
 
   test('does not overshoot target', () => {
-    const { snapshots } = simulate(params, 10)
+    const { snapshots } = simulate(params, 10000)
 
     // Starting at 100, targeting 0: values should stay >= 0
     for (const snap of snapshots) {
@@ -146,7 +146,7 @@ describe('physics: overdamped (ζ > 1)', () => {
   })
 
   test('eventually comes to rest at target', () => {
-    const { spring } = simulate(params, 15)
+    const { spring } = simulate(params, 15000)
     expect(spring.resting).toBe(true)
     expect(spring.value).toBeCloseTo(0, 1)
   })
@@ -156,8 +156,8 @@ describe('physics: overdamped (ζ > 1)', () => {
     const cc = 2 * 1 * wn
     const criticalParams = { mass: 1, tension: 170, damping: cc, target: 0, value: 100 }
 
-    const { snapshots: overdamped } = simulate(params, 5)
-    const { snapshots: critical } = simulate(criticalParams, 5)
+    const { snapshots: overdamped } = simulate(params, 5000)
+    const { snapshots: critical } = simulate(criticalParams, 5000)
 
     // At the same time point, the overdamped spring should be further from target
     // Check at t ≈ 0.5s (roughly frame 30)
@@ -173,7 +173,7 @@ describe('physics: general properties', () => {
     // ζ = 0 → pure harmonic oscillator
     const { spring, snapshots } = simulate(
       { mass: 1, tension: 100, damping: 0, target: 0, value: 50 },
-      5,
+      5000,
     )
 
     // Should still be moving after 5 seconds
@@ -199,8 +199,8 @@ describe('physics: general properties', () => {
   })
 
   test('heavier mass results in slower oscillation', () => {
-    const light = simulate({ mass: 1, tension: 100, damping: 2, target: 0, value: 50 }, 3)
-    const heavy = simulate({ mass: 10, tension: 100, damping: 2, target: 0, value: 50 }, 3)
+    const light = simulate({ mass: 1, tension: 100, damping: 2, target: 0, value: 50 }, 3000)
+    const heavy = simulate({ mass: 10, tension: 100, damping: 2, target: 0, value: 50 }, 3000)
 
     // Count zero crossings — lighter mass should cross more
     function zeroCrossings(snaps: { value: number }[]) {
@@ -217,8 +217,8 @@ describe('physics: general properties', () => {
   })
 
   test('higher tension results in faster oscillation', () => {
-    const low = simulate({ mass: 1, tension: 50, damping: 2, target: 0, value: 50 }, 3)
-    const high = simulate({ mass: 1, tension: 200, damping: 2, target: 0, value: 50 }, 3)
+    const low = simulate({ mass: 1, tension: 50, damping: 2, target: 0, value: 50 }, 3000)
+    const high = simulate({ mass: 1, tension: 200, damping: 2, target: 0, value: 50 }, 3000)
 
     function zeroCrossings(snaps: { value: number }[]) {
       let crossings = 0
@@ -234,8 +234,8 @@ describe('physics: general properties', () => {
   })
 
   test('symmetric initial conditions produce mirrored trajectories', () => {
-    const positive = simulate({ mass: 1, tension: 170, damping: 10, target: 0, value: 50 }, 2)
-    const negative = simulate({ mass: 1, tension: 170, damping: 10, target: 0, value: -50 }, 2)
+    const positive = simulate({ mass: 1, tension: 170, damping: 10, target: 0, value: 50 }, 2000)
+    const negative = simulate({ mass: 1, tension: 170, damping: 10, target: 0, value: -50 }, 2000)
 
     // Values should be exact negations of each other
     for (let i = 0; i < positive.snapshots.length; i++) {
@@ -247,7 +247,7 @@ describe('physics: general properties', () => {
     // Spring targeting 200 from value 100
     const { spring } = simulate(
       { mass: 1, tension: 170, damping: 26, target: 200, value: 100 },
-      10,
+      10000,
     )
     expect(spring.resting).toBe(true)
     expect(spring.value).toBeCloseTo(200, 0)
@@ -256,7 +256,7 @@ describe('physics: general properties', () => {
   test('negative targets work correctly', () => {
     const { spring } = simulate(
       { mass: 1, tension: 170, damping: 26, target: -100, value: 0 },
-      10,
+      10000,
     )
     expect(spring.resting).toBe(true)
     expect(spring.value).toBeCloseTo(-100, 0)

@@ -1,9 +1,28 @@
 import type { Solver } from './solver.ts'
+import { invariant } from './util.ts'
 
 export interface TickerOptions {
-  fps?: number
-  lagThreshold?: number
-  adjustedLag?: number
+  /**
+   * The target frames per second for the simulation loop
+   *
+   * must be greater than 0, defaults to 60
+   */
+  fps?: number | undefined
+  /**
+   * The maximum elapsed time (in ms) before a frame is considered a lag spike
+   * (e.g. from a backgrounded tab). When exceeded, `adjustedLag` is used instead
+   * of the real elapsed time. Set to 0 to disable lag detection.
+   *
+   * must be greater than or equal to 0, defaults to 500
+   */
+  lagThreshold?: number | undefined
+  /**
+   * The substitute elapsed time (in ms) used when a lag spike is detected.
+   * Clamped to be at most `lagThreshold`.
+   *
+   * must be greater than or equal to 0, defaults to 33
+   */
+  adjustedLag?: number | undefined
 }
 
 const hasWindow = typeof window !== 'undefined'
@@ -35,10 +54,18 @@ export class Ticker {
   #stopped = true
 
   constructor(options?: TickerOptions) {
-    this.#fps = options?.fps ?? 60
-    this.#gap = 1000 / this.#fps
-    this.#lagThreshold = options?.lagThreshold ?? 500
-    this.#adjustedLag = options?.adjustedLag ?? 33
+    const fps = options?.fps ?? 60
+    const lagThreshold = options?.lagThreshold ?? 500
+    const adjustedLag = options?.adjustedLag ?? 33
+
+    invariant(fps > 0, 'FPS must be greater than 0')
+    invariant(lagThreshold >= 0, 'Lag threshold must be greater than or equal to 0')
+    invariant(adjustedLag >= 0, 'Adjusted lag must be greater than or equal to 0')
+
+    this.#fps = fps
+    this.#gap = 1000 / fps
+    this.#lagThreshold = lagThreshold === 0 ? 1e8 : lagThreshold
+    this.#adjustedLag = Math.min(adjustedLag, this.#lagThreshold)
     this.#nextTime = this.#gap
   }
 
@@ -47,6 +74,7 @@ export class Ticker {
   }
 
   set fps(value: number) {
+    invariant(value > 0, 'FPS must be greater than 0')
     this.#fps = value
     this.#gap = 1000 / value
     this.#nextTime = this.#previousTime + this.#gap
@@ -57,6 +85,7 @@ export class Ticker {
   }
 
   set lagThreshold(value: number) {
+    invariant(value >= 0, 'Lag threshold must be greater than or equal to 0')
     this.#lagThreshold = value === 0 ? 1e8 : value
     this.#adjustedLag = Math.min(this.#adjustedLag, this.#lagThreshold)
   }
@@ -66,6 +95,7 @@ export class Ticker {
   }
 
   set adjustedLag(value: number) {
+    invariant(value >= 0, 'Adjusted lag must be greater than or equal to 0')
     this.#adjustedLag = Math.min(value, this.#lagThreshold)
   }
 
@@ -116,10 +146,10 @@ export class Ticker {
     return this.#solvers.has(solver)
   }
 
-  /** Advance solvers by `dt` seconds, without affecting internal timing. */
-  step(dt: number) {
+  /** Advance solvers by `dt` milliseconds, without affecting internal timing. */
+  advance(dt: number) {
     for (const solver of this.#solvers) {
-      solver.tick(dt)
+      solver.tick(dt / 1000)
       if (solver.resting) {
         this.#solvers.delete(solver)
       }
@@ -139,8 +169,7 @@ export class Ticker {
 
     // If the browser tab was backgrounded or the system lagged,
     // clamp the elapsed time so the simulation doesn't jump.
-    const elapsed =
-      wallElapsed > this.#lagThreshold ? this.#adjustedLag : wallElapsed
+    const elapsed = wallElapsed > this.#lagThreshold ? this.#adjustedLag : wallElapsed
 
     this.#time += elapsed
 

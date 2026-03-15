@@ -47,10 +47,10 @@ function simulateToSettling(
   const system = createSpringSystem()
   const spring = system.createSpring(params)
 
-  const dt = est / iterations
+  const dt = (est * 1000) / iterations
 
   for (let i = 0; i < iterations; i++) {
-    system.tick(dt)
+    system.advance(dt)
   }
 
   return { spring, system, dt, estimatedTime: est }
@@ -86,13 +86,13 @@ describe('property-based: no NaN or Infinity', () => {
       fc.property(springParamsArb, (params) => {
         const displacement = params.value - params.target
         const est = settlingTime({ ...params, displacement })
-        const dt = est / ITERATIONS
+        const dt = (est * 1000) / ITERATIONS
 
         const system = createSpringSystem()
         const spring = system.createSpring(params)
 
         for (let i = 0; i < ITERATIONS; i++) {
-          system.tick(dt)
+          system.advance(dt)
           expect(Number.isFinite(spring.value)).toBe(true)
           expect(Number.isFinite(spring.velocity)).toBe(true)
         }
@@ -125,11 +125,11 @@ describe('property-based: symmetry', () => {
         const s2 = system2.createSpring({ mass, tension, damping, target: 0, value: -displacement })
 
         const est = settlingTime({ mass, tension, damping, displacement })
-        const dt = est / ITERATIONS
+        const dt = (est * 1000) / ITERATIONS
 
         for (let i = 0; i < ITERATIONS; i++) {
-          system1.tick(dt)
-          system2.tick(dt)
+          system1.advance(dt)
+          system2.advance(dt)
           expect(s1.value).toBeCloseTo(-s2.value, 4)
         }
       }),
@@ -159,13 +159,13 @@ describe('property-based: monotonicity for overdamped springs', () => {
         const spring = system.createSpring({ mass, tension, damping, target: 0, value: displacement })
 
         const est = settlingTime({ mass, tension, damping, displacement })
-        const dt = est / ITERATIONS
+        const dt = (est * 1000) / ITERATIONS
 
         let prevDistance = Math.abs(spring.value)
         let violations = 0
 
         for (let i = 0; i < ITERATIONS; i++) {
-          system.tick(dt)
+          system.advance(dt)
           const distance = Math.abs(spring.value)
 
           if (distance > prevDistance + 0.02) violations++
@@ -200,7 +200,7 @@ describe('property-based: energy', () => {
         const spring = system.createSpring({ mass, tension, damping, target: 0, value: displacement })
 
         const est = settlingTime({ mass, tension, damping, displacement })
-        const dt = est / ITERATIONS
+        const dt = (est * 1000) / ITERATIONS
 
         function energy() {
           const pos = spring.value
@@ -212,7 +212,7 @@ describe('property-based: energy', () => {
         const energies: number[] = []
         for (let i = 0; i < ITERATIONS; i++) {
           if (i % 10 === 0) energies.push(energy())
-          system.tick(dt)
+          system.advance(dt)
         }
 
         let decreases = 0
@@ -242,8 +242,8 @@ describe('property-based: target changes', () => {
             ...params,
             displacement: params.value - params.target,
           })
-          const warmupDt = initialEst / ITERATIONS
-          for (let i = 0; i < 60; i++) system.tick(warmupDt)
+          const warmupDt = (initialEst * 1000) / ITERATIONS
+          for (let i = 0; i < 60; i++) system.advance(warmupDt)
 
           // Change target
           spring.target = newTarget
@@ -257,10 +257,10 @@ describe('property-based: target changes', () => {
             displacement: newDisplacement,
             velocity: spring.velocity,
           })
-          const dt = newEst / ITERATIONS
+          const dt = (newEst * 1000) / ITERATIONS
 
           for (let i = 0; i < ITERATIONS; i++) {
-            system.tick(dt)
+            system.advance(dt)
           }
 
           const tolerance = Math.max(Math.abs(newTarget) * 0.01, 1)

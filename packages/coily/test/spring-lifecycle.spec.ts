@@ -115,7 +115,7 @@ describe('Spring: jumpTo', () => {
     })
 
     // Tick to build up velocity
-    system.tick(0.1)
+    system.advance(100)
     expect(spring.velocity).not.toBe(0)
 
     spring.jumpTo(50)
@@ -143,9 +143,9 @@ describe('Spring: events', () => {
     const onUpdate = vi.fn()
     spring.onUpdate(onUpdate)
 
-    system.tick(1 / 60)
-    system.tick(1 / 60)
-    system.tick(1 / 60)
+    system.advance(1000 / 60)
+    system.advance(1000 / 60)
+    system.advance(1000 / 60)
 
     expect(onUpdate).toHaveBeenCalledTimes(3)
   })
@@ -160,7 +160,7 @@ describe('Spring: events', () => {
     spring.onStart(onStart)
 
     // Spring is resting — no start event on tick
-    system.tick(1 / 60)
+    system.advance(1000 / 60)
     expect(onStart).not.toHaveBeenCalled()
 
     // Change target to trigger motion
@@ -179,7 +179,7 @@ describe('Spring: events', () => {
 
     // Simulate until resting
     for (let i = 0; i < 600; i++) {
-      system.tick(1 / 60)
+      system.advance(1000 / 60)
       if (spring.resting) break
     }
 
@@ -195,11 +195,11 @@ describe('Spring: events', () => {
     const onUpdate = vi.fn()
     const unsub = spring.onUpdate(onUpdate)
 
-    system.tick(1 / 60)
+    system.advance(1000 / 60)
     expect(onUpdate).toHaveBeenCalledOnce()
 
     unsub()
-    system.tick(1 / 60)
+    system.advance(1000 / 60)
     expect(onUpdate).toHaveBeenCalledOnce()
   })
 })
@@ -211,9 +211,9 @@ describe('Spring: parameter changes mid-animation', () => {
       mass: 1, tension: 170, damping: 10, target: 0, value: 100,
     })
 
-    system.tick(1 / 60)
+    system.advance(1000 / 60)
     spring.mass = 5
-    expect(() => system.tick(1 / 60)).not.toThrow()
+    expect(() => system.advance(1000 / 60)).not.toThrow()
     expect(spring.value).not.toBeNaN()
   })
 
@@ -223,9 +223,9 @@ describe('Spring: parameter changes mid-animation', () => {
       mass: 1, tension: 170, damping: 10, target: 0, value: 100,
     })
 
-    system.tick(1 / 60)
+    system.advance(1000 / 60)
     spring.tension = 300
-    system.tick(1 / 60)
+    system.advance(1000 / 60)
     expect(spring.value).not.toBeNaN()
     expect(spring.velocity).not.toBeNaN()
   })
@@ -237,9 +237,9 @@ describe('Spring: parameter changes mid-animation', () => {
     })
 
     // Start underdamped, switch to overdamped
-    system.tick(1 / 60)
+    system.advance(1000 / 60)
     spring.damping = 40
-    system.tick(1 / 60)
+    system.advance(1000 / 60)
 
     expect(spring.value).not.toBeNaN()
     expect(spring.velocity).not.toBeNaN()
@@ -252,12 +252,12 @@ describe('Spring: parameter changes mid-animation', () => {
     })
 
     // Tick for a bit, change params, then simulate to completion
-    for (let i = 0; i < 30; i++) system.tick(1 / 60)
+    for (let i = 0; i < 30; i++) system.advance(1000 / 60)
     spring.tension = 200
     spring.damping = 30
 
     for (let i = 0; i < 600; i++) {
-      system.tick(1 / 60)
+      system.advance(1000 / 60)
       if (spring.resting) break
     }
 
@@ -276,11 +276,11 @@ describe('Spring: dispose', () => {
     const onUpdate = vi.fn()
     spring.onUpdate(onUpdate)
 
-    system.tick(1 / 60)
+    system.advance(1000 / 60)
     expect(onUpdate).toHaveBeenCalledOnce()
 
     spring.dispose()
-    system.tick(1 / 60)
+    system.advance(1000 / 60)
     // onUpdate should not fire again — emitter was cleared
     expect(onUpdate).toHaveBeenCalledOnce()
   })
