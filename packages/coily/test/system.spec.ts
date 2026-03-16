@@ -1,12 +1,13 @@
 import { describe, expect, test, vi } from 'vitest'
-import { createSpringSystem } from '../src/index.ts'
+import { createSpringSystem, springConfig } from '../src/index.ts'
 
 describe('SpringSystem', () => {
   test('single tick() updates all active springs', () => {
     const system = createSpringSystem()
+    const config = springConfig({ mass: 1, tension: 170, damping: 10 })
 
-    const a = system.createSpring({ mass: 1, tension: 170, damping: 10, target: 100, value: 0 })
-    const b = system.createSpring({ mass: 1, tension: 170, damping: 10, target: -50, value: 0 })
+    const a = system.createSpring({ target: 100, value: 0 }, config)
+    const b = system.createSpring({ target: -50, value: 0 }, config)
 
     system.advance(1000 / 60)
 
@@ -17,15 +18,10 @@ describe('SpringSystem', () => {
 
   test('resting springs are not ticked', () => {
     const system = createSpringSystem()
+    const config = springConfig({ mass: 1, tension: 170, damping: 10 })
 
-    const resting = system.createSpring({ mass: 1, tension: 170, damping: 10, target: 0, value: 0 })
-    const active = system.createSpring({
-      mass: 1,
-      tension: 170,
-      damping: 10,
-      target: 100,
-      value: 0,
-    })
+    const resting = system.createSpring(0, config)
+    const active = system.createSpring({ target: 100, value: 0 }, config)
 
     const restingUpdate = vi.fn()
     const activeUpdate = vi.fn()
@@ -40,13 +36,10 @@ describe('SpringSystem', () => {
 
   test('springs that come to rest are removed from scheduler', () => {
     const system = createSpringSystem()
-    const spring = system.createSpring({
-      mass: 1,
-      tension: 170,
-      damping: 26,
-      target: 0,
-      value: 1,
-    })
+    const spring = system.createSpring(
+      { target: 0, value: 1 },
+      springConfig({ mass: 1, tension: 170, damping: 26 }),
+    )
 
     const onStop = vi.fn()
     spring.onStop(onStop)
@@ -68,13 +61,7 @@ describe('SpringSystem', () => {
 
   test('setting target re-adds a resting spring to the scheduler', () => {
     const system = createSpringSystem()
-    const spring = system.createSpring({
-      mass: 1,
-      tension: 170,
-      damping: 26,
-      target: 0,
-      value: 0,
-    })
+    const spring = system.createSpring(0, springConfig({ mass: 1, tension: 170, damping: 26 }))
 
     expect(spring.resting).toBe(true)
 
@@ -93,10 +80,11 @@ describe('SpringSystem', () => {
 
   test('multiple springs reach their different targets independently', () => {
     const system = createSpringSystem()
+    const config = springConfig({ mass: 1, tension: 170, damping: 26 })
 
-    const a = system.createSpring({ mass: 1, tension: 170, damping: 26, target: 100, value: 0 })
-    const b = system.createSpring({ mass: 1, tension: 170, damping: 26, target: -200, value: 0 })
-    const c = system.createSpring({ mass: 1, tension: 170, damping: 26, target: 50, value: 50 })
+    const a = system.createSpring({ target: 100, value: 0 }, config)
+    const b = system.createSpring({ target: -200, value: 0 }, config)
+    const c = system.createSpring(50, config)
 
     for (let i = 0; i < 600; i++) {
       system.advance(1000 / 60)

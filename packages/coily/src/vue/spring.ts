@@ -1,12 +1,6 @@
-import { type MaybeRefOrGetter, type Ref, customRef, inject, toValue, watchSyncEffect } from 'vue'
+import { type MaybeRefOrGetter, type Ref, computed, customRef, inject, toValue, watchSyncEffect } from 'vue'
+import { SpringConfig, type SpringOptions } from '../config.ts'
 import { SpringSystemKey } from './system.ts'
-
-interface SpringOptions {
-  mass: number
-  tension: number
-  damping: number
-  precision?: number
-}
 
 interface UseSpringReturn {
   readonly value: Ref<number>
@@ -15,12 +9,11 @@ interface UseSpringReturn {
   readonly jumpTo: (value: number) => void
 }
 
-const defaultOptions: SpringOptions = {
-  mass: 1,
+const defaultOptions = {
   tension: 100,
   damping: 10,
   precision: 2,
-}
+} satisfies SpringOptions
 
 export function useSpring(
   target: MaybeRefOrGetter<number>,
@@ -32,22 +25,12 @@ export function useSpring(
     throw new Error('No SpringSystem found')
   }
 
-  const spring = system.createSpring({
-    ...defaultOptions,
-    ...toValue(options),
-    target: toValue(target),
-  })
+  const config = computed(() => new SpringConfig(toValue(options) ?? defaultOptions))
+
+  const spring = system.createSpring(toValue(target), config.value)
 
   watchSyncEffect(() => {
-    const opts = toValue(options)
-    if (opts) {
-      spring.mass = opts.mass
-      spring.tension = opts.tension
-      spring.damping = opts.damping
-      if (opts.precision !== undefined) {
-        spring.precision = opts.precision
-      }
-    }
+    spring.configure(config.value)
   })
 
   let triggerValue: (() => void) | undefined

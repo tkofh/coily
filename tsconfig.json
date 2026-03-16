@@ -19,6 +19,6 @@
     "exactOptionalPropertyTypes": true,
     "noImplicitOverride": true,
     "noUncheckedIndexedAccess": true,
-    "strict": true
-  }
+    "strict": true,
+  },
 }

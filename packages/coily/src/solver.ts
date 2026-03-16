@@ -1,11 +1,10 @@
+import { type SpringConfig } from './config.ts'
 import { Emitter } from './emitter.ts'
 import { State } from './state.ts'
 import { invariant } from './util.ts'
 
 export class Solver {
-  #mass: number
-  #tension: number
-  #damping: number
+  #config: SpringConfig
   readonly #state: State
 
   #underdampedSolver: UnderdampedSolver | null = null
@@ -13,57 +12,17 @@ export class Solver {
   #overdampedSolver: OverdampedSolver | null = null
   #currentSolver: Solveable | null = null
 
-  #naturalFrequency = 0
-  #criticalDamping = 0
-  #dampingRatio = 0
-
   #needsUpdate = false
   #needsReset = false
 
   readonly #emitter: Emitter
 
-  constructor(
-    mass: number,
-    tension: number,
-    damping: number,
-    position: number,
-    velocity: number,
-    precision: number,
-  ) {
-    this.#mass = mass
-    this.#tension = tension
-    this.#damping = damping
-    this.#state = new State(position, velocity, precision)
+  constructor(config: SpringConfig, position: number, velocity: number) {
+    this.#config = config
+    this.#state = new State(config, position, velocity)
     this.#emitter = new Emitter()
 
     this.#updateSolver()
-  }
-
-  get mass() {
-    return this.#mass
-  }
-
-  set mass(value: number) {
-    this.#mass = value
-    this.#needsUpdate = true
-  }
-
-  get tension() {
-    return this.#tension
-  }
-
-  set tension(value: number) {
-    this.#tension = value
-    this.#needsUpdate = true
-  }
-
-  get damping() {
-    return this.#damping
-  }
-
-  set damping(value: number) {
-    this.#damping = value
-    this.#needsUpdate = true
   }
 
   get position() {
@@ -88,28 +47,14 @@ export class Solver {
     this.#needsReset = true
   }
 
-  get precision() {
-    return this.#state.precision
-  }
-
-  set precision(value: number) {
-    this.#state.precision = value
-  }
-
   get resting() {
     return this.#state.resting
   }
 
-  get naturalFrequency() {
-    return this.#naturalFrequency
-  }
-
-  get criticalDamping() {
-    return this.#criticalDamping
-  }
-
-  get dampingRatio() {
-    return this.#dampingRatio
+  configure(config: SpringConfig) {
+    this.#config = config
+    this.#state.configure(config)
+    this.#needsUpdate = true
   }
 
   tick(dt: number, emit = true) {
@@ -119,10 +64,9 @@ export class Solver {
       this.#updateSolver()
 
       this.#needsUpdate = false
-      this.#needsReset = true
-    }
-    if (this.#needsReset) {
-      this.#currentSolver.reset()
+      this.#needsReset = false
+    } else if (this.#needsReset) {
+      this.#currentSolver.configure()
 
       this.#needsReset = false
     }
@@ -158,63 +102,52 @@ export class Solver {
     this.#currentSolver = null
   }
 
-  #updateDerivedValues() {
-    this.#naturalFrequency = Math.sqrt(this.#tension / this.#mass)
-    this.#criticalDamping = 2 * this.#mass * this.#naturalFrequency
-    this.#dampingRatio = this.#damping / this.#criticalDamping
-  }
-
   #updateSolver() {
-    this.#updateDerivedValues()
-
-    if (this.dampingRatio < 1) {
-      this.#underdampedSolver ||= new UnderdampedSolver(this, this.#state)
+    if (this.#config.dampingRatio < 1) {
+      this.#underdampedSolver ||= new UnderdampedSolver(this.#state)
 
       this.#currentSolver = this.#underdampedSolver
-    } else if (this.dampingRatio === 1) {
-      this.#criticallyDampedSolver ||= new CriticallyDampedSolver(this, this.#state)
+    } else if (this.#config.dampingRatio === 1) {
+      this.#criticallyDampedSolver ||= new CriticallyDampedSolver(this.#state)
 
       this.#currentSolver = this.#criticallyDampedSolver
     } else {
-      this.#overdampedSolver ||= new OverdampedSolver(this, this.#state)
+      this.#overdampedSolver ||= new OverdampedSolver(this.#state)
 
       this.#currentSolver = this.#overdampedSolver
     }
+
+    this.#currentSolver.configure(this.#config)
   }
 }
 
 interface Solveable {
-  reset: () => void
+  configure: (config?: SpringConfig) => void
   tick: (dt: number) => void
 }
 
 class UnderdampedSolver implements Solveable {
-  #solver: Solver
   #state: State
 
-  #dampedFrequency!: number
-  #decayRate!: number
+  #dampedFrequency = 0
+  #decayRate = 0
   #t = 0
   #c1 = 0
   #c2 = 0
 
-  constructor(solver: Solver, state: State) {
-    this.#solver = solver
+  constructor(state: State) {
     this.#state = state
-
-    this.reset()
   }
 
-  reset() {
-    this.#decayRate = this.#solver.dampingRatio * this.#solver.naturalFrequency
-    this.#dampedFrequency =
-      this.#solver.naturalFrequency * Math.sqrt(1 - this.#solver.dampingRatio ** 2)
+  configure(config?: SpringConfig) {
+    if (config) {
+      this.#decayRate = config.dampingRatio * config.naturalFrequency
+      this.#dampedFrequency = config.naturalFrequency * Math.sqrt(1 - config.dampingRatio ** 2)
+    }
     this.#t = 0
     this.#c1 = this.#state.position
     this.#c2 =
       (this.#state.velocity + this.#decayRate * this.#state.position) / this.#dampedFrequency
-
-    this.tick(0)
   }
 
   tick(dt: number) {
@@ -236,28 +169,24 @@ class UnderdampedSolver implements Solveable {
 }
 
 class CriticallyDampedSolver implements Solveable {
-  #solver: Solver
   #state: State
 
-  #naturalFrequency!: number
+  #naturalFrequency = 0
   #t = 0
   #c1 = 0
   #c2 = 0
 
-  constructor(solver: Solver, state: State) {
-    this.#solver = solver
+  constructor(state: State) {
     this.#state = state
-
-    this.reset()
   }
 
-  reset() {
-    this.#naturalFrequency = this.#solver.naturalFrequency
+  configure(config?: SpringConfig) {
+    if (config) {
+      this.#naturalFrequency = config.naturalFrequency
+    }
     this.#t = 0
     this.#c1 = this.#state.position
     this.#c2 = this.#state.velocity + this.#naturalFrequency * this.#state.position
-
-    this.tick(0)
   }
 
   tick(dt: number) {
@@ -275,26 +204,23 @@ class CriticallyDampedSolver implements Solveable {
 }
 
 class OverdampedSolver implements Solveable {
-  #solver: Solver
   #state: State
 
-  #dampedFrequency!: number
-  #decayRate!: number
+  #dampedFrequency = 0
+  #decayRate = 0
   #t = 0
   #c1 = 0
   #c2 = 0
 
-  constructor(solver: Solver, state: State) {
-    this.#solver = solver
+  constructor(state: State) {
     this.#state = state
-
-    this.reset()
   }
 
-  reset() {
-    this.#decayRate = this.#solver.dampingRatio * this.#solver.naturalFrequency
-    this.#dampedFrequency =
-      this.#solver.naturalFrequency * Math.sqrt(this.#solver.dampingRatio ** 2 - 1)
+  configure(config?: SpringConfig) {
+    if (config) {
+      this.#decayRate = config.dampingRatio * config.naturalFrequency
+      this.#dampedFrequency = config.naturalFrequency * Math.sqrt(config.dampingRatio ** 2 - 1)
+    }
     this.#t = 0
     this.#c1 = this.#state.velocity + this.#decayRate * this.#state.position
     this.#c2 = this.#state.position * this.#dampedFrequency

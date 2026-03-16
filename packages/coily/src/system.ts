@@ -1,5 +1,6 @@
+import type { SpringConfig } from './config.ts'
 import { SolverSet } from './solver-set.ts'
-import { Spring, type SpringOptions } from './spring.ts'
+import { Spring, type SpringPosition } from './spring.ts'
 import { Ticker, type TickerOptions } from './ticker.ts'
 
 class SpringSystemImpl implements SpringSystem {
@@ -11,8 +12,8 @@ class SpringSystemImpl implements SpringSystem {
     this.#ticker = new Ticker(this.#solvers, options)
   }
 
-  createSpring(options: SpringOptions) {
-    return new Spring(this.#solvers, options)
+  createSpring(position: SpringPosition, config: SpringConfig) {
+    return new Spring(this.#solvers, position, config)
   }
 
   advance(dt: number) {
@@ -57,7 +58,7 @@ class SpringSystemImpl implements SpringSystem {
 }
 
 export interface SpringSystem {
-  createSpring(options: SpringOptions): Spring
+  createSpring(position: SpringPosition, config: SpringConfig): Spring
   /** Advance all springs by `dt` milliseconds, without affecting internal timing. */
   advance(dt: number): void
 

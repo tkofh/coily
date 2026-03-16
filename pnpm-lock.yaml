@@ -84,7 +84,7 @@ importers:
   packages/playground-nuxt:
     dependencies:
       coily:
-        specifier: workspace:^0.10.1
+        specifier: workspace:*
         version: link:../coily
       nuxt:
         specifier: ^4.4.2
@@ -92,9 +92,12 @@ importers:
       vue:
         specifier: ^3.5.30
         version: 3.5.30(typescript@5.9.3)
+      vue-router:
+        specifier: ^5.0.3
+        version: 5.0.3(@vue/compiler-sfc@3.5.30)(vue@3.5.30(typescript@5.9.3))
     devDependencies:
       vite:
-        specifier: 7.3.1
+        specifier: ^7.3.1
         version: 7.3.1(@types/node@25.5.0)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.0)(yaml@2.8.2)
 
   packages/playground-vanilla:
@@ -102,25 +105,6 @@ importers:
       coily:
         specifier: workspace:^0.10.1
         version: link:../coily
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vite:
-        specifier: ^8.0.0
-        version: 8.0.0(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.0)(yaml@2.8.2)
-
-  packages/playground-vue:
-    dependencies:
-      coily:
-        specifier: workspace:^0.10.1
-        version: link:../coily
-      vue:
-        specifier: ^3.5.30
-        version: 3.5.30(typescript@5.9.3)
-    devDependencies:
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.5
-        version: 6.0.5(vite@8.0.0(@types/node@25.5.0)(esbuild@0.27.4)(jiti@2.6.1)(terser@5.46.0)(yaml@2.8.2))(vue@3.5.30(typescript@5.9.3))
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
