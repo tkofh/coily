@@ -1,86 +1,79 @@
 import { invariant } from './util.ts'
 
-// ── Input shapes ──────────────────────────────────────────────────────
-
 interface BaseOptions {
+  /**
+   * Mass of the spring system.
+   * @default 1
+   */
   mass?: number | undefined
-  /** Precision for resting threshold. Defaults to 2. */
+  /**
+   * Precision for resting threshold.
+   * @default 2
+   */
   precision?: number | undefined
 }
 
-/** Group 1: Direct physics. */
-interface DirectOptions extends BaseOptions {
+interface WithTension {
+  /**
+   * Spring stiffness coefficient.
+   * Must be greater than 0.
+   */
   tension: number
+}
+
+interface WithDamping {
+  /**
+   * Viscous damping coefficient.
+   * Must be greater than or equal to 0.
+   */
   damping: number
 }
 
-/** Group 2a: Tension + dampingRatio, derive damping. */
-interface TensionRatioOptions extends BaseOptions {
-  tension: number
+interface WithDampingRatio {
+  /**
+   * Ratio of damping to critical damping (0 = undamped, 1 = critically damped).
+   * Must be greater than or equal to 0.
+   */
   dampingRatio: number
 }
 
-interface TensionBounceOptions extends BaseOptions {
-  tension: number
+interface WithBounce {
+  /**
+   * Bounciness of the spring. Converted to dampingRatio as `1 - bounce`.
+   * [-1, 1]
+   */
   bounce: number
 }
 
-/** Group 2b: Damping + dampingRatio, derive tension. */
-interface DampingRatioOptions extends BaseOptions {
-  damping: number
-  dampingRatio: number
-}
-
-interface DampingBounceOptions extends BaseOptions {
-  damping: number
-  bounce: number
-}
-
-/** Group 2c: Tension + damping + dampingRatio, derive mass. */
-interface TensionDampingRatioOptions extends BaseOptions {
-  tension: number
-  damping: number
-  dampingRatio: number
-}
-
-interface TensionDampingBounceOptions extends BaseOptions {
-  tension: number
-  damping: number
-  bounce: number
-}
-
-/** Group 3: Duration-based. */
-interface DurationOptions extends BaseOptions {
-  dampingRatio: number
-  /** Settling time in milliseconds. */
+interface WithDuration {
+  /**
+   * Target settle duration in milliseconds.
+   * Must be greater than 0.
+   */
   duration: number
-  /** Reference displacement. Defaults to 1. */
+}
+
+interface WithDisplacement {
+  /**
+   * Initial displacement used for duration-based envelope calculation.
+   * @default 1
+   */
   displacement?: number | undefined
 }
 
-interface BounceDurationOptions extends BaseOptions {
-  bounce: number
-  /** Settling time in milliseconds. */
-  duration: number
-  /** Reference displacement. Defaults to 1. */
-  displacement?: number | undefined
-}
-
-interface TensionDurationOptions extends DurationOptions {
-  tension: number
-}
-
-interface TensionBounceDurationOptions extends BounceDurationOptions {
-  tension: number
-}
-
-interface DampingDurationOptions extends DurationOptions {
-  damping: number
-}
-
-interface DampingBounceDurationOptions extends BounceDurationOptions {
-  damping: number
-}
+interface DirectOptions extends BaseOptions, WithTension, WithDamping {}
+interface TensionRatioOptions extends BaseOptions, WithTension, WithDampingRatio {}
+interface TensionBounceOptions extends BaseOptions, WithTension, WithBounce {}
+interface DampingRatioOptions extends BaseOptions, WithDamping, WithDampingRatio {}
+interface DampingBounceOptions extends BaseOptions, WithDamping, WithBounce {}
+interface TensionDampingRatioOptions extends BaseOptions, WithTension, WithDamping, WithDampingRatio {}
+interface TensionDampingBounceOptions extends BaseOptions, WithTension, WithDamping, WithBounce {}
+interface DurationOptions extends BaseOptions, WithDampingRatio, WithDuration, WithDisplacement {}
+interface BounceDurationOptions extends BaseOptions, WithBounce, WithDuration, WithDisplacement {}
+interface TensionDurationOptions extends BaseOptions, WithTension, WithDampingRatio, WithDuration, WithDisplacement {}
+interface TensionBounceDurationOptions extends BaseOptions, WithTension, WithBounce, WithDuration, WithDisplacement {}
+interface DampingDurationOptions extends BaseOptions, WithDamping, WithDampingRatio, WithDuration, WithDisplacement {}
+interface DampingBounceDurationOptions extends BaseOptions, WithDamping, WithBounce, WithDuration, WithDisplacement {}
 
 export type SpringOptions =
   | DirectOptions
@@ -97,25 +90,8 @@ export type SpringOptions =
   | DampingDurationOptions
   | DampingBounceDurationOptions
 
-// ── SpringConfig ─────────────────────────────────────────────────────
-
 /**
- * Immutable spring configuration. Resolves any valid input shape into
- * the canonical (mass, tension, damping) triple plus derived physics
- * and precision values.
- *
- * Input shapes:
- *   1. { tension, damping }               — direct
- *   2. { tension, dampingRatio }          — derive damping
- *   3. { damping, dampingRatio }          — derive tension
- *   4. { tension, damping, dampingRatio } — derive mass
- *   5. { dampingRatio, duration }         — derive all
- *   6. { tension, dampingRatio, duration }  — derive damping
- *   7. { damping, dampingRatio, duration }  — derive tension
- *
- * Mass is always optional and defaults to 1.
- * Duration-based configs accept an optional `displacement` (defaults to 1)
- * and `precision` (defaults to 2).
+ * Immutable spring configuration.
  */
 export class SpringConfig {
   readonly mass: number
@@ -149,7 +125,9 @@ export class SpringConfig {
       invariant(bounce >= -1 && bounce <= 1, 'Bounce must be between -1 and 1')
 
     // Resolve bounce → dampingRatio
-    const dampingRatio = raw.dampingRatio ?? (bounce !== undefined ? 1 - bounce : undefined)
+    // Clamp to a small epsilon so bounce=1 ("max bounce") still settles
+    const dampingRatio =
+      raw.dampingRatio ?? (bounce !== undefined ? Math.max(1e-4, 1 - bounce) : undefined)
 
     if (dampingRatio !== undefined)
       invariant(dampingRatio >= 0, 'Damping ratio must be greater than or equal to 0')
@@ -234,6 +212,94 @@ export class SpringConfig {
   }
 }
 
+/**
+ * Direct physical parameters. You control stiffness and friction exactly;
+ * mass defaults to 1.
+ */
+export function defineSpring(input: DirectOptions): SpringConfig
+/**
+ * Tension sets the stiffness; dampingRatio controls oscillation character
+ * (0 = undamped, 1 = critically damped, >1 = overdamped).
+ * Damping is derived as `2 * dampingRatio * sqrt(mass * tension)`.
+ */
+export function defineSpring(input: TensionRatioOptions): SpringConfig
+/**
+ * Tension sets the stiffness; bounce controls how oscillatory the spring is,
+ * from -1 (overdamped, no oscillation) to 1 (maximum bounce).
+ * Damping is derived to match the requested bounciness.
+ */
+export function defineSpring(input: TensionBounceOptions): SpringConfig
+/**
+ * Damping is given directly; dampingRatio is used to derive tension
+ * as `damping² / (4 * dampingRatio² * mass)`.
+ * dampingRatio must be greater than 0.
+ */
+export function defineSpring(input: DampingRatioOptions): SpringConfig
+/**
+ * Damping is given directly; bounce controls how oscillatory the spring is.
+ * Tension is derived to match the requested bounciness.
+ * bounce must be less than 1.
+ */
+export function defineSpring(input: DampingBounceOptions): SpringConfig
+/**
+ * All three physical knobs specified — mass is derived
+ * as `damping² / (4 * dampingRatio² * tension)`.
+ * dampingRatio must be greater than 0.
+ */
+export function defineSpring(input: TensionDampingRatioOptions): SpringConfig
+/**
+ * All three physical knobs specified — mass is derived
+ * from tension, damping, and the requested bounciness.
+ * bounce must be less than 1.
+ */
+export function defineSpring(input: TensionDampingBounceOptions): SpringConfig
+/**
+ * Duration-based configuration. The spring is tuned so that its envelope
+ * decays to the resting threshold within the given duration.
+ * Duration assumes a displacement of 1 by default — provide `displacement`
+ * to match your actual animation range for accurate timing.
+ * Tension and damping are both derived from dampingRatio and duration.
+ */
+export function defineSpring(input: DurationOptions): SpringConfig
+/**
+ * Duration-based configuration. The spring is tuned so that its envelope
+ * decays to the resting threshold within the given duration.
+ * Duration assumes a displacement of 1 by default — provide `displacement`
+ * to match your actual animation range for accurate timing.
+ * Bounce controls how oscillatory the motion is while settling.
+ * Tension and damping are both derived.
+ */
+export function defineSpring(input: BounceDurationOptions): SpringConfig
+/**
+ * Duration-based with a tension constraint. Mass is derived from tension
+ * and the computed natural frequency; damping follows from mass and dampingRatio.
+ * Duration assumes a displacement of 1 by default — provide `displacement`
+ * to match your actual animation range for accurate timing.
+ */
+export function defineSpring(input: TensionDurationOptions): SpringConfig
+/**
+ * Duration-based with a tension constraint. Bounce controls how oscillatory
+ * the motion is while settling. Mass is derived from tension and the
+ * computed natural frequency.
+ * Duration assumes a displacement of 1 by default — provide `displacement`
+ * to match your actual animation range for accurate timing.
+ */
+export function defineSpring(input: TensionBounceDurationOptions): SpringConfig
+/**
+ * Duration-based with a damping constraint. Mass is derived from damping,
+ * dampingRatio, and the computed natural frequency; tension follows from mass.
+ * Duration assumes a displacement of 1 by default — provide `displacement`
+ * to match your actual animation range for accurate timing.
+ */
+export function defineSpring(input: DampingDurationOptions): SpringConfig
+/**
+ * Duration-based with a damping constraint. Bounce controls how oscillatory
+ * the motion is while settling. Mass is derived from damping and the
+ * computed natural frequency.
+ * Duration assumes a displacement of 1 by default — provide `displacement`
+ * to match your actual animation range for accurate timing.
+ */
+export function defineSpring(input: DampingBounceDurationOptions): SpringConfig
 export function defineSpring(input: SpringOptions): SpringConfig {
   return new SpringConfig(input)
 }

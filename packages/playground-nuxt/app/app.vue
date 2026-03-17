@@ -7,8 +7,8 @@ function onMouseMove(event: MouseEvent) {
   mouseY.value = event.clientY
 }
 
-const bouncyOptions = defineSpring({ bounce: 0.5, displacement: 100, damping: 1 })
-const stiffOptions = defineSpring({ mass: 3, tension: 500, damping: 400 })
+const bouncyOptions = defineSpring({ bounce: 0.4, duration: 1000 })
+const stiffOptions = defineSpring({ tension: 500, bounce: 0 })
 
 const bouncyX = useSpring(mouseX, bouncyOptions)
 const bouncyY = useSpring(mouseY, bouncyOptions)
