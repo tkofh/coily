@@ -17,7 +17,7 @@ const defaultOptions = {
 
 export function useSpring(
   target: MaybeRefOrGetter<number>,
-  options?: MaybeRefOrGetter<SpringOptions>,
+  options?: MaybeRefOrGetter<SpringOptions | SpringConfig>,
 ): UseSpringReturn {
   const system = inject(SpringSystemKey)
 
@@ -25,7 +25,11 @@ export function useSpring(
     throw new Error('No SpringSystem found')
   }
 
-  const config = computed(() => new SpringConfig(toValue(options) ?? defaultOptions))
+  const config = computed(() => {
+    const opts = toValue(options)
+    if (opts instanceof SpringConfig) return opts
+    return new SpringConfig(opts ?? defaultOptions)
+  })
 
   const spring = system.createSpring(toValue(target), config.value)
 
