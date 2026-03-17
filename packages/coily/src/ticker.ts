@@ -1,4 +1,4 @@
-import type { SolverSet } from './solver-set.ts'
+import type { MotionSet } from './motion-set.ts'
 import { invariant } from './util.ts'
 
 export interface TickerOptions {
@@ -41,7 +41,7 @@ export class Ticker {
   #lagThreshold: number
   #adjustedLag: number
 
-  readonly #solvers: SolverSet
+  readonly #motion: MotionSet
 
   #frame = 0
   #time = 0
@@ -53,8 +53,8 @@ export class Ticker {
   #id = 0
   #stopped = true
 
-  constructor(solvers: SolverSet, options?: TickerOptions) {
-    this.#solvers = solvers
+  constructor(motions: MotionSet, options?: TickerOptions) {
+    this.#motion = motions
 
     const fps = options?.fps ?? 60
     const lagThreshold = options?.lagThreshold ?? 500
@@ -160,7 +160,7 @@ export class Ticker {
       this.#previousTime = this.#time
       this.#nextTime += this.#gap
 
-      this.#solvers.tick(this.#delta / 1000)
+      this.#motion.tick(this.#delta / 1000)
     }
 
     this.#id = request((t) => this.#onFrame(t))
@@ -172,6 +172,6 @@ export class Ticker {
     this.#delta = dt
     this.#previousTime = this.#time
 
-    this.#solvers.tick(dt / 1000)
+    this.#motion.tick(dt / 1000)
   }
 }

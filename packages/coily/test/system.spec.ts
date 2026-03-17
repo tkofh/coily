@@ -1,10 +1,10 @@
 import { describe, expect, test, vi } from 'vitest'
-import { createSpringSystem, springConfig } from '../src/index.ts'
+import { createSpringSystem, defineSpring } from '../src/index.ts'
 
 describe('SpringSystem', () => {
   test('single tick() updates all active springs', () => {
     const system = createSpringSystem()
-    const config = springConfig({ mass: 1, tension: 170, damping: 10 })
+    const config = defineSpring({ mass: 1, tension: 170, damping: 10 })
 
     const a = system.createSpring({ target: 100, value: 0 }, config)
     const b = system.createSpring({ target: -50, value: 0 }, config)
@@ -18,7 +18,7 @@ describe('SpringSystem', () => {
 
   test('resting springs are not ticked', () => {
     const system = createSpringSystem()
-    const config = springConfig({ mass: 1, tension: 170, damping: 10 })
+    const config = defineSpring({ mass: 1, tension: 170, damping: 10 })
 
     const resting = system.createSpring(0, config)
     const active = system.createSpring({ target: 100, value: 0 }, config)
@@ -38,7 +38,7 @@ describe('SpringSystem', () => {
     const system = createSpringSystem()
     const spring = system.createSpring(
       { target: 0, value: 1 },
-      springConfig({ mass: 1, tension: 170, damping: 26 }),
+      defineSpring({ mass: 1, tension: 170, damping: 26 }),
     )
 
     const onStop = vi.fn()
@@ -61,7 +61,7 @@ describe('SpringSystem', () => {
 
   test('setting target re-adds a resting spring to the scheduler', () => {
     const system = createSpringSystem()
-    const spring = system.createSpring(0, springConfig({ mass: 1, tension: 170, damping: 26 }))
+    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
 
     expect(spring.resting).toBe(true)
 
@@ -80,7 +80,7 @@ describe('SpringSystem', () => {
 
   test('multiple springs reach their different targets independently', () => {
     const system = createSpringSystem()
-    const config = springConfig({ mass: 1, tension: 170, damping: 26 })
+    const config = defineSpring({ mass: 1, tension: 170, damping: 26 })
 
     const a = system.createSpring({ target: 100, value: 0 }, config)
     const b = system.createSpring({ target: -200, value: 0 }, config)

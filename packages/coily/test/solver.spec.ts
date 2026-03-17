@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { createSpringSystem, springConfig } from '../src/index.ts'
+import { createSpringSystem, defineSpring } from '../src/index.ts'
 
 /**
  * Helper: simulate a spring for a given duration at a fixed time step.
@@ -11,7 +11,7 @@ function simulate(
   dt = 1000 / 60,
 ) {
   const system = createSpringSystem()
-  const config = springConfig({ mass: params.mass, tension: params.tension, damping: params.damping })
+  const config = defineSpring({ mass: params.mass, tension: params.tension, damping: params.damping })
   const spring = system.createSpring({ target: params.target, value: params.value }, config)
 
   const snapshots: { time: number; value: number; velocity: number }[] = []

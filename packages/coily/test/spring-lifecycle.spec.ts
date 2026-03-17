@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { createSpringSystem, springConfig } from '../src/index.ts'
+import { createSpringSystem, defineSpring } from '../src/index.ts'
 
 describe('initial conditions', () => {
   test('correct initial state with only target defined', () => {
@@ -7,7 +7,7 @@ describe('initial conditions', () => {
 
     const spring = system.createSpring(
       { target: 1 },
-      springConfig({ damping: 1, mass: 1, tension: 1 }),
+      defineSpring({ damping: 1, mass: 1, tension: 1 }),
     )
 
     expect(spring.target).toBe(1)
@@ -19,7 +19,7 @@ describe('initial conditions', () => {
 
     const spring = system.createSpring(
       { value: 1 },
-      springConfig({ damping: 1, mass: 1, tension: 1 }),
+      defineSpring({ damping: 1, mass: 1, tension: 1 }),
     )
 
     expect(spring.target).toBe(1)
@@ -31,7 +31,7 @@ describe('initial conditions', () => {
 
     const spring = system.createSpring(
       { target: 1, value: 1 },
-      springConfig({ damping: 1, mass: 1, tension: 1 }),
+      defineSpring({ damping: 1, mass: 1, tension: 1 }),
     )
 
     expect(spring.target).toBe(1)
@@ -43,7 +43,7 @@ describe('initial conditions', () => {
 
     const spring = system.createSpring(
       { target: 1, value: 2 },
-      springConfig({ damping: 1, mass: 1, tension: 1 }),
+      defineSpring({ damping: 1, mass: 1, tension: 1 }),
     )
 
     expect(spring.target).toBe(1)

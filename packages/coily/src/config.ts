@@ -20,10 +20,20 @@ interface TensionRatioOptions extends BaseOptions {
   dampingRatio: number
 }
 
+interface TensionBounceOptions extends BaseOptions {
+  tension: number
+  bounce: number
+}
+
 /** Group 2b: Damping + dampingRatio, derive tension. */
 interface DampingRatioOptions extends BaseOptions {
   damping: number
   dampingRatio: number
+}
+
+interface DampingBounceOptions extends BaseOptions {
+  damping: number
+  bounce: number
 }
 
 /** Group 2c: Tension + damping + dampingRatio, derive mass. */
@@ -31,6 +41,12 @@ interface TensionDampingRatioOptions extends BaseOptions {
   tension: number
   damping: number
   dampingRatio: number
+}
+
+interface TensionDampingBounceOptions extends BaseOptions {
+  tension: number
+  damping: number
+  bounce: number
 }
 
 /** Group 3: Duration-based. */
@@ -42,7 +58,19 @@ interface DurationOptions extends BaseOptions {
   displacement?: number | undefined
 }
 
+interface BounceDurationOptions extends BaseOptions {
+  bounce: number
+  /** Settling time in milliseconds. */
+  duration: number
+  /** Reference displacement. Defaults to 1. */
+  displacement?: number | undefined
+}
+
 interface TensionDurationOptions extends DurationOptions {
+  tension: number
+}
+
+interface TensionBounceDurationOptions extends BounceDurationOptions {
   tension: number
 }
 
@@ -50,14 +78,24 @@ interface DampingDurationOptions extends DurationOptions {
   damping: number
 }
 
+interface DampingBounceDurationOptions extends BounceDurationOptions {
+  damping: number
+}
+
 export type SpringOptions =
   | DirectOptions
   | TensionRatioOptions
+  | TensionBounceOptions
   | DampingRatioOptions
+  | DampingBounceOptions
   | TensionDampingRatioOptions
+  | TensionDampingBounceOptions
   | DurationOptions
+  | BounceDurationOptions
   | TensionDurationOptions
+  | TensionBounceDurationOptions
   | DampingDurationOptions
+  | DampingBounceDurationOptions
 
 // ── SpringConfig ─────────────────────────────────────────────────────
 
@@ -98,7 +136,7 @@ export class SpringConfig {
     const mass = raw.mass
     const tension = raw.tension
     const damping = raw.damping
-    const dampingRatio = raw.dampingRatio
+    const bounce = raw.bounce
     const duration = raw.duration !== undefined ? raw.duration / 1000 : undefined
     const displacement = raw.displacement ?? 1
     const precision = raw.precision ?? 2
@@ -107,6 +145,12 @@ export class SpringConfig {
     if (mass !== undefined) invariant(mass > 0, 'Mass must be greater than 0')
     if (tension !== undefined) invariant(tension > 0, 'Tension must be greater than 0')
     if (damping !== undefined) invariant(damping >= 0, 'Damping must be greater than or equal to 0')
+    if (bounce !== undefined)
+      invariant(bounce >= -1 && bounce <= 1, 'Bounce must be between -1 and 1')
+
+    // Resolve bounce → dampingRatio
+    const dampingRatio = raw.dampingRatio ?? (bounce !== undefined ? 1 - bounce : undefined)
+
     if (dampingRatio !== undefined)
       invariant(dampingRatio >= 0, 'Damping ratio must be greater than or equal to 0')
     if (duration !== undefined) invariant(duration > 0, 'Duration must be greater than 0')
@@ -190,6 +234,6 @@ export class SpringConfig {
   }
 }
 
-export function springConfig(input: SpringOptions): SpringConfig {
+export function defineSpring(input: SpringOptions): SpringConfig {
   return new SpringConfig(input)
 }

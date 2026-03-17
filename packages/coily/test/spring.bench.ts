@@ -1,9 +1,9 @@
 import { bench, describe } from 'vitest'
-import { createSpringSystem, springConfig } from '../src/index.ts'
+import { createSpringSystem, defineSpring } from '../src/index.ts'
 
 const FRAME = 1000 / 60
 
-const defaultConfig = springConfig({ mass: 1, tension: 170, damping: 26 })
+const defaultConfig = defineSpring({ mass: 1, tension: 170, damping: 26 })
 
 describe('spring creation', () => {
   bench('create 1,000 springs', () => {

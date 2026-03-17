@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import fc from 'fast-check'
-import { createSpringSystem, springConfig } from '../src/index.ts'
+import { createSpringSystem, defineSpring } from '../src/index.ts'
 import { settlingTime } from '../src/util.ts'
 
 /**
@@ -53,7 +53,7 @@ function simulateToSettling(
   const system = createSpringSystem()
   const spring = system.createSpring(
     { target: params.target, value: params.value },
-    springConfig({ mass: params.mass, tension: params.tension, damping: params.damping }),
+    defineSpring({ mass: params.mass, tension: params.tension, damping: params.damping }),
   )
 
   const dt = (est * 1000) / iterations
@@ -100,7 +100,7 @@ describe('property-based: no NaN or Infinity', () => {
         const system = createSpringSystem()
         const spring = system.createSpring(
           { target: params.target, value: params.value },
-          springConfig({ mass: params.mass, tension: params.tension, damping: params.damping }),
+          defineSpring({ mass: params.mass, tension: params.tension, damping: params.damping }),
         )
 
         for (let i = 0; i < ITERATIONS; i++) {
@@ -132,7 +132,7 @@ describe('property-based: symmetry', () => {
       fc.property(paramsArb, ({ mass, tension, damping, displacement }) => {
         const system1 = createSpringSystem()
         const system2 = createSpringSystem()
-        const config = springConfig({ mass, tension, damping })
+        const config = defineSpring({ mass, tension, damping })
 
         const s1 = system1.createSpring({ target: 0, value: displacement }, config)
         const s2 = system2.createSpring({ target: 0, value: -displacement }, config)
@@ -171,7 +171,7 @@ describe('property-based: monotonicity for overdamped springs', () => {
         const system = createSpringSystem()
         const spring = system.createSpring(
           { target: 0, value: displacement },
-          springConfig({ mass, tension, damping }),
+          defineSpring({ mass, tension, damping }),
         )
 
         const est = settlingTime({ mass, tension, damping, displacement })
@@ -215,7 +215,7 @@ describe('property-based: energy', () => {
         const system = createSpringSystem()
         const spring = system.createSpring(
           { target: 0, value: displacement },
-          springConfig({ mass, tension, damping }),
+          defineSpring({ mass, tension, damping }),
         )
 
         const est = settlingTime({ mass, tension, damping, displacement })
@@ -256,7 +256,7 @@ describe('property-based: target changes', () => {
           const system = createSpringSystem()
           const spring = system.createSpring(
             { target: params.target, value: params.value },
-            springConfig({ mass: params.mass, tension: params.tension, damping: params.damping }),
+            defineSpring({ mass: params.mass, tension: params.tension, damping: params.damping }),
           )
 
           // Run for a fraction of estimated settling time

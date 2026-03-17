@@ -1,6 +1,6 @@
 import type { SpringConfig } from './config.ts'
-import type { SolverSet } from './solver-set.ts'
-import { Solver } from './solver.ts'
+import type { MotionSet } from './motion-set.ts'
+import { Motion } from './motion.ts'
 
 interface DisplacedSpringPosition {
   target?: number | undefined
@@ -12,10 +12,10 @@ export type SpringPosition = number | DisplacedSpringPosition
 export class Spring {
   #target: number
   #config: SpringConfig
-  readonly #solver: Solver
-  readonly #solvers: SolverSet
+  readonly #motion: Motion
+  readonly #motions: MotionSet
 
-  constructor(solvers: SolverSet, position: SpringPosition, config: SpringConfig) {
+  constructor(motions: MotionSet, position: SpringPosition, config: SpringConfig) {
     let target: number
     let value: number
 
@@ -29,11 +29,11 @@ export class Spring {
 
     this.#target = target
     this.#config = config
-    this.#solver = new Solver(config, value - target, 0)
-    this.#solvers = solvers
+    this.#motion = new Motion(config, value - target, 0)
+    this.#motions = motions
 
-    if (!this.#solver.resting) {
-      this.#solvers.add(this.#solver)
+    if (!this.#motion.resting) {
+      this.#motions.add(this.#motion)
     }
   }
 
@@ -43,36 +43,36 @@ export class Spring {
 
   set target(value: number) {
     if (value !== this.#target) {
-      this.#solvers.add(this.#solver)
+      this.#motions.add(this.#motion)
 
       const currentValue = this.value
       this.#target = value
-      this.#solver.position = currentValue - this.#target
-      this.#solver.tick(0)
+      this.#motion.position = currentValue - this.#target
+      this.#motion.tick(0)
     }
   }
 
   get value() {
-    return this.#target + this.#solver.position
+    return this.#target + this.#motion.position
   }
 
   set value(value: number) {
     const position = value - this.#target
-    if (position !== this.#solver.position) {
-      this.#solvers.add(this.#solver)
+    if (position !== this.#motion.position) {
+      this.#motions.add(this.#motion)
 
-      this.#solver.position = position
-      this.#solver.tick(0)
+      this.#motion.position = position
+      this.#motion.tick(0)
     }
   }
 
   get velocity() {
-    return this.#solver.velocity
+    return this.#motion.velocity
   }
 
   set velocity(value: number) {
-    this.#solvers.add(this.#solver)
-    this.#solver.velocity = value
+    this.#motions.add(this.#motion)
+    this.#motion.velocity = value
   }
 
   get mass() {
@@ -96,36 +96,36 @@ export class Spring {
   }
 
   get resting() {
-    return this.#solver.resting
+    return this.#motion.resting
   }
 
   configure(config: SpringConfig) {
     this.#config = config
-    this.#solver.configure(config)
-    this.#solvers.add(this.#solver)
+    this.#motion.configure(config)
+    this.#motions.add(this.#motion)
   }
 
   onUpdate(callback: () => void) {
-    return this.#solver.onUpdate(callback)
+    return this.#motion.onUpdate(callback)
   }
 
   onStart(callback: () => void) {
-    return this.#solver.onStart(callback)
+    return this.#motion.onStart(callback)
   }
 
   onStop(callback: () => void) {
-    return this.#solver.onStop(callback)
+    return this.#motion.onStop(callback)
   }
 
   jumpTo(value: number) {
     this.#target = value
-    this.#solver.position = 0
-    this.#solver.velocity = 0
-    this.#solver.tick(0)
+    this.#motion.position = 0
+    this.#motion.velocity = 0
+    this.#motion.tick(0)
   }
 
   dispose() {
-    this.#solvers.remove(this.#solver)
-    this.#solver.dispose()
+    this.#motions.remove(this.#motion)
+    this.#motion.dispose()
   }
 }

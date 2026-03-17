@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { createSpringSystem, springConfig } from '../src/index.ts'
+import { createSpringSystem, defineSpring } from '../src/index.ts'
 
 function waitForStop(spring: { onStop: (cb: () => void) => () => void }, timeout = 5000) {
   return new Promise<void>((resolve, reject) => {
@@ -32,7 +32,7 @@ function blockMainThread(ms: number) {
   }
 }
 
-const defaultConfig = springConfig({ mass: 1, tension: 170, damping: 26 })
+const defaultConfig = defineSpring({ mass: 1, tension: 170, damping: 26 })
 
 describe('ticker with requestAnimationFrame', () => {
   test('start() drives spring updates via rAF', async () => {
@@ -81,7 +81,7 @@ describe('ticker with requestAnimationFrame', () => {
     const springA = system.createSpring({ target: 50, value: 0 }, defaultConfig)
     const springB = system.createSpring(
       { target: -30, value: 0 },
-      springConfig({ mass: 1, tension: 80, damping: 20 }),
+      defineSpring({ mass: 1, tension: 80, damping: 20 }),
     )
 
     const settledA = waitForStop(springA)
@@ -151,7 +151,7 @@ describe('ticker with requestAnimationFrame', () => {
   })
 
   test('lag spike is clamped to adjustedLag', async () => {
-    const springOpts = springConfig({ mass: 1, tension: 170, damping: 26 })
+    const springOpts = defineSpring({ mass: 1, tension: 170, damping: 26 })
 
     // System with a low lagThreshold so our busy-wait triggers clamping
     const clamped = createSpringSystem({ lagThreshold: 30, adjustedLag: 16 })

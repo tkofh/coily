@@ -1,10 +1,10 @@
-import { createSpringSystem, springConfig } from 'coily'
+import { createSpringSystem, defineSpring } from 'coily'
 import './style.css'
 
 document.addEventListener('DOMContentLoaded', () => {
   const system = createSpringSystem()
-  const bouncyConfig = springConfig({ dampingRatio: 1.1, duration: 750 })
-  const stiffConfig = springConfig({ mass: 5, tension: 500, damping: 400 })
+  const bouncyConfig = defineSpring({ dampingRatio: 1.1, duration: 750 })
+  const stiffConfig = defineSpring({ mass: 5, tension: 500, damping: 400 })
 
   console.log(bouncyConfig)
 

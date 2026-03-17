@@ -1,23 +1,23 @@
 import type { SpringConfig } from './config.ts'
-import { SolverSet } from './solver-set.ts'
+import { MotionSet } from './motion-set.ts'
 import { Spring, type SpringPosition } from './spring.ts'
 import { Ticker, type TickerOptions } from './ticker.ts'
 
 class SpringSystemImpl implements SpringSystem {
-  readonly #solvers: SolverSet
+  readonly #motion: MotionSet
   readonly #ticker: Ticker
 
   constructor(options?: TickerOptions) {
-    this.#solvers = new SolverSet()
-    this.#ticker = new Ticker(this.#solvers, options)
+    this.#motion = new MotionSet()
+    this.#ticker = new Ticker(this.#motion, options)
   }
 
   createSpring(position: SpringPosition, config: SpringConfig) {
-    return new Spring(this.#solvers, position, config)
+    return new Spring(this.#motion, position, config)
   }
 
   advance(dt: number) {
-    this.#solvers.tick(dt / 1000)
+    this.#motion.tick(dt / 1000)
   }
 
   start() {
