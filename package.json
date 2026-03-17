@@ -3,6 +3,8 @@
   "private": true,
   "scripts": {
     "build": "turbo run build",
+    "dev:vanilla": "turbo run dev --filter=playground-vanilla...",
+    "dev:nuxt": "turbo run dev --filter=playground-nuxt...",
     "deps:reinstall": "pnpm dlx rimraf --glob node_modules packages/*/node_modules pnpm-lock.yaml && pnpm install",
     "deps:upgrade": "pnpm update --recursive --latest && pnpm dedupe",
     "lint": "oxlint",

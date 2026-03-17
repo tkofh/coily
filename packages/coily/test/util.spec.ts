@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { invariant, settlingTime } from '../src/util.ts'
-import { createSpringSystem } from '../src/index.ts'
+import { createSpringSystem, defineSpring } from '../src/index.ts'
 
 describe('invariant', () => {
   test('does not throw when condition is true', () => {
@@ -52,7 +52,7 @@ describe('settlingTime', () => {
     const est = settlingTime({ ...params, displacement })
 
     const system = createSpringSystem()
-    const spring = system.createSpring({ ...params, target: 0, value: displacement })
+    const spring = system.createSpring({ target: 0, value: displacement }, defineSpring(params))
 
     let t = 0
     const dt = 1000 / 60
@@ -72,7 +72,7 @@ describe('settlingTime', () => {
     const est = settlingTime({ ...params, displacement })
 
     const system = createSpringSystem()
-    const spring = system.createSpring({ ...params, target: 0, value: displacement })
+    const spring = system.createSpring({ target: 0, value: displacement }, defineSpring(params))
 
     let t = 0
     const dt = 1000 / 60
@@ -90,7 +90,7 @@ describe('settlingTime', () => {
     const est = settlingTime({ ...params, displacement })
 
     const system = createSpringSystem()
-    const spring = system.createSpring({ ...params, target: 0, value: displacement })
+    const spring = system.createSpring({ target: 0, value: displacement }, defineSpring(params))
 
     let t = 0
     const dt = 1000 / 60

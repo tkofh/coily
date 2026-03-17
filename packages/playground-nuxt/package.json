@@ -9,11 +9,12 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
-    "coily": "workspace:^0.10.1",
+    "coily": "workspace:*",
     "nuxt": "^4.4.2",
-    "vue": "^3.5.30"
+    "vue": "^3.5.30",
+    "vue-router": "^5.0.3"
   },
   "devDependencies": {
-    "vite": "7.3.1"
+    "vite": "^7.3.1"
   }
 }

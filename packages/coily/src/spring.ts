@@ -1,74 +1,39 @@
-import type { SolverSet } from './solver-set.ts'
-import { Solver } from './solver.ts'
-import { invariant } from './util.ts'
+import type { SpringConfig } from './config.ts'
+import type { MotionSet } from './motion-set.ts'
+import { Motion } from './motion.ts'
 
-export interface SpringOptions {
-  /**
-   * The mass of the spring
-   *
-   * must be greater than 0
-   */
-  mass: number
-  /**
-   * The tension of the spring
-   *
-   * must be greater than 0
-   */
-  tension: number
-  /**
-   * The damping of the spring
-   *
-   * must be greater than or equal to 0
-   */
-  damping: number
-  /**
-   * The target of the spring
-   *
-   * defaults to 0
-   */
-  target?: number
-  /**
-   * The current value of the spring
-   *
-   * defaults to the target
-   */
-  value?: number
-  /**
-   * The precision of the solver
-   *
-   * defaults to 2
-   */
-  precision?: number
+interface DisplacedSpringPosition {
+  target?: number | undefined
+  value?: number | undefined
 }
+
+export type SpringPosition = number | DisplacedSpringPosition
 
 export class Spring {
   #target: number
-  readonly #solver: Solver
-  readonly #solvers: SolverSet
+  #config: SpringConfig
+  readonly #motion: Motion
+  readonly #motions: MotionSet
 
-  constructor(solvers: SolverSet, options: SpringOptions) {
-    invariant(options.mass > 0, 'Mass must be greater than 0')
-    invariant(options.tension > 0, 'Tension must be greater than 0')
-    invariant(options.damping >= 0, 'Damping must be greater than or equal to 0')
-    invariant(
-      options.precision === undefined || options.precision > 0,
-      'Precision must be greater than 0',
-    )
+  constructor(motions: MotionSet, position: SpringPosition, config: SpringConfig) {
+    let target: number
+    let value: number
 
-    this.#target = options.target ?? options.value ?? 0
+    if (typeof position === 'number') {
+      target = position
+      value = position
+    } else {
+      target = position.target ?? position.value ?? 0
+      value = position.value ?? target
+    }
 
-    this.#solver = new Solver(
-      options.mass,
-      options.tension,
-      options.damping,
-      (options.value ?? this.#target) - this.#target,
-      0,
-      options.precision ?? 2,
-    )
-    this.#solvers = solvers
+    this.#target = target
+    this.#config = config
+    this.#motion = new Motion(config, value - target, 0)
+    this.#motions = motions
 
-    if (!this.#solver.resting) {
-      this.#solvers.add(this.#solver)
+    if (!this.#motion.resting) {
+      this.#motions.add(this.#motion)
     }
   }
 
@@ -78,107 +43,89 @@ export class Spring {
 
   set target(value: number) {
     if (value !== this.#target) {
-      this.#solvers.add(this.#solver)
+      this.#motions.add(this.#motion)
 
       const currentValue = this.value
       this.#target = value
-      this.#solver.position = currentValue - this.#target
-      this.#solver.tick(0)
+      this.#motion.position = currentValue - this.#target
+      this.#motion.tick(0)
     }
   }
 
   get value() {
-    return this.#target + this.#solver.position
+    return this.#target + this.#motion.position
   }
 
   set value(value: number) {
     const position = value - this.#target
-    if (position !== this.#solver.position) {
-      this.#solvers.add(this.#solver)
+    if (position !== this.#motion.position) {
+      this.#motions.add(this.#motion)
 
-      this.#solver.position = position
-      this.#solver.tick(0)
+      this.#motion.position = position
+      this.#motion.tick(0)
     }
   }
 
   get velocity() {
-    return this.#solver.velocity
+    return this.#motion.velocity
   }
 
   set velocity(value: number) {
-    this.#solvers.add(this.#solver)
-    this.#solver.velocity = value
+    this.#motions.add(this.#motion)
+    this.#motion.velocity = value
   }
 
   get mass() {
-    return this.#solver.mass
-  }
-
-  set mass(value: number) {
-    invariant(value > 0, 'Mass must be greater than 0')
-
-    this.#solvers.add(this.#solver)
-    this.#solver.mass = value
+    return this.#config.mass
   }
 
   get tension() {
-    return this.#solver.tension
-  }
-
-  set tension(value: number) {
-    invariant(value > 0, 'Tension must be greater than 0')
-
-    this.#solvers.add(this.#solver)
-    this.#solver.tension = value
+    return this.#config.tension
   }
 
   get damping() {
-    return this.#solver.damping
+    return this.#config.damping
   }
 
-  set damping(value: number) {
-    invariant(value >= 0, 'Damping must be greater than or equal to 0')
-
-    this.#solvers.add(this.#solver)
-    this.#solver.damping = value
+  get dampingRatio() {
+    return this.#config.dampingRatio
   }
 
   get precision() {
-    return this.#solver.precision
-  }
-
-  set precision(value: number) {
-    invariant(value > 0, 'Precision must be greater than 0')
-
-    this.#solvers.add(this.#solver)
-    this.#solver.precision = value
+    return this.#config.precision
   }
 
   get resting() {
-    return this.#solver.resting
+    return this.#motion.resting
+  }
+
+  configure(config: SpringConfig) {
+    this.#config = config
+    this.#motion.configure(config)
+    this.#motions.add(this.#motion)
   }
 
   onUpdate(callback: () => void) {
-    return this.#solver.onUpdate(callback)
+    return this.#motion.onUpdate(callback)
   }
 
   onStart(callback: () => void) {
-    return this.#solver.onStart(callback)
+    return this.#motion.onStart(callback)
   }
 
   onStop(callback: () => void) {
-    return this.#solver.onStop(callback)
+    return this.#motion.onStop(callback)
   }
 
   jumpTo(value: number) {
     this.#target = value
-    this.#solver.position = 0
-    this.#solver.velocity = 0
-    this.#solver.tick(0)
+    this.#motion.position = 0
+    this.#motion.velocity = 0
+    this.#motion.tick(0)
   }
 
   dispose() {
-    this.#solvers.remove(this.#solver)
-    this.#solver.dispose()
+    this.#motions.remove(this.#motion)
+    this.#motion.dispose()
   }
 }

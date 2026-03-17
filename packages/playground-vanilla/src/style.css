@@ -1,3 +1,15 @@
+@property --x {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --y {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+
 :root {
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
   font-size: 16px;
@@ -28,4 +40,5 @@
   width: 100px;
   height: 100px;
   border-radius: 50%;
+  translate: calc(var(--x) * 1px - 50%) calc(var(--y) * 1px - 50%);
 }

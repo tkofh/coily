@@ -31,7 +31,7 @@ export class Emitter {
   emit(type: 'update' | 'start' | 'stop') {
     const list = this.#list(type)
     if (list.length === 1) {
-      list[0]()
+      list[0]!()
     } else if (list.length > 1) {
       for (const handler of list.slice()) {
         handler()

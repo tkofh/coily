@@ -1,33 +1,18 @@
-import { createSpringSystem } from 'coily'
+import { createSpringSystem, defineSpring } from 'coily'
 import './style.css'
 
 document.addEventListener('DOMContentLoaded', () => {
   const system = createSpringSystem()
-  const springX = system.createSpring({
-    mass: 1,
-    tension: 100,
-    damping: 10,
-    target: 0,
-  })
-  const springY = system.createSpring({
-    mass: 1,
-    tension: 100,
-    damping: 10,
-    target: 0,
-  })
+  const bouncyConfig = defineSpring({ dampingRatio: 1.1, duration: 750 })
+  const stiffConfig = defineSpring({ mass: 5, tension: 500, damping: 400 })
 
-  const spring2X = system.createSpring({
-    mass: 5,
-    tension: 500,
-    damping: 400,
-    target: 0,
-  })
-  const spring2Y = system.createSpring({
-    mass: 5,
-    tension: 500,
-    damping: 400,
-    target: 0,
-  })
+  console.log(bouncyConfig)
+
+  const springX = system.createSpring(0, bouncyConfig)
+  const springY = system.createSpring(0, bouncyConfig)
+
+  const spring2X = system.createSpring(0, stiffConfig)
+  const spring2Y = system.createSpring(0, stiffConfig)
 
   const ball = document.querySelector('#ball') as HTMLDivElement
   const ball2 = document.querySelector('#ball2') as HTMLDivElement
@@ -35,14 +20,22 @@ document.addEventListener('DOMContentLoaded', () => {
   system.start()
 
   document.addEventListener('mousemove', (event) => {
-    spring2X.target = springX.value
-    spring2Y.target = springY.value
+    spring2X.target = event.clientX
+    spring2Y.target = event.clientY
     springX.target = event.clientX
     springY.target = event.clientY
   })
 
   springX.onUpdate(() => {
-    ball.style.translate = `calc(${springX.value}px - 50%) calc(${springY.value}px - 50%)`
-    ball2.style.translate = `calc(${spring2X.value}px - 50%) calc(${spring2Y.value}px - 50%)`
+    ball.style.setProperty('--x', String(springX.value))
+  })
+  springY.onUpdate(() => {
+    ball.style.setProperty('--y', String(springY.value))
+  })
+  spring2X.onUpdate(() => {
+    ball2.style.setProperty('--x', String(spring2X.value))
+  })
+  spring2Y.onUpdate(() => {
+    ball2.style.setProperty('--y', String(spring2Y.value))
   })
 })
