@@ -112,9 +112,7 @@ describe('advance to rest', () => {
 describe('target changes', () => {
   bench('update target on 1,000 springs', () => {
     const system = createSpringSystem()
-    const springs = Array.from({ length: 1_000 }, () =>
-      system.createSpring(0, defaultConfig),
-    )
+    const springs = Array.from({ length: 1_000 }, () => system.createSpring(0, defaultConfig))
     for (const spring of springs) {
       spring.target = 100
     }

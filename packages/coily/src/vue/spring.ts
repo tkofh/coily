@@ -1,4 +1,12 @@
-import { type MaybeRefOrGetter, type Ref, computed, customRef, inject, toValue, watchSyncEffect } from 'vue'
+import {
+  type MaybeRefOrGetter,
+  type Ref,
+  computed,
+  customRef,
+  inject,
+  toValue,
+  watchSyncEffect,
+} from 'vue'
 import { SpringConfig, type SpringOptions } from '../config.ts'
 import { SpringSystemKey } from './system.ts'
 

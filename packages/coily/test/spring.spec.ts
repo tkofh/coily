@@ -11,9 +11,9 @@ describe('Spring: input validation', () => {
 
   test('throws when mass is negative', () => {
     const system = createSpringSystem()
-    expect(() => system.createSpring(0, defineSpring({ mass: -1, tension: 1, damping: 1 }))).toThrow(
-      'Mass must be greater than 0',
-    )
+    expect(() =>
+      system.createSpring(0, defineSpring({ mass: -1, tension: 1, damping: 1 })),
+    ).toThrow('Mass must be greater than 0')
   })
 
   test('throws when tension is 0', () => {
@@ -25,21 +25,23 @@ describe('Spring: input validation', () => {
 
   test('throws when damping is negative', () => {
     const system = createSpringSystem()
-    expect(() => system.createSpring(0, defineSpring({ mass: 1, tension: 1, damping: -1 }))).toThrow(
-      'Damping must be greater than or equal to 0',
-    )
+    expect(() =>
+      system.createSpring(0, defineSpring({ mass: 1, tension: 1, damping: -1 })),
+    ).toThrow('Damping must be greater than or equal to 0')
   })
 
   test('allows damping of 0', () => {
     const system = createSpringSystem()
-    expect(() => system.createSpring(0, defineSpring({ mass: 1, tension: 1, damping: 0 }))).not.toThrow()
+    expect(() =>
+      system.createSpring(0, defineSpring({ mass: 1, tension: 1, damping: 0 })),
+    ).not.toThrow()
   })
 
   test('throws when precision is 0', () => {
     const system = createSpringSystem()
-    expect(() => system.createSpring(0, defineSpring({ mass: 1, tension: 1, damping: 1, precision: 0 }))).toThrow(
-      'Precision must be greater than 0',
-    )
+    expect(() =>
+      system.createSpring(0, defineSpring({ mass: 1, tension: 1, damping: 1, precision: 0 })),
+    ).toThrow('Precision must be greater than 0')
   })
 
   test('throws on configure with invalid mass', () => {
@@ -85,14 +87,20 @@ describe('Spring: default values', () => {
 
   test('target defaults to value when only value is set', () => {
     const system = createSpringSystem()
-    const spring = system.createSpring({ value: 50 }, defineSpring({ mass: 1, tension: 1, damping: 1 }))
+    const spring = system.createSpring(
+      { value: 50 },
+      defineSpring({ mass: 1, tension: 1, damping: 1 }),
+    )
     expect(spring.target).toBe(50)
     expect(spring.value).toBe(50)
   })
 
   test('value defaults to target when only target is set', () => {
     const system = createSpringSystem()
-    const spring = system.createSpring({ target: 50 }, defineSpring({ mass: 1, tension: 1, damping: 1 }))
+    const spring = system.createSpring(
+      { target: 50 },
+      defineSpring({ mass: 1, tension: 1, damping: 1 }),
+    )
     expect(spring.target).toBe(50)
     expect(spring.value).toBe(50)
   })

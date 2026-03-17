@@ -11,7 +11,11 @@ function simulate(
   dt = 1000 / 60,
 ) {
   const system = createSpringSystem()
-  const config = defineSpring({ mass: params.mass, tension: params.tension, damping: params.damping })
+  const config = defineSpring({
+    mass: params.mass,
+    tension: params.tension,
+    damping: params.damping,
+  })
   const spring = system.createSpring({ target: params.target, value: params.value }, config)
 
   const snapshots: { time: number; value: number; velocity: number }[] = []

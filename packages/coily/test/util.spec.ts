@@ -52,10 +52,7 @@ describe('settlingTime', () => {
     const est = settlingTime({ ...params, displacement })
 
     const system = createSpringSystem()
-    const spring = system.createSpring(
-      { target: 0, value: displacement },
-      defineSpring(params),
-    )
+    const spring = system.createSpring({ target: 0, value: displacement }, defineSpring(params))
 
     let t = 0
     const dt = 1000 / 60
@@ -75,10 +72,7 @@ describe('settlingTime', () => {
     const est = settlingTime({ ...params, displacement })
 
     const system = createSpringSystem()
-    const spring = system.createSpring(
-      { target: 0, value: displacement },
-      defineSpring(params),
-    )
+    const spring = system.createSpring({ target: 0, value: displacement }, defineSpring(params))
 
     let t = 0
     const dt = 1000 / 60
@@ -96,10 +90,7 @@ describe('settlingTime', () => {
     const est = settlingTime({ ...params, displacement })
 
     const system = createSpringSystem()
-    const spring = system.createSpring(
-      { target: 0, value: displacement },
-      defineSpring(params),
-    )
+    const spring = system.createSpring({ target: 0, value: displacement }, defineSpring(params))
 
     let t = 0
     const dt = 1000 / 60

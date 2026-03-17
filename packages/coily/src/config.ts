@@ -66,14 +66,19 @@ interface TensionRatioOptions extends BaseOptions, WithTension, WithDampingRatio
 interface TensionBounceOptions extends BaseOptions, WithTension, WithBounce {}
 interface DampingRatioOptions extends BaseOptions, WithDamping, WithDampingRatio {}
 interface DampingBounceOptions extends BaseOptions, WithDamping, WithBounce {}
-interface TensionDampingRatioOptions extends BaseOptions, WithTension, WithDamping, WithDampingRatio {}
+interface TensionDampingRatioOptions
+  extends BaseOptions, WithTension, WithDamping, WithDampingRatio {}
 interface TensionDampingBounceOptions extends BaseOptions, WithTension, WithDamping, WithBounce {}
 interface DurationOptions extends BaseOptions, WithDampingRatio, WithDuration, WithDisplacement {}
 interface BounceDurationOptions extends BaseOptions, WithBounce, WithDuration, WithDisplacement {}
-interface TensionDurationOptions extends BaseOptions, WithTension, WithDampingRatio, WithDuration, WithDisplacement {}
-interface TensionBounceDurationOptions extends BaseOptions, WithTension, WithBounce, WithDuration, WithDisplacement {}
-interface DampingDurationOptions extends BaseOptions, WithDamping, WithDampingRatio, WithDuration, WithDisplacement {}
-interface DampingBounceDurationOptions extends BaseOptions, WithDamping, WithBounce, WithDuration, WithDisplacement {}
+interface TensionDurationOptions
+  extends BaseOptions, WithTension, WithDampingRatio, WithDuration, WithDisplacement {}
+interface TensionBounceDurationOptions
+  extends BaseOptions, WithTension, WithBounce, WithDuration, WithDisplacement {}
+interface DampingDurationOptions
+  extends BaseOptions, WithDamping, WithDampingRatio, WithDuration, WithDisplacement {}
+interface DampingBounceDurationOptions
+  extends BaseOptions, WithDamping, WithBounce, WithDuration, WithDisplacement {}
 
 export type SpringOptions =
   | DirectOptions
