@@ -1,5 +1,18 @@
 # Change Log
 
+## 0.11.0
+
+### Minor Changes
+
+- c99af28: Add `Spring.dispose()` for cleaning up event listeners and removing a spring from the scheduler.
+- cc16cba: bring the vue and nuxt integrations into the main package via subpath exports and optional dependencies. vue is available at `coily/vue` and the nuxt module at `coily/nuxt`
+- c99af28: Rename the `SpringValue` component's `friction` prop to `damping` to match the core API and `useSpring` options.
+
+### Patch Changes
+
+- 0f89ef6: Fix incorrect velocity computation in the overdamped spring solver. The derivative of `sinh`/`cosh` was using the sign pattern from the underdamped `sin`/`cos` derivative, causing velocity to be significantly overestimated for heavily overdamped springs. This could delay or prevent rest detection and produce incorrect `spring.velocity` values.
+- c99af28: Fix springs producing incorrect motion when damping is changed mid-animation across regime boundaries (e.g., underdamped to overdamped). Fix ticker lag compensation being disabled after setting `lagThreshold` or `adjustedLag` at runtime.
+
 ## 0.10.1
 
 ### Patch Changes
