@@ -23,9 +23,11 @@ export const defaultOptions = {
   precision: 2,
 } satisfies SpringOptions
 
-export function useSpring(
+type UseSpringOptions = MaybeRefOrGetter<SpringOptions | SpringConfig | undefined>
+
+function createSpringRef(
   target: MaybeRefOrGetter<number>,
-  options?: MaybeRefOrGetter<SpringOptions | SpringConfig | undefined>,
+  options: UseSpringOptions | undefined,
 ): SpringRef {
   const system = inject(SpringSystemKey)
 
@@ -111,4 +113,19 @@ export function useSpring(
     isResting,
     jumpTo: (value: number) => spring.jumpTo(value),
   }) as SpringRef
+}
+
+export function useSpring(target: MaybeRefOrGetter<number>, options?: UseSpringOptions): SpringRef
+export function useSpring<const T extends readonly MaybeRefOrGetter<number>[]>(
+  targets: T,
+  options?: UseSpringOptions,
+): { [K in keyof T]: SpringRef }
+export function useSpring(
+  target: MaybeRefOrGetter<number> | readonly MaybeRefOrGetter<number>[],
+  options?: UseSpringOptions,
+): SpringRef | SpringRef[] {
+  if (Array.isArray(target)) {
+    return Array.from(target as MaybeRefOrGetter<number>[], (t) => createSpringRef(t, options))
+  }
+  return createSpringRef(target as MaybeRefOrGetter<number>, options)
 }
