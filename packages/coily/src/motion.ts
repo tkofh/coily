@@ -20,6 +20,7 @@ export class Motion {
 
   #needsUpdate = false
   #needsReset = false
+  #timeRemaining = 0
 
   readonly #emitter: Emitter
 
@@ -29,6 +30,7 @@ export class Motion {
     this.#emitter = new Emitter()
 
     this.#updateSolver()
+    this.#timeRemaining = this.#config.computeTimeRemaining(this.#state)
   }
 
   get position() {
@@ -39,7 +41,7 @@ export class Motion {
     this.#state.position = value
     this.#needsReset = true
 
-    if (!this.#state.resting) {
+    if (!this.#state.isResting) {
       this.#emitter.emit('start')
     }
   }
@@ -53,8 +55,12 @@ export class Motion {
     this.#needsReset = true
   }
 
-  get resting() {
-    return this.#state.resting
+  get timeRemaining() {
+    return this.#timeRemaining
+  }
+
+  get isResting() {
+    return this.#state.isResting
   }
 
   configure(config: SpringConfig) {
@@ -65,6 +71,8 @@ export class Motion {
 
   tick(dt: number, emit = true) {
     invariant(this.#currentSolver, 'Cannot tick a disposed motion')
+
+    const needsTimeRemaining = this.#needsUpdate || this.#needsReset
 
     if (this.#needsUpdate) {
       this.#updateSolver()
@@ -77,12 +85,18 @@ export class Motion {
       this.#needsReset = false
     }
 
+    if (needsTimeRemaining) {
+      this.#timeRemaining = this.#config.computeTimeRemaining(this.#state)
+    }
+
     this.#currentSolver.tick(dt)
+    this.#timeRemaining = Math.max(0, this.#timeRemaining - dt * 1000)
 
     if (emit) {
       this.#emitter.emit('update')
 
-      if (this.#state.resting) {
+      if (this.#state.isResting) {
+        this.#timeRemaining = 0
         this.#emitter.emit('stop')
       }
     }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { invariant, settlingTime } from '../src/util.ts'
+import { invariant } from '../src/util.ts'
 import { createSpringSystem, defineSpring } from '../src/index.ts'
 
 describe('invariant', () => {
@@ -29,89 +29,91 @@ describe('invariant', () => {
   })
 })
 
-describe('settlingTime', () => {
+describe('computeTimeRemaining', () => {
   test('returns 0 when displacement is at or below threshold', () => {
-    expect(settlingTime({ mass: 1, tension: 100, damping: 10, displacement: 0 })).toBe(0)
-    expect(settlingTime({ mass: 1, tension: 100, damping: 10, displacement: 0.005 })).toBe(0)
-    expect(settlingTime({ mass: 1, tension: 100, damping: 10, displacement: 0.01 })).toBe(0)
+    const config = defineSpring({ mass: 1, tension: 100, damping: 10 })
+    expect(config.computeTimeRemaining({ position: 0, velocity: 0 })).toBe(0)
+    expect(config.computeTimeRemaining({ position: 0.005, velocity: 0 })).toBe(0)
+    expect(config.computeTimeRemaining({ position: 0.01, velocity: 0 })).toBe(0)
   })
 
   test('returns nonzero when displacement exceeds threshold', () => {
+    const config = defineSpring({ mass: 1, tension: 100, damping: 10 })
     expect(
-      settlingTime({ mass: 1, tension: 100, damping: 10, displacement: 0.02 }),
+      config.computeTimeRemaining({ position: 0.02, velocity: 0 }),
     ).toBeGreaterThan(0)
   })
 
   test('returns Infinity for zero damping', () => {
-    expect(settlingTime({ mass: 1, tension: 100, damping: 0, displacement: 50 })).toBe(Infinity)
+    const config = defineSpring({ mass: 1, tension: 100, damping: 0 })
+    expect(config.computeTimeRemaining({ position: 50, velocity: 0 })).toBe(Infinity)
   })
 
   test('estimated time is an upper bound for underdamped spring', () => {
-    const params = { mass: 1, tension: 170, damping: 10 }
-    const displacement = 100
-    const est = settlingTime({ ...params, displacement })
+    const config = defineSpring({ mass: 1, tension: 170, damping: 10 })
+    const est = config.computeTimeRemaining({ position: 100, velocity: 0 })
 
     const system = createSpringSystem()
-    const spring = system.createSpring({ target: 0, value: displacement }, defineSpring(params))
+    const spring = system.createSpring({ target: 0, value: 100 }, config)
 
     let t = 0
     const dt = 1000 / 60
-    while (t < est * 1000 && !spring.resting) {
+    while (t < est && !spring.isResting) {
       system.advance(dt)
       t += dt
     }
 
-    expect(spring.resting).toBe(true)
+    expect(spring.isResting).toBe(true)
   })
 
   test('estimated time is an upper bound for critically damped spring', () => {
     const wn = Math.sqrt(170)
     const cc = 2 * wn
-    const params = { mass: 1, tension: 170, damping: cc }
-    const displacement = 100
-    const est = settlingTime({ ...params, displacement })
+    const config = defineSpring({ mass: 1, tension: 170, damping: cc })
+    const est = config.computeTimeRemaining({ position: 100, velocity: 0 })
 
     const system = createSpringSystem()
-    const spring = system.createSpring({ target: 0, value: displacement }, defineSpring(params))
+    const spring = system.createSpring({ target: 0, value: 100 }, config)
 
     let t = 0
     const dt = 1000 / 60
-    while (t < est * 1000 && !spring.resting) {
+    while (t < est && !spring.isResting) {
       system.advance(dt)
       t += dt
     }
 
-    expect(spring.resting).toBe(true)
+    expect(spring.isResting).toBe(true)
   })
 
   test('estimated time is an upper bound for overdamped spring', () => {
-    const params = { mass: 1, tension: 170, damping: 40 }
-    const displacement = 100
-    const est = settlingTime({ ...params, displacement })
+    const config = defineSpring({ mass: 1, tension: 170, damping: 40 })
+    const est = config.computeTimeRemaining({ position: 100, velocity: 0 })
 
     const system = createSpringSystem()
-    const spring = system.createSpring({ target: 0, value: displacement }, defineSpring(params))
+    const spring = system.createSpring({ target: 0, value: 100 }, config)
 
     let t = 0
     const dt = 1000 / 60
-    while (t < est * 1000 && !spring.resting) {
+    while (t < est && !spring.isResting) {
       system.advance(dt)
       t += dt
     }
 
-    expect(spring.resting).toBe(true)
+    expect(spring.isResting).toBe(true)
   })
 
   test('larger displacement produces longer settling time', () => {
-    const params = { mass: 1, tension: 170, damping: 10 }
-    const small = settlingTime({ ...params, displacement: 10 })
-    const large = settlingTime({ ...params, displacement: 100 })
+    const config = defineSpring({ mass: 1, tension: 170, damping: 10 })
+    const small = config.computeTimeRemaining({ position: 10, velocity: 0 })
+    const large = config.computeTimeRemaining({ position: 100, velocity: 0 })
     expect(large).toBeGreaterThan(small)
   })
 
   test('higher damping ratio produces shorter settling time (underdamped regime)', () => {
-    const low = settlingTime({ mass: 1, tension: 170, damping: 5, displacement: 100 })
-    const high = settlingTime({ mass: 1, tension: 170, damping: 20, displacement: 100 })
-    expect(high).toBeLessThan(low)
+    const low = defineSpring({ mass: 1, tension: 170, damping: 5 })
+    const high = defineSpring({ mass: 1, tension: 170, damping: 20 })
+    expect(high.computeTimeRemaining({ position: 100, velocity: 0 })).toBeLessThan(
+      low.computeTimeRemaining({ position: 100, velocity: 0 }),
+    )
   })
 })

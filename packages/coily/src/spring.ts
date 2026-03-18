@@ -32,7 +32,7 @@ export class Spring {
     this.#motion = new Motion(config, value - target, 0)
     this.#motions = motions
 
-    if (!this.#motion.resting) {
+    if (!this.#motion.isResting) {
       this.#motions.add(this.#motion)
     }
   }
@@ -95,8 +95,12 @@ export class Spring {
     return this.#config.precision
   }
 
-  get resting() {
-    return this.#motion.resting
+  get timeRemaining() {
+    return this.#motion.timeRemaining
+  }
+
+  get isResting() {
+    return this.#motion.isResting
   }
 
   configure(config: SpringConfig) {

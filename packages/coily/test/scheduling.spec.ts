@@ -9,19 +9,19 @@ describe('scheduling', () => {
 
     expect(spring.target).toBe(0)
     expect(spring.value).toBe(0)
-    expect(spring.resting).toBe(true)
+    expect(spring.isResting).toBe(true)
 
     spring.target = 100
 
     expect(spring.target).toBe(100)
     expect(spring.value).toBe(0)
-    expect(spring.resting).toBe(false)
+    expect(spring.isResting).toBe(false)
 
     spring.target = 0
 
     expect(spring.target).toBe(0)
     expect(spring.value).toBe(0)
-    expect(spring.resting).toBe(true)
+    expect(spring.isResting).toBe(true)
   })
 
   test('emits start / stop / state change events', () => {
@@ -61,13 +61,13 @@ describe('scheduling', () => {
 
     expect(spring.target).toBe(0)
     expect(spring.value).toBe(0)
-    expect(spring.resting).toBe(true)
+    expect(spring.isResting).toBe(true)
 
     spring.target = 100
 
     expect(spring.target).toBe(100)
     expect(spring.value).toBe(0)
-    expect(spring.resting).toBe(false)
+    expect(spring.isResting).toBe(false)
 
     spring.value = 100
 
@@ -75,13 +75,13 @@ describe('scheduling', () => {
 
     expect(spring.target).toBe(100)
     expect(spring.value).toBe(100)
-    expect(spring.resting).toBe(true)
+    expect(spring.isResting).toBe(true)
 
     spring.value = 0
 
     expect(spring.target).toBe(100)
     expect(spring.value).toBe(0)
-    expect(spring.resting).toBe(false)
+    expect(spring.isResting).toBe(false)
 
     spring.target = 0
 
@@ -89,6 +89,6 @@ describe('scheduling', () => {
 
     expect(spring.target).toBe(0)
     expect(spring.value).toBe(0)
-    expect(spring.resting).toBe(true)
+    expect(spring.isResting).toBe(true)
   })
 })

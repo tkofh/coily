@@ -11,9 +11,14 @@ export interface SpringValueProps {
 
 export type SpringValueEmits = Record<string, never>
 
-export type SpringValueSlots = SlotsType<{
-  default: { value: number; velocity: number; resting: boolean }
-}>
+export interface SpringValueSlotScope {
+  value: number
+  velocity: number
+  isResting: boolean
+  timeRemaining: number
+}
+
+export type SpringValueSlots = SlotsType<{ default: SpringValueSlotScope }>
 
 export const SpringValue = defineComponent<
   SpringValueProps,
@@ -30,15 +35,13 @@ export const SpringValue = defineComponent<
       precision: precision?.value ?? 2,
     }))
 
-    return () => {
-      return (
-        slots.default?.({
-          value: spring.value.value,
-          velocity: spring.velocity.value,
-          resting: spring.resting.value,
-        }) ?? null
-      )
-    }
+    return () =>
+      slots.default?.({
+        value: spring.value.value,
+        velocity: spring.velocity.value,
+        isResting: spring.isResting.value,
+        timeRemaining: spring.timeRemaining.value,
+      }) ?? null
   },
   {
     name: 'SpringValue',

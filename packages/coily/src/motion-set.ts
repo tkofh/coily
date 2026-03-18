@@ -14,7 +14,7 @@ export class MotionSet {
   tick(dt: number) {
     for (const motion of this.#motions) {
       motion.tick(dt)
-      if (motion.resting) {
+      if (motion.isResting) {
         this.#motions.delete(motion)
       }
     }

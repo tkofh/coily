@@ -41,7 +41,7 @@ export class State {
   }
 
   /** Uses raw (unrounded) values so resting detection isn't affected by output quantization. */
-  get resting() {
+  get isResting() {
     return (
       Math.abs(this.#velocity) < this.#config.restingMagnitude &&
       Math.abs(this.#position) < this.#config.restingMagnitude

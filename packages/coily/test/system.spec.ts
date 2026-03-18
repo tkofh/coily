@@ -47,7 +47,7 @@ describe('SpringSystem', () => {
     // Simulate until rest
     for (let i = 0; i < 600; i++) {
       system.advance(1000 / 60)
-      if (spring.resting) break
+      if (spring.isResting) break
     }
 
     expect(onStop).toHaveBeenCalled()
@@ -63,7 +63,7 @@ describe('SpringSystem', () => {
     const system = createSpringSystem()
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
 
-    expect(spring.resting).toBe(true)
+    expect(spring.isResting).toBe(true)
 
     const onUpdate = vi.fn()
     spring.onUpdate(onUpdate)
@@ -88,7 +88,7 @@ describe('SpringSystem', () => {
 
     for (let i = 0; i < 600; i++) {
       system.advance(1000 / 60)
-      if (a.resting && b.resting && c.resting) break
+      if (a.isResting && b.isResting && c.isResting) break
     }
 
     expect(a.value).toBeCloseTo(100, 0)

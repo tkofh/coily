@@ -13,7 +13,8 @@ import { SpringSystemKey } from './system.ts'
 interface UseSpringReturn {
   readonly value: Ref<number>
   readonly velocity: Ref<number>
-  readonly resting: Readonly<Ref<boolean>>
+  readonly timeRemaining: Readonly<Ref<number>>
+  readonly isResting: Readonly<Ref<boolean>>
   readonly jumpTo: (value: number) => void
 }
 
@@ -47,10 +48,12 @@ export function useSpring(
 
   let triggerValue: (() => void) | undefined
   let triggerVelocity: (() => void) | undefined
+  let triggerTimeRemaining: (() => void) | undefined
 
   spring.onUpdate(() => {
     triggerValue?.()
     triggerVelocity?.()
+    triggerTimeRemaining?.()
   })
 
   const value = customRef((track, trigger) => {
@@ -83,14 +86,26 @@ export function useSpring(
     }
   })
 
-  const resting = customRef((track, trigger) => {
+  const timeRemaining = customRef((track, trigger) => {
+    triggerTimeRemaining = trigger
+
+    return {
+      get() {
+        track()
+        return spring.timeRemaining
+      },
+      set() {},
+    }
+  })
+
+  const isResting = customRef((track, trigger) => {
     spring.onStart(trigger)
     spring.onStop(trigger)
 
     return {
       get() {
         track()
-        return spring.resting
+        return spring.isResting
       },
       set() {},
     }
@@ -103,7 +118,8 @@ export function useSpring(
   return {
     value,
     velocity,
-    resting,
+    timeRemaining,
+    isResting,
     jumpTo: (value: number) => {
       spring.jumpTo(value)
     },

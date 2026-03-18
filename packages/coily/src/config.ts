@@ -1,5 +1,10 @@
 import { invariant } from './util.ts'
 
+export interface SpringState {
+  readonly position: number
+  readonly velocity: number
+}
+
 interface BaseOptions {
   /**
    * Mass of the spring system.
@@ -214,6 +219,48 @@ export class SpringConfig {
     this.naturalFrequency = Math.sqrt(this.tension / this.mass)
     this.criticalDamping = 2 * this.mass * this.naturalFrequency
     this.dampingRatio = this.damping / this.criticalDamping
+  }
+
+  /**
+   * Analytically estimates the time remaining for a spring to come to rest,
+   * given the current displacement and velocity.
+   *
+   * Uses the exponential decay envelope common to all three damping regimes.
+   * The decay rate depends on the regime:
+   * - Underdamped (ζ < 1): σ = ζωₙ
+   * - Critically damped (ζ = 1): σ = ωₙ
+   * - Overdamped (ζ > 1): σ = (ζ - √(ζ²-1))ωₙ  (the slower eigenvalue)
+   *
+   * The effective initial amplitude accounts for both displacement and velocity,
+   * since kinetic energy can convert to additional displacement:
+   *   A₀ = |x₀| + |v₀| / ωₙ
+   *
+   * Settling time: t = ln(A₀ / threshold) / σ, with a 2× safety factor
+   * to account for polynomial terms in the critically damped solution.
+   *
+   * Returns the estimated time in milliseconds.
+   */
+  computeTimeRemaining(state: SpringState): number {
+    const { position, velocity } = state
+
+    const a0 = Math.abs(position) + Math.abs(velocity) / this.naturalFrequency
+
+    if (a0 <= this.restingMagnitude) return 0
+
+    let sigma: number
+    if (this.dampingRatio < 1) {
+      sigma = this.dampingRatio * this.naturalFrequency
+    } else if (this.dampingRatio === 1) {
+      sigma = this.naturalFrequency
+    } else {
+      sigma =
+        (this.dampingRatio - Math.sqrt(this.dampingRatio * this.dampingRatio - 1)) *
+        this.naturalFrequency
+    }
+
+    if (sigma <= 0) return Infinity
+
+    return ((2 * Math.log(a0 / this.restingMagnitude)) / sigma) * 1000
   }
 }
 

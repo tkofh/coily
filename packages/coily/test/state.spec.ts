@@ -44,33 +44,33 @@ describe('State', () => {
     test('resting when both position and velocity are below threshold', () => {
       // precision 2 → threshold = 0.01
       const state = new State(makeConfig(2), 0, 0)
-      expect(state.resting).toBe(true)
+      expect(state.isResting).toBe(true)
     })
 
     test('not resting when position exceeds threshold', () => {
       const state = new State(makeConfig(2), 0.05, 0)
-      expect(state.resting).toBe(false)
+      expect(state.isResting).toBe(false)
     })
 
     test('not resting when velocity exceeds threshold', () => {
       const state = new State(makeConfig(2), 0, 0.05)
-      expect(state.resting).toBe(false)
+      expect(state.isResting).toBe(false)
     })
 
     test('resting uses raw values, not rounded values', () => {
       // 0.005 rounds to 0.01 on read, but raw 0.005 IS below threshold 0.01
       const state = new State(makeConfig(2), 0.005, 0.005)
       expect(state.position).toBe(0.01) // rounded output
-      expect(state.resting).toBe(true) // raw check: 0.005 < 0.01
+      expect(state.isResting).toBe(true) // raw check: 0.005 < 0.01
     })
 
     test('resting threshold changes with precision', () => {
       const state = new State(makeConfig(2), 0.05, 0.05)
-      expect(state.resting).toBe(false) // 0.05 >= 0.01
+      expect(state.isResting).toBe(false) // 0.05 >= 0.01
 
       state.configure(makeConfig(1))
       // threshold is now 0.1, and raw 0.05 < 0.1
-      expect(state.resting).toBe(true)
+      expect(state.isResting).toBe(true)
     })
   })
 
@@ -85,11 +85,11 @@ describe('State', () => {
 
     test('changing precision updates resting threshold', () => {
       const state = new State(makeConfig(2), 0.05, 0.05)
-      expect(state.resting).toBe(false) // raw 0.05 >= threshold 0.01
+      expect(state.isResting).toBe(false) // raw 0.05 >= threshold 0.01
 
       // Raising threshold to 0.1 — raw 0.05 < 0.1
       state.configure(makeConfig(1))
-      expect(state.resting).toBe(true)
+      expect(state.isResting).toBe(true)
     })
   })
 })
