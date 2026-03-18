@@ -145,7 +145,7 @@ describe('Spring: jumpTo', () => {
     )
 
     spring.jumpTo(50)
-    expect(spring.resting).toBe(true)
+    expect(spring.isResting).toBe(true)
   })
 })
 
@@ -196,7 +196,7 @@ describe('Spring: events', () => {
     // Simulate until resting
     for (let i = 0; i < 600; i++) {
       system.advance(1000 / 60)
-      if (spring.resting) break
+      if (spring.isResting) break
     }
 
     expect(onStop).toHaveBeenCalled()
@@ -278,10 +278,10 @@ describe('Spring: parameter changes mid-animation', () => {
 
     for (let i = 0; i < 600; i++) {
       system.advance(1000 / 60)
-      if (spring.resting) break
+      if (spring.isResting) break
     }
 
-    expect(spring.resting).toBe(true)
+    expect(spring.isResting).toBe(true)
     expect(spring.value).toBeCloseTo(0, 0)
   })
 })
@@ -291,17 +291,17 @@ describe('Spring: re-activation from rest', () => {
     const system = createSpringSystem()
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
 
-    expect(spring.resting).toBe(true)
+    expect(spring.isResting).toBe(true)
     spring.value = 50
     expect(spring.value).toBe(50)
 
     // Should animate back to target
     for (let i = 0; i < 600; i++) {
       system.advance(1000 / 60)
-      if (spring.resting) break
+      if (spring.isResting) break
     }
 
-    expect(spring.resting).toBe(true)
+    expect(spring.isResting).toBe(true)
     expect(spring.value).toBeCloseTo(0, 0)
   })
 
@@ -309,7 +309,7 @@ describe('Spring: re-activation from rest', () => {
     const system = createSpringSystem()
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
 
-    expect(spring.resting).toBe(true)
+    expect(spring.isResting).toBe(true)
     spring.velocity = 100
 
     system.advance(1000 / 60)
@@ -326,9 +326,9 @@ describe('Spring: re-activation from rest', () => {
     // Settle first
     for (let i = 0; i < 600; i++) {
       system.advance(1000 / 60)
-      if (spring.resting) break
+      if (spring.isResting) break
     }
-    expect(spring.resting).toBe(true)
+    expect(spring.isResting).toBe(true)
     void spring.value
 
     spring.configure(defineSpring({ mass: 5, tension: 170, damping: 26 }))
@@ -336,7 +336,7 @@ describe('Spring: re-activation from rest', () => {
 
     expect(spring.mass).toBe(5)
     // Spring is re-enrolled in ticker (advance didn't skip it)
-    expect(spring.resting).toBeDefined()
+    expect(spring.isResting).toBeDefined()
   })
 
   test('setting tension on a resting spring re-activates it', () => {
@@ -348,9 +348,9 @@ describe('Spring: re-activation from rest', () => {
 
     for (let i = 0; i < 600; i++) {
       system.advance(1000 / 60)
-      if (spring.resting) break
+      if (spring.isResting) break
     }
-    expect(spring.resting).toBe(true)
+    expect(spring.isResting).toBe(true)
 
     spring.configure(defineSpring({ tension: 300, damping: 26 }))
     system.advance(1000 / 60)
@@ -367,9 +367,9 @@ describe('Spring: re-activation from rest', () => {
 
     for (let i = 0; i < 600; i++) {
       system.advance(1000 / 60)
-      if (spring.resting) break
+      if (spring.isResting) break
     }
-    expect(spring.resting).toBe(true)
+    expect(spring.isResting).toBe(true)
 
     spring.configure(defineSpring({ tension: 170, damping: 10 }))
     expect(spring.damping).toBe(10)
@@ -384,9 +384,9 @@ describe('Spring: re-activation from rest', () => {
 
     for (let i = 0; i < 600; i++) {
       system.advance(1000 / 60)
-      if (spring.resting) break
+      if (spring.isResting) break
     }
-    expect(spring.resting).toBe(true)
+    expect(spring.isResting).toBe(true)
 
     spring.configure(defineSpring({ tension: 170, damping: 26, precision: 5 }))
     expect(spring.precision).toBe(5)

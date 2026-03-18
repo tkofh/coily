@@ -60,7 +60,7 @@ describe('physics: underdamped (ζ < 1)', () => {
 
   test('eventually comes to rest at target', () => {
     const { spring } = simulate(params, 10000)
-    expect(spring.resting).toBe(true)
+    expect(spring.isResting).toBe(true)
     expect(spring.value).toBeCloseTo(0, 1)
   })
 
@@ -110,7 +110,7 @@ describe('physics: critically damped (ζ = 1)', () => {
 
   test('eventually comes to rest at target', () => {
     const { spring } = simulate(params, 10000)
-    expect(spring.resting).toBe(true)
+    expect(spring.isResting).toBe(true)
     expect(spring.value).toBeCloseTo(0, 1)
   })
 
@@ -152,7 +152,7 @@ describe('physics: overdamped (ζ > 1)', () => {
 
   test('eventually comes to rest at target', () => {
     const { spring } = simulate(params, 15000)
-    expect(spring.resting).toBe(true)
+    expect(spring.isResting).toBe(true)
     expect(spring.value).toBeCloseTo(0, 1)
   })
 
@@ -182,7 +182,7 @@ describe('physics: general properties', () => {
     )
 
     // Should still be moving after 5 seconds
-    expect(spring.resting).toBe(false)
+    expect(spring.isResting).toBe(false)
 
     // Amplitude should remain roughly constant (conservation of energy in undamped case)
     const maxima: number[] = []
@@ -254,7 +254,7 @@ describe('physics: general properties', () => {
       { mass: 1, tension: 170, damping: 26, target: 200, value: 100 },
       10000,
     )
-    expect(spring.resting).toBe(true)
+    expect(spring.isResting).toBe(true)
     expect(spring.value).toBeCloseTo(200, 0)
   })
 
@@ -263,7 +263,7 @@ describe('physics: general properties', () => {
       { mass: 1, tension: 170, damping: 26, target: -100, value: 0 },
       10000,
     )
-    expect(spring.resting).toBe(true)
+    expect(spring.isResting).toBe(true)
     expect(spring.value).toBeCloseTo(-100, 0)
   })
 })

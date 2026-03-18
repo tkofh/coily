@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import fc from 'fast-check'
 import { createSpringSystem, defineSpring } from '../src/index.ts'
-import { settlingTime } from '../src/util.ts'
 
 /**
  * Number of iterations for convergence tests.
@@ -47,16 +46,17 @@ function simulateToSettling(
   params: { mass: number; tension: number; damping: number; value: number; target: number },
   iterations = ITERATIONS,
 ) {
+  const config = defineSpring({ mass: params.mass, tension: params.tension, damping: params.damping })
   const displacement = params.value - params.target
-  const est = settlingTime({ ...params, displacement })
+  const est = config.computeTimeRemaining({ position: displacement, velocity: 0 })
 
   const system = createSpringSystem()
   const spring = system.createSpring(
     { target: params.target, value: params.value },
-    defineSpring({ mass: params.mass, tension: params.tension, damping: params.damping }),
+    config,
   )
 
-  const dt = (est * 1000) / iterations
+  const dt = est / iterations
 
   for (let i = 0; i < iterations; i++) {
     system.advance(dt)
@@ -70,7 +70,7 @@ describe('property-based: convergence', () => {
     fc.assert(
       fc.property(springParamsArb, (params) => {
         const { spring } = simulateToSettling(params)
-        return spring.resting
+        return spring.isResting
       }),
       { numRuns: 200 },
     )
@@ -93,14 +93,15 @@ describe('property-based: no NaN or Infinity', () => {
   test('position and velocity remain finite during simulation', () => {
     fc.assert(
       fc.property(springParamsArb, (params) => {
+        const config = defineSpring({ mass: params.mass, tension: params.tension, damping: params.damping })
         const displacement = params.value - params.target
-        const est = settlingTime({ ...params, displacement })
-        const dt = (est * 1000) / ITERATIONS
+        const est = config.computeTimeRemaining({ position: displacement, velocity: 0 })
+        const dt = est / ITERATIONS
 
         const system = createSpringSystem()
         const spring = system.createSpring(
           { target: params.target, value: params.value },
-          defineSpring({ mass: params.mass, tension: params.tension, damping: params.damping }),
+          config,
         )
 
         for (let i = 0; i < ITERATIONS; i++) {
@@ -137,8 +138,8 @@ describe('property-based: symmetry', () => {
         const s1 = system1.createSpring({ target: 0, value: displacement }, config)
         const s2 = system2.createSpring({ target: 0, value: -displacement }, config)
 
-        const est = settlingTime({ mass, tension, damping, displacement })
-        const dt = (est * 1000) / ITERATIONS
+        const est = config.computeTimeRemaining({ position: displacement, velocity: 0 })
+        const dt = est / ITERATIONS
 
         for (let i = 0; i < ITERATIONS; i++) {
           system1.advance(dt)
@@ -168,14 +169,15 @@ describe('property-based: monotonicity for overdamped springs', () => {
 
     fc.assert(
       fc.property(overdampedArb, ({ mass, tension, damping, displacement }) => {
+        const config = defineSpring({ mass, tension, damping })
         const system = createSpringSystem()
         const spring = system.createSpring(
           { target: 0, value: displacement },
-          defineSpring({ mass, tension, damping }),
+          config,
         )
 
-        const est = settlingTime({ mass, tension, damping, displacement })
-        const dt = (est * 1000) / ITERATIONS
+        const est = config.computeTimeRemaining({ position: displacement, velocity: 0 })
+        const dt = est / ITERATIONS
 
         let prevDistance = Math.abs(spring.value)
         let violations = 0
@@ -212,14 +214,15 @@ describe('property-based: energy', () => {
 
     fc.assert(
       fc.property(underdampedArb, ({ mass, tension, damping, displacement }) => {
+        const config = defineSpring({ mass, tension, damping })
         const system = createSpringSystem()
         const spring = system.createSpring(
           { target: 0, value: displacement },
-          defineSpring({ mass, tension, damping }),
+          config,
         )
 
-        const est = settlingTime({ mass, tension, damping, displacement })
-        const dt = (est * 1000) / ITERATIONS
+        const est = config.computeTimeRemaining({ position: displacement, velocity: 0 })
+        const dt = est / ITERATIONS
 
         function energy() {
           const pos = spring.value
@@ -253,33 +256,30 @@ describe('property-based: target changes', () => {
         springParamsArb,
         fc.double({ min: -200, max: 200, noNaN: true }),
         (params, newTarget) => {
+          const config = defineSpring({ mass: params.mass, tension: params.tension, damping: params.damping })
           const system = createSpringSystem()
           const spring = system.createSpring(
             { target: params.target, value: params.value },
-            defineSpring({ mass: params.mass, tension: params.tension, damping: params.damping }),
+            config,
           )
 
           // Run for a fraction of estimated settling time
-          const initialEst = settlingTime({
-            ...params,
-            displacement: params.value - params.target,
+          const initialEst = config.computeTimeRemaining({
+            position: params.value - params.target,
+            velocity: 0,
           })
-          const warmupDt = (initialEst * 1000) / ITERATIONS
+          const warmupDt = initialEst / ITERATIONS
           for (let i = 0; i < 60; i++) system.advance(warmupDt)
 
           // Change target
           spring.target = newTarget
 
           // Compute new settling time from current state
-          const newDisplacement = spring.value - newTarget
-          const newEst = settlingTime({
-            mass: params.mass,
-            tension: params.tension,
-            damping: params.damping,
-            displacement: newDisplacement,
+          const newEst = config.computeTimeRemaining({
+            position: spring.value - newTarget,
             velocity: spring.velocity,
           })
-          const dt = (newEst * 1000) / ITERATIONS
+          const dt = newEst / ITERATIONS
 
           for (let i = 0; i < ITERATIONS; i++) {
             system.advance(dt)

@@ -1,6 +1,6 @@
 import type { SpringConfig } from './config.ts'
-import type { MotionSet } from './motion-set.ts'
-import { Motion } from './motion.ts'
+import type { MotionSet } from './motion.ts'
+import { SpringMotion } from './spring-motion.ts'
 
 interface DisplacedSpringPosition {
   target?: number | undefined
@@ -12,7 +12,7 @@ export type SpringPosition = number | DisplacedSpringPosition
 export class Spring {
   #target: number
   #config: SpringConfig
-  readonly #motion: Motion
+  readonly #motion: SpringMotion
   readonly #motions: MotionSet
 
   constructor(motions: MotionSet, position: SpringPosition, config: SpringConfig) {
@@ -29,10 +29,10 @@ export class Spring {
 
     this.#target = target
     this.#config = config
-    this.#motion = new Motion(config, value - target, 0)
+    this.#motion = new SpringMotion(config, value - target, 0)
     this.#motions = motions
 
-    if (!this.#motion.resting) {
+    if (!this.#motion.isResting) {
       this.#motions.add(this.#motion)
     }
   }
@@ -95,8 +95,12 @@ export class Spring {
     return this.#config.precision
   }
 
-  get resting() {
-    return this.#motion.resting
+  get timeRemaining() {
+    return this.#motion.timeRemaining
+  }
+
+  get isResting() {
+    return this.#motion.isResting
   }
 
   configure(config: SpringConfig) {

@@ -1,4 +1,4 @@
-import type { MotionSet } from './motion-set.ts'
+import type { MotionSet } from './motion.ts'
 import { invariant } from './util.ts'
 
 export interface TickerOptions {
