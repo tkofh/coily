@@ -1,6 +1,7 @@
 import type { SpringConfig } from './config.ts'
-import { MotionSet } from './motion-set.ts'
+import { MotionSet } from './motion.ts'
 import { Spring, type SpringPosition } from './spring.ts'
+import { SpringChain, type ChainSpacing } from './spring-chain.ts'
 import { Ticker, type TickerOptions } from './ticker.ts'
 
 class SpringSystemImpl implements SpringSystem {
@@ -14,6 +15,10 @@ class SpringSystemImpl implements SpringSystem {
 
   createSpring(position: SpringPosition, config: SpringConfig) {
     return new Spring(this.#motion, position, config)
+  }
+
+  createSpringChain(target: number, count: number, config: SpringConfig, spacing?: ChainSpacing) {
+    return new SpringChain(this.#motion, target, count, config, spacing)
   }
 
   advance(dt: number) {
@@ -59,6 +64,7 @@ class SpringSystemImpl implements SpringSystem {
 
 export interface SpringSystem {
   createSpring(position: SpringPosition, config: SpringConfig): Spring
+  createSpringChain(target: number, count: number, config: SpringConfig, spacing?: ChainSpacing): SpringChain
   /** Advance all springs by `dt` milliseconds, without affecting internal timing. */
   advance(dt: number): void
 
