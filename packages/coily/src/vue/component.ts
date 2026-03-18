@@ -1,12 +1,10 @@
 import { type SlotsType, defineComponent, toRefs } from 'vue'
 import { useSpring } from './spring.ts'
+import type { SpringConfig, SpringOptions } from '../config.ts'
 
 export interface SpringValueProps {
   target: number
-  mass?: number
-  tension?: number
-  damping?: number
-  precision?: number
+  config?: SpringOptions | SpringConfig
 }
 
 export type SpringValueEmits = Record<string, never>
@@ -16,6 +14,7 @@ export interface SpringValueSlotScope {
   velocity: number
   isResting: boolean
   timeRemaining: number
+  jumpTo: (value: number) => void
 }
 
 export type SpringValueSlots = SlotsType<{ default: SpringValueSlotScope }>
@@ -26,25 +25,29 @@ export const SpringValue = defineComponent<
   string,
   SpringValueSlots
 >(
-  (props, { slots }) => {
-    const { target, mass, tension, damping, precision } = toRefs(props)
-    const spring = useSpring(target, () => ({
-      mass: mass?.value ?? 1,
-      tension: tension?.value ?? 100,
-      damping: damping?.value ?? 10,
-      precision: precision?.value ?? 2,
-    }))
+  (props, { slots, expose }) => {
+    const { target, config } = toRefs(props)
+    const spring = useSpring(target, config)
+
+    expose({
+      value: spring,
+      velocity: spring.velocity,
+      isResting: spring.isResting,
+      timeRemaining: spring.timeRemaining,
+      jumpTo: spring.jumpTo,
+    })
 
     return () =>
       slots.default?.({
-        value: spring.value.value,
+        value: spring.value,
         velocity: spring.velocity.value,
         isResting: spring.isResting.value,
         timeRemaining: spring.timeRemaining.value,
+        jumpTo: spring.jumpTo,
       }) ?? null
   },
   {
     name: 'SpringValue',
-    props: ['target', 'mass', 'tension', 'damping', 'precision'],
+    props: ['target', 'config'],
   },
 )

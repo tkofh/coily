@@ -19,20 +19,8 @@ const stiffY = useSpring(mouseY, stiffOptions)
 
 <template>
   <div class="playground" @mousemove="onMouseMove">
-    <div
-      class="ball bouncy"
-      :style="{
-        '--x': bouncyX.value.value,
-        '--y': bouncyY.value.value,
-      }"
-    />
-    <div
-      class="ball stiff"
-      :style="{
-        '--x': stiffX.value.value,
-        '--y': stiffY.value.value,
-      }"
-    />
+    <div class="ball bouncy" :style="{ '--x': bouncyX, '--y': bouncyY }" />
+    <div class="ball stiff" :style="{ '--x': stiffX, '--y': stiffY }" />
   </div>
 </template>
 

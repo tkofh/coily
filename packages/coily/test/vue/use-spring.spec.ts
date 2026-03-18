@@ -3,7 +3,7 @@ import { defineComponent, h, nextTick, ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import { createSpringSystem } from '../../src/index.ts'
 import { SpringSystemKey } from '../../src/vue/system.ts'
-import { useSpring } from '../../src/vue/spring.ts'
+import { useSpring, type SpringRef } from '../../src/vue/spring.ts'
 import type { MaybeRefOrGetter } from 'vue'
 
 interface SpringOptions {
@@ -15,11 +15,12 @@ interface SpringOptions {
 
 function mountSpring(target: MaybeRefOrGetter<number>, options?: MaybeRefOrGetter<SpringOptions>) {
   const system = createSpringSystem()
+  let spring!: SpringRef
   const wrapper = mount(
     defineComponent({
       setup() {
-        const { value, velocity, isResting, jumpTo } = useSpring(target, options)
-        return { value, velocity, isResting, jumpTo }
+        spring = useSpring(target, options)
+        return { spring }
       },
       render: () => h('div'),
     }),
@@ -29,16 +30,16 @@ function mountSpring(target: MaybeRefOrGetter<number>, options?: MaybeRefOrGette
       },
     },
   )
-  return { wrapper, system }
+  return { wrapper, spring, system }
 }
 
 describe('useSpring', () => {
   test('initial value matches target', () => {
-    const { wrapper } = mountSpring(5)
+    const { spring } = mountSpring(5)
 
-    expect(wrapper.vm.value).toBe(5)
-    expect(wrapper.vm.velocity).toBe(0)
-    expect(wrapper.vm.isResting).toBe(true)
+    expect(spring.value).toBe(5)
+    expect(spring.velocity.value).toBe(0)
+    expect(spring.isResting.value).toBe(true)
   })
 
   test('throws without a SpringSystem', () => {
@@ -57,29 +58,29 @@ describe('useSpring', () => {
 
   test('value updates when system advances', async () => {
     const target = ref(0)
-    const { wrapper, system } = mountSpring(target)
+    const { spring, system } = mountSpring(target)
 
-    expect(wrapper.vm.value).toBe(0)
+    expect(spring.value).toBe(0)
 
     target.value = 100
     await nextTick()
 
     system.advance(16)
-    expect(wrapper.vm.value).toBeGreaterThan(0)
-    expect(wrapper.vm.value).toBeLessThan(100)
-    expect(wrapper.vm.isResting).toBe(false)
+    expect(spring.value).toBeGreaterThan(0)
+    expect(spring.value).toBeLessThan(100)
+    expect(spring.isResting.value).toBe(false)
   })
 
   test('reactive options update spring config', async () => {
     const target = ref(0)
     const options = ref({ mass: 1, tension: 100, damping: 10 })
-    const { wrapper, system } = mountSpring(target, options)
+    const { spring, system } = mountSpring(target, options)
 
     // Move with default tension
     target.value = 100
     await nextTick()
     system.advance(16)
-    const valueDefault = wrapper.vm.value
+    const valueDefault = spring.value
 
     // Reset
     target.value = 0
@@ -91,47 +92,47 @@ describe('useSpring', () => {
     target.value = 100
     await nextTick()
     system.advance(16)
-    const valueStiff = wrapper.vm.value
+    const valueStiff = spring.value
 
     expect(valueStiff).toBeGreaterThan(valueDefault)
   })
 
   test('jumpTo sets value immediately', () => {
-    const { wrapper } = mountSpring(0)
+    const { spring } = mountSpring(0)
 
-    wrapper.vm.jumpTo(42)
-    expect(wrapper.vm.value).toBe(42)
-    expect(wrapper.vm.velocity).toBe(0)
+    spring.jumpTo(42)
+    expect(spring.value).toBe(42)
+    expect(spring.velocity.value).toBe(0)
   })
 
   test('velocity is reactive during animation', async () => {
     const target = ref(0)
-    const { wrapper, system } = mountSpring(target)
+    const { spring, system } = mountSpring(target)
 
-    expect(wrapper.vm.velocity).toBe(0)
+    expect(spring.velocity.value).toBe(0)
 
     target.value = 100
     await nextTick()
     system.advance(16)
 
-    expect(wrapper.vm.velocity).not.toBe(0)
+    expect(spring.velocity.value).not.toBe(0)
   })
 
   test('isResting becomes true when spring settles', async () => {
     const target = ref(0)
-    const { wrapper, system } = mountSpring(target)
+    const { spring, system } = mountSpring(target)
 
     target.value = 10
     await nextTick()
     system.advance(16)
-    expect(wrapper.vm.isResting).toBe(false)
+    expect(spring.isResting.value).toBe(false)
 
     for (let i = 0; i < 500; i++) system.advance(16)
-    expect(wrapper.vm.isResting).toBe(true)
+    expect(spring.isResting.value).toBe(true)
   })
 
   test('getter target works', () => {
-    const { wrapper } = mountSpring(() => 25)
-    expect(wrapper.vm.value).toBe(25)
+    const { spring } = mountSpring(() => 25)
+    expect(spring.value).toBe(25)
   })
 })

@@ -10,15 +10,14 @@ import {
 import { SpringConfig, type SpringOptions } from '../config.ts'
 import { SpringSystemKey } from './system.ts'
 
-interface UseSpringReturn {
-  readonly value: Ref<number>
+export interface SpringRef extends Ref<number> {
   readonly velocity: Ref<number>
-  readonly timeRemaining: Readonly<Ref<number>>
-  readonly isResting: Readonly<Ref<boolean>>
+  readonly timeRemaining: Ref<number>
+  readonly isResting: Ref<boolean>
   readonly jumpTo: (value: number) => void
 }
 
-const defaultOptions = {
+export const defaultOptions = {
   tension: 100,
   damping: 10,
   precision: 2,
@@ -26,8 +25,8 @@ const defaultOptions = {
 
 export function useSpring(
   target: MaybeRefOrGetter<number>,
-  options?: MaybeRefOrGetter<SpringOptions | SpringConfig>,
-): UseSpringReturn {
+  options?: MaybeRefOrGetter<SpringOptions | SpringConfig | undefined>,
+): SpringRef {
   const system = inject(SpringSystemKey)
 
   if (!system) {
@@ -56,47 +55,38 @@ export function useSpring(
     triggerTimeRemaining?.()
   })
 
-  const value = customRef((track, trigger) => {
-    triggerValue = trigger
+  const value = customRef((track, trigger) => ({
+    get() {
+      triggerValue ??= trigger
+      track()
+      return spring.value
+    },
+    set(value: number) {
+      spring.value = value
+      trigger()
+    },
+  }))
 
-    return {
-      get() {
-        track()
-        return spring.value
-      },
-      set(value: number) {
-        spring.value = value
-        trigger()
-      },
-    }
-  })
+  const velocity = customRef((track, trigger) => ({
+    get() {
+      triggerVelocity ??= trigger
+      track()
+      return spring.velocity
+    },
+    set(value: number) {
+      spring.velocity = value
+      trigger()
+    },
+  }))
 
-  const velocity = customRef((track, trigger) => {
-    triggerVelocity = trigger
-
-    return {
-      get() {
-        track()
-        return spring.velocity
-      },
-      set(value: number) {
-        spring.velocity = value
-        trigger()
-      },
-    }
-  })
-
-  const timeRemaining = customRef((track, trigger) => {
-    triggerTimeRemaining = trigger
-
-    return {
-      get() {
-        track()
-        return spring.timeRemaining
-      },
-      set() {},
-    }
-  })
+  const timeRemaining = customRef((track, trigger) => ({
+    get() {
+      triggerTimeRemaining ??= trigger
+      track()
+      return spring.timeRemaining
+    },
+    set() {},
+  }))
 
   const isResting = customRef((track, trigger) => {
     spring.onStart(trigger)
@@ -115,13 +105,10 @@ export function useSpring(
     spring.target = toValue(target)
   })
 
-  return {
-    value,
+  return Object.assign(value, {
     velocity,
     timeRemaining,
     isResting,
-    jumpTo: (value: number) => {
-      spring.jumpTo(value)
-    },
-  }
+    jumpTo: (value: number) => spring.jumpTo(value),
+  }) as SpringRef
 }
