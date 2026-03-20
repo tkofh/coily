@@ -1,5 +1,7 @@
 import { invariant } from './util.ts'
 
+type Writable<T> = { -readonly [K in keyof T]: T[K] }
+
 export interface SpringState {
   readonly position: number
   readonly velocity: number
@@ -104,6 +106,9 @@ export type SpringOptions =
  * Immutable spring configuration.
  */
 export class SpringConfig {
+  /** @internal Incremented by `SpringConfig.assign` to signal mutations. */
+  #version = 0
+
   readonly mass: number
   readonly tension: number
   readonly damping: number
@@ -219,6 +224,24 @@ export class SpringConfig {
     this.naturalFrequency = Math.sqrt(this.tension / this.mass)
     this.criticalDamping = 2 * this.mass * this.naturalFrequency
     this.dampingRatio = this.damping / this.criticalDamping
+  }
+
+  static version(config: SpringConfig) {
+    return config.#version
+  }
+
+  static assign(target: SpringConfig, source: SpringConfig) {
+    target.#version++
+    const t = target as Writable<SpringConfig>
+    t.mass = source.mass
+    t.tension = source.tension
+    t.damping = source.damping
+    t.precision = source.precision
+    t.naturalFrequency = source.naturalFrequency
+    t.criticalDamping = source.criticalDamping
+    t.dampingRatio = source.dampingRatio
+    t.precisionMultiplier = source.precisionMultiplier
+    t.restingMagnitude = source.restingMagnitude
   }
 
   /**

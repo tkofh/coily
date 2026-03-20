@@ -1,7 +1,7 @@
 import type { SpringConfig } from './config.ts'
 import type { State } from './state.ts'
 
-export class UnderdampedSpringSolver {
+export class UnderdampedSolver {
   #state: State
 
   #dampedFrequency = 0
@@ -43,7 +43,7 @@ export class UnderdampedSpringSolver {
   }
 }
 
-export class CriticallyDampedSpringSolver {
+export class CriticallyDampedSolver {
   #state: State
 
   #naturalFrequency = 0
@@ -78,7 +78,7 @@ export class CriticallyDampedSpringSolver {
   }
 }
 
-export class OverdampedSpringSolver {
+export class OverdampedSolver {
   #state: State
 
   #dampedFrequency = 0

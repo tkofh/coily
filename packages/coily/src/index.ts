@@ -1,5 +1,4 @@
 export { createSpringSystem, type SpringSystem } from './system.ts'
-export type { Spring, SpringPosition } from './spring.ts'
+export type { Spring, LinkedSpring, SpringBase, SpringPosition, LinkedSpringPosition } from './spring.ts'
 export { type SpringConfig, type SpringState, defineSpring, type SpringOptions } from './config.ts'
-export { type SpringChain, type ChainSpacing } from './spring-chain.ts'
 export type { TickerOptions } from './ticker.ts'

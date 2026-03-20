@@ -30,7 +30,10 @@ const coilyModule: NuxtModule = defineNuxtModule({
 
     addImports([
       { from: 'coily/vue', name: 'useSpring' },
+      { from: 'coily/vue', name: 'SpringRef', type: true },
+      { from: 'coily/vue', name: 'LinkedSpringRef', type: true },
       { from: 'coily', name: 'defineSpring' },
+      { from: 'coily', name: 'SpringConfig', type: true },
     ])
 
     addComponent({

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { MotionSet } from '../src/motion.ts'
+import { MotionSet } from '../src/motion-set.ts'
 import { Ticker } from '../src/ticker.ts'
 
 describe('Ticker', () => {
