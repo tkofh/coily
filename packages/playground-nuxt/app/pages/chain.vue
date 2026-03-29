@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { SpringOptions } from 'coily'
+
 const count = 32
 
 const mouseX = ref(0)
@@ -9,7 +11,7 @@ function onMouseMove(event: MouseEvent) {
   mouseY.value = event.clientY
 }
 
-const chainConfig = { bounce: 0.1, duration: 1000 }
+const chainConfig = { bounce: -0.5, duration: 5000, precision: 5 } satisfies SpringOptions
 
 // Build chains by passing each spring as the target for the next
 const xSprings: SpringRef[] = []
