@@ -134,6 +134,11 @@ export abstract class SpringBase {
     this.#motion.dispose()
   }
 
+  /** @internal Raw unrounded value — only for linked spring target tracking. */
+  protected static rawValue(spring: SpringBase) {
+    return spring.#target + spring.#motion.position
+  }
+
   protected setConfig(config: SpringConfig) {
     this.#config = config
     this.#motions.add(this.#motion)
@@ -143,9 +148,10 @@ export abstract class SpringBase {
     if (value !== this.#target) {
       this.#motions.add(this.#motion)
 
-      const currentValue = this.value
+      // Use raw position to avoid injecting rounding error
+      const rawValue = this.#target + this.#motion.position
       this.#target = value
-      this.#motion.position = currentValue - this.#target
+      this.#motion.position = rawValue - this.#target
       this.#motion.tick(0)
     }
   }
@@ -190,7 +196,7 @@ export class LinkedSpring extends SpringBase {
     const leader = position.target
     const offset = position.offset ?? 0
     const hasOverride = config !== undefined
-    const target = leader.value + offset
+    const target = SpringBase.rawValue(leader) + offset
     const value = position.value ?? target
 
     // Share the leader's config instance when no override is provided.
@@ -205,7 +211,7 @@ export class LinkedSpring extends SpringBase {
     this.#hasConfigOverride = hasOverride
 
     this.#unsubUpdate = leader.onUpdate(() => {
-      this.setTarget(this.#leader.value + this.#offset)
+      this.setTarget(SpringBase.rawValue(this.#leader) + this.#offset)
     })
   }
 
@@ -220,7 +226,7 @@ export class LinkedSpring extends SpringBase {
   set offset(value: number) {
     if (value !== this.#offset) {
       this.#offset = value
-      this.setTarget(this.#leader.value + this.#offset)
+      this.setTarget(SpringBase.rawValue(this.#leader) + this.#offset)
     }
   }
 

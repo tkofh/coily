@@ -148,11 +148,11 @@ export class SpringConfig {
       invariant(dampingRatio >= 0, 'Damping ratio must be greater than or equal to 0')
     if (duration !== undefined) invariant(duration > 0, 'Duration must be greater than 0')
     invariant(displacement !== 0, 'Displacement must not be 0')
-    invariant(precision > 0, 'Precision must be greater than 0')
+    invariant(precision >= 0, 'Precision must be greater than or equal to 0')
 
     this.precision = precision
     this.precisionMultiplier = 10 ** precision
-    this.restingMagnitude = 1 / this.precisionMultiplier
+    this.restingMagnitude = 0.5 / this.precisionMultiplier
 
     const hasM = mass !== undefined
     const hasK = tension !== undefined
@@ -184,7 +184,8 @@ export class SpringConfig {
     }
     // ── Group 3: Duration-based ─────────────────────────────────────
     else if (hasZ && hasT) {
-      const threshold = this.restingMagnitude
+      // Fixed threshold for duration derivation so precision doesn't affect spring physics.
+      const threshold = 0.005
       const x0 = Math.abs(displacement)
 
       invariant(x0 > threshold, 'displacement must be greater than the precision threshold')

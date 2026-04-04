@@ -7,8 +7,8 @@ function onMouseMove(event: MouseEvent) {
   mouseY.value = event.clientY
 }
 
-const [bouncyX, bouncyY] = useSpring([mouseX, mouseY], { bounce: 0.4, duration: 1000 })
-const [stiffX, stiffY] = useSpring([mouseX, mouseY], { tension: 600, bounce: 0 })
+const [bouncyX, bouncyY] = useSpring([mouseX, mouseY], { bounce: 0.5, duration: 2000 })
+const [stiffX, stiffY] = useSpring([mouseX, mouseY], { tension: 600, bounce: -0.1 })
 </script>
 
 <template>
@@ -19,7 +19,7 @@ const [stiffX, stiffY] = useSpring([mouseX, mouseY], { tension: 600, bounce: 0 }
   </div>
 </template>
 
-<style>
+<style scoped>
 @property --x {
   syntax: '<number>';
   inherits: false;

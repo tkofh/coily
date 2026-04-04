@@ -40,36 +40,42 @@ describe('State', () => {
     })
   })
 
-  describe('resting detection (uses raw values)', () => {
-    test('resting when both position and velocity are below threshold', () => {
-      // precision 2 → threshold = 0.01
+  describe('resting detection (uses rounded values)', () => {
+    test('resting when both position and velocity are zero', () => {
       const state = new State(makeConfig(2), 0, 0)
       expect(state.isResting).toBe(true)
     })
 
-    test('not resting when position exceeds threshold', () => {
+    test('not resting when position rounds to non-zero', () => {
       const state = new State(makeConfig(2), 0.05, 0)
       expect(state.isResting).toBe(false)
     })
 
-    test('not resting when velocity exceeds threshold', () => {
+    test('not resting when velocity rounds to non-zero', () => {
       const state = new State(makeConfig(2), 0, 0.05)
       expect(state.isResting).toBe(false)
     })
 
-    test('resting uses raw values, not rounded values', () => {
-      // 0.005 rounds to 0.01 on read, but raw 0.005 IS below threshold 0.01
-      const state = new State(makeConfig(2), 0.005, 0.005)
-      expect(state.position).toBe(0.01) // rounded output
-      expect(state.isResting).toBe(true) // raw check: 0.005 < 0.01
+    test('resting when raw values round to zero', () => {
+      // 0.004 rounds to 0.00 at precision 2
+      const state = new State(makeConfig(2), 0.004, 0.004)
+      expect(state.position).toBe(0)
+      expect(state.isResting).toBe(true)
+    })
+
+    test('not resting when raw values round to non-zero', () => {
+      // 0.005 rounds to 0.01 at precision 2
+      const state = new State(makeConfig(2), 0.005, 0)
+      expect(state.position).toBe(0.01)
+      expect(state.isResting).toBe(false)
     })
 
     test('resting threshold changes with precision', () => {
-      const state = new State(makeConfig(2), 0.05, 0.05)
-      expect(state.isResting).toBe(false) // 0.05 >= 0.01
+      // 0.04 rounds to 0.0 at precision 1, but 0.04 at precision 2
+      const state = new State(makeConfig(2), 0.04, 0.04)
+      expect(state.isResting).toBe(false)
 
       state.configure(makeConfig(1))
-      // threshold is now 0.1, and raw 0.05 < 0.1
       expect(state.isResting).toBe(true)
     })
   })
@@ -84,10 +90,11 @@ describe('State', () => {
     })
 
     test('changing precision updates resting threshold', () => {
-      const state = new State(makeConfig(2), 0.05, 0.05)
-      expect(state.isResting).toBe(false) // raw 0.05 >= threshold 0.01
+      // 0.04 rounds to 0.04 at precision 2 (not resting)
+      const state = new State(makeConfig(2), 0.04, 0.04)
+      expect(state.isResting).toBe(false)
 
-      // Raising threshold to 0.1 — raw 0.05 < 0.1
+      // At precision 1, 0.04 rounds to 0.0 (resting)
       state.configure(makeConfig(1))
       expect(state.isResting).toBe(true)
     })

@@ -40,11 +40,8 @@ export class State {
     this.#velocity = value
   }
 
-  /** Uses raw (unrounded) values so resting detection isn't affected by output quantization. */
+  /** A spring is resting when its rounded position and velocity are both zero. */
   get isResting() {
-    return (
-      Math.abs(this.#velocity) < this.#config.restingMagnitude &&
-      Math.abs(this.#position) < this.#config.restingMagnitude
-    )
+    return this.position === 0 && this.velocity === 0
   }
 }

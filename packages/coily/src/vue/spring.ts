@@ -3,7 +3,9 @@ import {
   type Ref,
   computed,
   customRef,
+  getCurrentScope,
   inject,
+  onScopeDispose,
   toValue,
   watchSyncEffect,
 } from 'vue'
@@ -125,6 +127,10 @@ function createSpringRef(
     spring.target = toValue(target)
   })
 
+  if (getCurrentScope()) {
+    onScopeDispose(() => spring.dispose())
+  }
+
   const ref = Object.assign(value, {
     velocity,
     timeRemaining,
@@ -233,6 +239,10 @@ function createLinkedSpringRef(
       trigger()
     },
   }))
+
+  if (getCurrentScope()) {
+    onScopeDispose(() => linkedSpring.dispose())
+  }
 
   const ref = Object.assign(value, {
     velocity,

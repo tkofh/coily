@@ -9,6 +9,8 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
+    "@vueuse/core": "^14.2.1",
+    "@vueuse/nuxt": "^14.2.1",
     "coily": "workspace:*",
     "nuxt": "^4.4.2",
     "vue": "^3.5.30",

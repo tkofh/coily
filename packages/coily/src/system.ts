@@ -9,12 +9,16 @@ import {
 } from './spring.ts'
 import { Ticker, type TickerOptions } from './ticker.ts'
 
+export interface SpringSystemOptions extends TickerOptions {
+  debug?: boolean | undefined
+}
+
 class SpringSystemImpl implements SpringSystem {
   readonly #motion: MotionSet
   readonly #ticker: Ticker
 
-  constructor(options?: TickerOptions) {
-    this.#motion = new MotionSet()
+  constructor(options?: SpringSystemOptions) {
+    this.#motion = new MotionSet(options?.debug)
     this.#ticker = new Ticker(this.#motion, options)
   }
 
@@ -107,6 +111,6 @@ export interface SpringSystem {
   adjustedLag: number
 }
 
-export function createSpringSystem(options?: TickerOptions): SpringSystem {
+export function createSpringSystem(options?: SpringSystemOptions): SpringSystem {
   return new SpringSystemImpl(options)
 }

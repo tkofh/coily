@@ -33,6 +33,7 @@ export class Motion {
     return this.#state.position
   }
 
+
   set position(value: number) {
     this.#state.position = value
     this.#needsReset = true

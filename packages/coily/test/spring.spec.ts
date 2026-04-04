@@ -37,11 +37,17 @@ describe('Spring: input validation', () => {
     ).not.toThrow()
   })
 
-  test('throws when precision is 0', () => {
+  test('allows precision 0 (integer rounding)', () => {
     const system = createSpringSystem()
     expect(() =>
       system.createSpring(0, defineSpring({ mass: 1, tension: 1, damping: 1, precision: 0 })),
-    ).toThrow('Precision must be greater than 0')
+    ).not.toThrow()
+  })
+
+  test('throws when precision is negative', () => {
+    expect(() =>
+      defineSpring({ mass: 1, tension: 1, damping: 1, precision: -1 }),
+    ).toThrow('Precision must be greater than or equal to 0')
   })
 
   test('throws on configure with invalid mass', () => {
@@ -68,12 +74,12 @@ describe('Spring: input validation', () => {
     }).toThrow('Damping must be greater than or equal to 0')
   })
 
-  test('throws on configure with invalid precision', () => {
+  test('throws on configure with negative precision', () => {
     const system = createSpringSystem()
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 1, damping: 1 }))
     expect(() => {
-      spring.configure(defineSpring({ tension: 1, damping: 1, precision: 0 }))
-    }).toThrow('Precision must be greater than 0')
+      spring.configure(defineSpring({ tension: 1, damping: 1, precision: -1 }))
+    }).toThrow('Precision must be greater than or equal to 0')
   })
 })
 

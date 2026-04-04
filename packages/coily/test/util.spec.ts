@@ -33,8 +33,8 @@ describe('computeTimeRemaining', () => {
   test('returns 0 when displacement is at or below threshold', () => {
     const config = defineSpring({ mass: 1, tension: 100, damping: 10 })
     expect(config.computeTimeRemaining({ position: 0, velocity: 0 })).toBe(0)
+    expect(config.computeTimeRemaining({ position: 0.002, velocity: 0 })).toBe(0)
     expect(config.computeTimeRemaining({ position: 0.005, velocity: 0 })).toBe(0)
-    expect(config.computeTimeRemaining({ position: 0.01, velocity: 0 })).toBe(0)
   })
 
   test('returns nonzero when displacement exceeds threshold', () => {
