@@ -57,7 +57,7 @@ describe('ticker with requestAnimationFrame', () => {
     system.stop()
 
     expect(spring.value).toBe(0)
-    expect(spring.resting).toBe(true)
+    expect(spring.isResting).toBe(true)
     spring.dispose()
   })
 

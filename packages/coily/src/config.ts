@@ -1,5 +1,12 @@
 import { invariant } from './util.ts'
 
+type Writable<T> = { -readonly [K in keyof T]: T[K] }
+
+export interface SpringState {
+  readonly position: number
+  readonly velocity: number
+}
+
 interface BaseOptions {
   /**
    * Mass of the spring system.
@@ -99,6 +106,9 @@ export type SpringOptions =
  * Immutable spring configuration.
  */
 export class SpringConfig {
+  /** @internal Incremented by `SpringConfig.assign` to signal mutations. */
+  #version = 0
+
   readonly mass: number
   readonly tension: number
   readonly damping: number
@@ -138,11 +148,11 @@ export class SpringConfig {
       invariant(dampingRatio >= 0, 'Damping ratio must be greater than or equal to 0')
     if (duration !== undefined) invariant(duration > 0, 'Duration must be greater than 0')
     invariant(displacement !== 0, 'Displacement must not be 0')
-    invariant(precision > 0, 'Precision must be greater than 0')
+    invariant(precision >= 0, 'Precision must be greater than or equal to 0')
 
     this.precision = precision
     this.precisionMultiplier = 10 ** precision
-    this.restingMagnitude = 1 / this.precisionMultiplier
+    this.restingMagnitude = 0.5 / this.precisionMultiplier
 
     const hasM = mass !== undefined
     const hasK = tension !== undefined
@@ -174,7 +184,8 @@ export class SpringConfig {
     }
     // ── Group 3: Duration-based ─────────────────────────────────────
     else if (hasZ && hasT) {
-      const threshold = this.restingMagnitude
+      // Fixed threshold for duration derivation so precision doesn't affect spring physics.
+      const threshold = 0.005
       const x0 = Math.abs(displacement)
 
       invariant(x0 > threshold, 'displacement must be greater than the precision threshold')
@@ -214,6 +225,66 @@ export class SpringConfig {
     this.naturalFrequency = Math.sqrt(this.tension / this.mass)
     this.criticalDamping = 2 * this.mass * this.naturalFrequency
     this.dampingRatio = this.damping / this.criticalDamping
+  }
+
+  static version(config: SpringConfig) {
+    return config.#version
+  }
+
+  static assign(target: SpringConfig, source: SpringConfig) {
+    target.#version++
+    const t = target as Writable<SpringConfig>
+    t.mass = source.mass
+    t.tension = source.tension
+    t.damping = source.damping
+    t.precision = source.precision
+    t.naturalFrequency = source.naturalFrequency
+    t.criticalDamping = source.criticalDamping
+    t.dampingRatio = source.dampingRatio
+    t.precisionMultiplier = source.precisionMultiplier
+    t.restingMagnitude = source.restingMagnitude
+  }
+
+  /**
+   * Analytically estimates the time remaining for a spring to come to rest,
+   * given the current displacement and velocity.
+   *
+   * Uses the exponential decay envelope common to all three damping regimes.
+   * The decay rate depends on the regime:
+   * - Underdamped (ζ < 1): σ = ζωₙ
+   * - Critically damped (ζ = 1): σ = ωₙ
+   * - Overdamped (ζ > 1): σ = (ζ - √(ζ²-1))ωₙ  (the slower eigenvalue)
+   *
+   * The effective initial amplitude accounts for both displacement and velocity,
+   * since kinetic energy can convert to additional displacement:
+   *   A₀ = |x₀| + |v₀| / ωₙ
+   *
+   * Settling time: t = ln(A₀ / threshold) / σ, with a 2× safety factor
+   * to account for polynomial terms in the critically damped solution.
+   *
+   * Returns the estimated time in milliseconds.
+   */
+  computeTimeRemaining(state: SpringState): number {
+    const { position, velocity } = state
+
+    const a0 = Math.abs(position) + Math.abs(velocity) / this.naturalFrequency
+
+    if (a0 <= this.restingMagnitude) return 0
+
+    let sigma: number
+    if (this.dampingRatio < 1) {
+      sigma = this.dampingRatio * this.naturalFrequency
+    } else if (this.dampingRatio === 1) {
+      sigma = this.naturalFrequency
+    } else {
+      sigma =
+        (this.dampingRatio - Math.sqrt(this.dampingRatio * this.dampingRatio - 1)) *
+        this.naturalFrequency
+    }
+
+    if (sigma <= 0) return Infinity
+
+    return ((2 * Math.log(a0 / this.restingMagnitude)) / sigma) * 1000
   }
 }
 

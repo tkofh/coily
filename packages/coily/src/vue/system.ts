@@ -1,5 +1,5 @@
 import { type App, type InjectionKey, onBeforeUnmount, onMounted, provide } from 'vue'
-import { type SpringSystem, createSpringSystem } from '../system.ts'
+import { type SpringSystem, type SpringSystemOptions, createSpringSystem } from '../system.ts'
 
 export const SpringSystemKey: InjectionKey<SpringSystem> = Symbol.for('coily/spring-system')
 
@@ -11,8 +11,8 @@ export function provideSpringSystem(system: SpringSystem, app?: App) {
   }
 }
 
-export function useSpringSystem() {
-  const system = createSpringSystem()
+export function useSpringSystem(options?: SpringSystemOptions) {
+  const system = createSpringSystem(options)
 
   provideSpringSystem(system)
 

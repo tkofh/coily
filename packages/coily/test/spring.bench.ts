@@ -51,7 +51,7 @@ describe('advance to rest', () => {
   bench('settle 1 spring to rest', () => {
     const system = createSpringSystem()
     const spring = system.createSpring({ target: 100, value: 0 }, defaultConfig)
-    while (!spring.resting) {
+    while (!spring.isResting) {
       system.advance(FRAME)
     }
   })
@@ -61,7 +61,7 @@ describe('advance to rest', () => {
     const springs = Array.from({ length: 100 }, () =>
       system.createSpring({ target: 100, value: 0 }, defaultConfig),
     )
-    while (springs.some((s) => !s.resting)) {
+    while (springs.some((s) => !s.isResting)) {
       system.advance(FRAME)
     }
   })
@@ -76,7 +76,7 @@ describe('advance to rest', () => {
       })
       return spring
     })
-    while (springs.some((s) => !s.resting)) {
+    while (springs.some((s) => !s.isResting)) {
       system.advance(FRAME)
     }
   })
@@ -89,7 +89,7 @@ describe('advance to rest', () => {
       spring.onUpdate(noop)
       return spring
     })
-    while (springs.some((s) => !s.resting)) {
+    while (springs.some((s) => !s.isResting)) {
       system.advance(FRAME)
     }
   })
@@ -99,7 +99,7 @@ describe('advance to rest', () => {
     const springs = Array.from({ length: 100 }, () =>
       system.createSpring({ target: 100, value: 0 }, defaultConfig),
     )
-    while (springs.some((s) => !s.resting)) {
+    while (springs.some((s) => !s.isResting)) {
       system.advance(FRAME)
     }
     // read final values after settling

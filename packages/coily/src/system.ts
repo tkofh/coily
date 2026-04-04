@@ -1,19 +1,37 @@
 import type { SpringConfig } from './config.ts'
 import { MotionSet } from './motion-set.ts'
-import { Spring, type SpringPosition } from './spring.ts'
+import {
+  Spring,
+  LinkedSpring,
+  isLinkedPosition,
+  type SpringPosition,
+  type LinkedSpringPosition,
+} from './spring.ts'
 import { Ticker, type TickerOptions } from './ticker.ts'
+
+export interface SpringSystemOptions extends TickerOptions {
+  debug?: boolean | undefined
+}
 
 class SpringSystemImpl implements SpringSystem {
   readonly #motion: MotionSet
   readonly #ticker: Ticker
 
-  constructor(options?: TickerOptions) {
-    this.#motion = new MotionSet()
+  constructor(options?: SpringSystemOptions) {
+    this.#motion = new MotionSet(options?.debug)
     this.#ticker = new Ticker(this.#motion, options)
   }
 
-  createSpring(position: SpringPosition, config: SpringConfig) {
-    return new Spring(this.#motion, position, config)
+  createSpring(position: SpringPosition, config: SpringConfig): Spring
+  createSpring(position: LinkedSpringPosition, config?: SpringConfig): LinkedSpring
+  createSpring(
+    position: SpringPosition | LinkedSpringPosition,
+    config?: SpringConfig,
+  ): Spring | LinkedSpring {
+    if (isLinkedPosition(position)) {
+      return new LinkedSpring(this.#motion, position, config)
+    }
+    return new Spring(this.#motion, position, config!)
   }
 
   advance(dt: number) {
@@ -59,6 +77,7 @@ class SpringSystemImpl implements SpringSystem {
 
 export interface SpringSystem {
   createSpring(position: SpringPosition, config: SpringConfig): Spring
+  createSpring(position: LinkedSpringPosition, config?: SpringConfig): LinkedSpring
   /** Advance all springs by `dt` milliseconds, without affecting internal timing. */
   advance(dt: number): void
 
@@ -92,6 +111,6 @@ export interface SpringSystem {
   adjustedLag: number
 }
 
-export function createSpringSystem(options?: TickerOptions): SpringSystem {
+export function createSpringSystem(options?: SpringSystemOptions): SpringSystem {
   return new SpringSystemImpl(options)
 }

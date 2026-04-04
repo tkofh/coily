@@ -1,12 +1,7 @@
-import { type SpringConfig } from './config.ts'
+import { SpringConfig } from './config.ts'
 import { Emitter } from './emitter.ts'
 import { State } from './state.ts'
-import {
-  CriticallyDampedSolver,
-  OverdampedSolver,
-  UnderdampedSolver,
-  type Solver,
-} from './solver.ts'
+import { CriticallyDampedSolver, OverdampedSolver, UnderdampedSolver } from './solver.ts'
 import { invariant } from './util.ts'
 
 export class Motion {
@@ -16,10 +11,12 @@ export class Motion {
   #underdampedSolver: UnderdampedSolver | null = null
   #criticallyDampedSolver: CriticallyDampedSolver | null = null
   #overdampedSolver: OverdampedSolver | null = null
-  #currentSolver: Solver | null = null
+  #currentSolver: UnderdampedSolver | CriticallyDampedSolver | OverdampedSolver | null = null
 
   #needsUpdate = false
   #needsReset = false
+  #configVersion = 0
+  #timeRemaining = 0
 
   readonly #emitter: Emitter
 
@@ -29,17 +26,19 @@ export class Motion {
     this.#emitter = new Emitter()
 
     this.#updateSolver()
+    this.#timeRemaining = this.#config.computeTimeRemaining(this.#state)
   }
 
   get position() {
     return this.#state.position
   }
 
+
   set position(value: number) {
     this.#state.position = value
     this.#needsReset = true
 
-    if (!this.#state.resting) {
+    if (!this.#state.isResting) {
       this.#emitter.emit('start')
     }
   }
@@ -53,18 +52,32 @@ export class Motion {
     this.#needsReset = true
   }
 
-  get resting() {
-    return this.#state.resting
+  get timeRemaining() {
+    return this.#timeRemaining
+  }
+
+  get isResting() {
+    return this.#state.isResting
   }
 
   configure(config: SpringConfig) {
     this.#config = config
     this.#state.configure(config)
+    this.#configVersion = SpringConfig.version(config)
     this.#needsUpdate = true
   }
 
   tick(dt: number, emit = true) {
     invariant(this.#currentSolver, 'Cannot tick a disposed motion')
+
+    // Detect config mutations (e.g. from SpringConfig.assign on a shared instance)
+    if (SpringConfig.version(this.#config) !== this.#configVersion) {
+      this.#state.configure(this.#config)
+      this.#configVersion = SpringConfig.version(this.#config)
+      this.#needsUpdate = true
+    }
+
+    const needsTimeRemaining = this.#needsUpdate || this.#needsReset
 
     if (this.#needsUpdate) {
       this.#updateSolver()
@@ -77,12 +90,18 @@ export class Motion {
       this.#needsReset = false
     }
 
+    if (needsTimeRemaining) {
+      this.#timeRemaining = this.#config.computeTimeRemaining(this.#state)
+    }
+
     this.#currentSolver.tick(dt)
+    this.#timeRemaining = Math.max(0, this.#timeRemaining - dt * 1000)
 
     if (emit) {
       this.#emitter.emit('update')
 
-      if (this.#state.resting) {
+      if (this.#state.isResting) {
+        this.#timeRemaining = 0
         this.#emitter.emit('stop')
       }
     }
