@@ -105,8 +105,6 @@ export type SpringOptions =
 /**
  * Immutable spring configuration.
  */
-let globalConfigVersion = 0
-
 export class SpringConfig {
   static readonly default = new SpringConfig({ dampingRatio: 1, duration: 500 })
 
@@ -231,16 +229,11 @@ export class SpringConfig {
     this.dampingRatio = this.damping / this.criticalDamping
   }
 
-  static get globalVersion() {
-    return globalConfigVersion
-  }
-
   static version(config: SpringConfig) {
     return config.#version
   }
 
   static assign(target: SpringConfig, source: SpringConfig) {
-    globalConfigVersion++
     target.#version++
     const t = target as Writable<SpringConfig>
     t.mass = source.mass

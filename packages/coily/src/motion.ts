@@ -16,7 +16,6 @@ export class Motion {
   #needsUpdate = false
   #needsReset = false
   #configVersion = 0
-  #globalConfigVersion = 0
   #timeRemaining = 0
 
   readonly #emitter: Emitter
@@ -65,23 +64,17 @@ export class Motion {
     this.#config = config
     this.#state.configure(config)
     this.#configVersion = SpringConfig.version(config)
-    this.#globalConfigVersion = SpringConfig.globalVersion
     this.#needsUpdate = true
   }
 
   tick(dt: number, emit = true) {
     invariant(this.#currentSolver, 'Cannot tick a disposed motion')
 
-    // Detect config mutations (e.g. from SpringConfig.assign on a shared instance).
-    // Two-tier check: only inspect our config's version if any config changed globally.
-    const gv = SpringConfig.globalVersion
-    if (gv !== this.#globalConfigVersion) {
-      this.#globalConfigVersion = gv
-      if (SpringConfig.version(this.#config) !== this.#configVersion) {
-        this.#state.configure(this.#config)
-        this.#configVersion = SpringConfig.version(this.#config)
-        this.#needsUpdate = true
-      }
+    // Detect config mutations (e.g. from SpringConfig.assign on a shared instance)
+    if (SpringConfig.version(this.#config) !== this.#configVersion) {
+      this.#state.configure(this.#config)
+      this.#configVersion = SpringConfig.version(this.#config)
+      this.#needsUpdate = true
     }
 
     const needsTimeRemaining = this.#needsUpdate || this.#needsReset
