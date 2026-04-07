@@ -1,21 +1,19 @@
 <script setup lang="ts">
-const mouseX = ref(0)
-const mouseY = ref(0)
+const mouse = ref({ x: 0, y: 0 })
 
 function onMouseMove(event: MouseEvent) {
-  mouseX.value = event.clientX
-  mouseY.value = event.clientY
+  mouse.value = { x: event.clientX, y: event.clientY }
 }
 
-const [bouncyX, bouncyY] = useSpring([mouseX, mouseY], { bounce: 0.5, duration: 2000 })
-const [stiffX, stiffY] = useSpring([mouseX, mouseY], { tension: 600, bounce: -0.1 })
+const bouncy = useSpring2D(mouse, { dampingRatio: 1, duration: 500 })
+const stiff = useSpring2D(mouse, { dampingRatio: 1.5, duration: 500 })
 </script>
 
 <template>
   <div class="playground" @mousemove="onMouseMove">
     <NuxtLink to="/chain" class="nav-link">Chain Demo →</NuxtLink>
-    <div class="ball bouncy" :style="{ '--x': bouncyX, '--y': bouncyY }" />
-    <div class="ball stiff" :style="{ '--x': stiffX, '--y': stiffY }" />
+    <div class="ball bouncy" :style="{ '--x': bouncy.x, '--y': bouncy.y }" />
+    <div class="ball stiff" :style="{ '--x': stiff.x, '--y': stiff.y }" />
   </div>
 </template>
 

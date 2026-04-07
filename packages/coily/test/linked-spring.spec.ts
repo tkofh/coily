@@ -15,7 +15,7 @@ function advanceUntilResting(
   }
 }
 
-describe('LinkedSpring', () => {
+describe('Spring: following', () => {
   describe('creation', () => {
     test('starts at leader value', () => {
       const system = createSpringSystem()
@@ -28,7 +28,7 @@ describe('LinkedSpring', () => {
     test('starts at leader value plus offset', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(50, config)
-      const follower = system.createSpring({ target: leader, offset: 20 })
+      const follower = system.createSpring({ target: { spring: leader, offset: 20 } })
 
       expect(follower.value).toBe(70)
     })
@@ -58,7 +58,7 @@ describe('LinkedSpring', () => {
     test('follows leader with offset', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
-      const follower = system.createSpring({ target: leader, offset: 25 })
+      const follower = system.createSpring({ target: { spring: leader, offset: 25 } })
 
       leader.target = 100
       advanceUntilResting(system, follower)
@@ -90,26 +90,45 @@ describe('LinkedSpring', () => {
 
       expect(c.value).toBeCloseTo(100, 0)
     })
-  })
 
-  describe('offset', () => {
-    test('offset getter returns current offset', () => {
+    test('can switch from standalone to following', () => {
       const system = createSpringSystem()
-      const leader = system.createSpring(0, config)
-      const follower = system.createSpring({ target: leader, offset: 10 })
+      const leader = system.createSpring(100, config)
+      const spring = system.createSpring(0, config)
 
-      expect(follower.offset).toBe(10)
+      spring.target = leader
+      advanceUntilResting(system, spring)
+
+      expect(spring.value).toBeCloseTo(100, 0)
     })
 
-    test('offset setter updates target', () => {
+    test('can switch from following to standalone', () => {
       const system = createSpringSystem()
-      const leader = system.createSpring(50, config)
-      const follower = system.createSpring({ target: leader, offset: 10 })
+      const leader = system.createSpring(100, config)
+      const spring = system.createSpring({ target: leader })
 
-      follower.offset = 30
+      advanceUntilResting(system, spring)
+      expect(spring.value).toBeCloseTo(100, 0)
+
+      spring.target = 0
+      advanceUntilResting(system, spring)
+
+      expect(spring.value).toBeCloseTo(0, 0)
+    })
+
+    test('can switch to a different leader', () => {
+      const system = createSpringSystem()
+      const a = system.createSpring(50, config)
+      const b = system.createSpring(200, config)
+      const follower = system.createSpring({ target: a })
+
+      advanceUntilResting(system, follower)
+      expect(follower.value).toBeCloseTo(50, 0)
+
+      follower.target = b
       advanceUntilResting(system, follower)
 
-      expect(follower.value).toBeCloseTo(80, 0)
+      expect(follower.value).toBeCloseTo(200, 0)
     })
   })
 
@@ -138,7 +157,7 @@ describe('LinkedSpring', () => {
       const follower = system.createSpring({ target: leader })
 
       const newConfig = defineSpring({ mass: 1, tension: 300, damping: 30 })
-      leader.configure(newConfig)
+      leader.config = newConfig
 
       expect(follower.tension).toBe(300)
       expect(follower.damping).toBe(30)
@@ -151,35 +170,34 @@ describe('LinkedSpring', () => {
       const follower = system.createSpring({ target: leader }, customConfig)
 
       const newConfig = defineSpring({ mass: 1, tension: 500, damping: 50 })
-      leader.configure(newConfig)
+      leader.config = newConfig
 
       expect(follower.tension).toBe(300)
     })
 
-    test('configure() on follower sets override', () => {
+    test('setting config on follower overrides inheritance', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
       const follower = system.createSpring({ target: leader })
 
-      const overrideConfig = defineSpring({ mass: 1, tension: 400, damping: 20 })
-      follower.configure(overrideConfig)
+      follower.config = defineSpring({ mass: 1, tension: 400, damping: 20 })
 
       expect(follower.tension).toBe(400)
 
       // Leader config change should not affect follower now
-      leader.configure(defineSpring({ mass: 1, tension: 999, damping: 99 }))
+      leader.config = defineSpring({ mass: 1, tension: 999, damping: 99 })
       expect(follower.tension).toBe(400)
     })
 
-    test('clearConfigOverride() resumes inheritance', () => {
+    test('setting config to null resumes inheritance', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
       const follower = system.createSpring({ target: leader })
 
-      follower.configure(defineSpring({ mass: 1, tension: 400, damping: 20 }))
+      follower.config = defineSpring({ mass: 1, tension: 400, damping: 20 })
       expect(follower.tension).toBe(400)
 
-      follower.clearConfigOverride()
+      follower.config = null
       expect(follower.tension).toBe(leader.tension)
     })
   })
@@ -231,30 +249,6 @@ describe('LinkedSpring', () => {
 
       // Follower keeps its position
       expect(follower.value).toBe(posBeforeDispose)
-    })
-  })
-
-  describe('type safety', () => {
-    test('linked spring does not have target setter', () => {
-      const system = createSpringSystem()
-      const leader = system.createSpring(0, config)
-      const follower = system.createSpring({ target: leader })
-
-      // LinkedSpring should not have a target setter in the type system.
-      // At runtime, setting target on the prototype would be SpringBase's
-      // read-only getter. This test verifies the property descriptor.
-      const descriptor = Object.getOwnPropertyDescriptor(
-        Object.getPrototypeOf(follower),
-        'target',
-      )
-      expect(descriptor?.set).toBeUndefined()
-    })
-
-    test('regular spring does not have offset', () => {
-      const system = createSpringSystem()
-      const spring = system.createSpring(0, config)
-
-      expect('offset' in spring).toBe(false)
     })
   })
 })

@@ -50,35 +50,35 @@ describe('Spring: input validation', () => {
     ).toThrow('Precision must be greater than or equal to 0')
   })
 
-  test('throws on configure with invalid mass', () => {
+  test('throws on config set with invalid mass', () => {
     const system = createSpringSystem()
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 1, damping: 1 }))
     expect(() => {
-      spring.configure(defineSpring({ mass: 0, tension: 1, damping: 1 }))
+      spring.config = defineSpring({ mass: 0, tension: 1, damping: 1 })
     }).toThrow('Mass must be greater than 0')
   })
 
-  test('throws on configure with invalid tension', () => {
+  test('throws on config set with invalid tension', () => {
     const system = createSpringSystem()
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 1, damping: 1 }))
     expect(() => {
-      spring.configure(defineSpring({ tension: -1, damping: 1 }))
+      spring.config = defineSpring({ tension: -1, damping: 1 })
     }).toThrow('Tension must be greater than 0')
   })
 
-  test('throws on configure with invalid damping', () => {
+  test('throws on config set with invalid damping', () => {
     const system = createSpringSystem()
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 1, damping: 1 }))
     expect(() => {
-      spring.configure(defineSpring({ tension: 1, damping: -1 }))
+      spring.config = defineSpring({ tension: 1, damping: -1 })
     }).toThrow('Damping must be greater than or equal to 0')
   })
 
-  test('throws on configure with negative precision', () => {
+  test('throws on config set with negative precision', () => {
     const system = createSpringSystem()
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 1, damping: 1 }))
     expect(() => {
-      spring.configure(defineSpring({ tension: 1, damping: 1, precision: -1 }))
+      spring.config = defineSpring({ tension: 1, damping: 1, precision: -1 })
     }).toThrow('Precision must be greater than or equal to 0')
   })
 })
@@ -236,7 +236,7 @@ describe('Spring: parameter changes mid-animation', () => {
     )
 
     system.advance(1000 / 60)
-    spring.configure(defineSpring({ mass: 5, tension: 170, damping: 10 }))
+    spring.config = defineSpring({ mass: 5, tension: 170, damping: 10 })
     expect(() => system.advance(1000 / 60)).not.toThrow()
     expect(spring.value).not.toBeNaN()
   })
@@ -249,7 +249,7 @@ describe('Spring: parameter changes mid-animation', () => {
     )
 
     system.advance(1000 / 60)
-    spring.configure(defineSpring({ mass: 1, tension: 300, damping: 10 }))
+    spring.config = defineSpring({ mass: 1, tension: 300, damping: 10 })
     system.advance(1000 / 60)
     expect(spring.value).not.toBeNaN()
     expect(spring.velocity).not.toBeNaN()
@@ -264,7 +264,7 @@ describe('Spring: parameter changes mid-animation', () => {
 
     // Start underdamped, switch to overdamped
     system.advance(1000 / 60)
-    spring.configure(defineSpring({ mass: 1, tension: 170, damping: 40 }))
+    spring.config = defineSpring({ mass: 1, tension: 170, damping: 40 })
     system.advance(1000 / 60)
 
     expect(spring.value).not.toBeNaN()
@@ -280,7 +280,7 @@ describe('Spring: parameter changes mid-animation', () => {
 
     // Tick for a bit, change params, then simulate to completion
     for (let i = 0; i < 30; i++) system.advance(1000 / 60)
-    spring.configure(defineSpring({ mass: 1, tension: 200, damping: 30 }))
+    spring.config = defineSpring({ mass: 1, tension: 200, damping: 30 })
 
     for (let i = 0; i < 600; i++) {
       system.advance(1000 / 60)
@@ -337,7 +337,7 @@ describe('Spring: re-activation from rest', () => {
     expect(spring.isResting).toBe(true)
     void spring.value
 
-    spring.configure(defineSpring({ mass: 5, tension: 170, damping: 26 }))
+    spring.config = defineSpring({ mass: 5, tension: 170, damping: 26 })
     system.advance(1000 / 60)
 
     expect(spring.mass).toBe(5)
@@ -358,7 +358,7 @@ describe('Spring: re-activation from rest', () => {
     }
     expect(spring.isResting).toBe(true)
 
-    spring.configure(defineSpring({ tension: 300, damping: 26 }))
+    spring.config = defineSpring({ tension: 300, damping: 26 })
     system.advance(1000 / 60)
 
     expect(spring.tension).toBe(300)
@@ -377,7 +377,7 @@ describe('Spring: re-activation from rest', () => {
     }
     expect(spring.isResting).toBe(true)
 
-    spring.configure(defineSpring({ tension: 170, damping: 10 }))
+    spring.config = defineSpring({ tension: 170, damping: 10 })
     expect(spring.damping).toBe(10)
   })
 
@@ -394,7 +394,7 @@ describe('Spring: re-activation from rest', () => {
     }
     expect(spring.isResting).toBe(true)
 
-    spring.configure(defineSpring({ tension: 170, damping: 26, precision: 5 }))
+    spring.config = defineSpring({ tension: 170, damping: 26, precision: 5 })
     expect(spring.precision).toBe(5)
   })
 })

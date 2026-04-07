@@ -2,50 +2,105 @@ import { SpringConfig } from './config.ts'
 import type { MotionSet } from './motion-set.ts'
 import { Motion } from './motion.ts'
 
-// ── Position Types ───────────────────────────────────────────────────
+export interface SpringWithOffset {
+  spring: Spring
+  offset?: number | undefined
+}
+
+export type SpringTarget = number | Spring | SpringWithOffset
 
 interface DisplacedSpringPosition {
-  target?: number | undefined
+  target?: SpringTarget | undefined
   value?: number | undefined
 }
 
 export type SpringPosition = number | DisplacedSpringPosition
 
-export interface LinkedSpringPosition {
-  target: SpringBase
-  offset?: number | undefined
-  value?: number | undefined
+function normalizeTarget(
+  target: SpringTarget | undefined,
+): { spring: Spring; offset: number } | null {
+  if (target instanceof Spring) return { spring: target, offset: 0 }
+  if (
+    typeof target === 'object' &&
+    target !== null &&
+    'spring' in target &&
+    target.spring instanceof Spring
+  ) {
+    return { spring: target.spring, offset: target.offset ?? 0 }
+  }
+  return null
 }
 
-function isLinkedPosition(
-  position: SpringPosition | LinkedSpringPosition,
-): position is LinkedSpringPosition {
-  return (
-    typeof position === 'object' && 'target' in position && position.target instanceof SpringBase
-  )
-}
-
-// ── SpringBase ───────────────────────────────────────────────────────
-
-export abstract class SpringBase {
+export class Spring {
   #target: number
   #config: SpringConfig
   readonly #motion: Motion
   readonly #motions: MotionSet
 
-  constructor(motions: MotionSet, target: number, value: number, config: SpringConfig) {
-    this.#target = target
-    this.#config = config
-    this.#motion = new Motion(config, value - target, 0)
+  #leader: Spring | null = null
+  #offset = 0
+  #ownsConfig: boolean
+  #unsubLeader: (() => void) | null = null
+
+  constructor(motions: MotionSet, position: SpringPosition, config?: SpringConfig) {
     this.#motions = motions
+
+    let numericTarget: number
+    let value: number
+    let normalized: { spring: Spring; offset: number } | null = null
+
+    if (typeof position === 'number') {
+      numericTarget = position
+      value = position
+    } else {
+      normalized = normalizeTarget(position.target)
+      if (normalized) {
+        numericTarget =
+          normalized.spring.#target + normalized.spring.#motion.position + normalized.offset
+        value = position.value ?? numericTarget
+      } else {
+        numericTarget = (position.target as number | undefined) ?? position.value ?? 0
+        value = position.value ?? numericTarget
+      }
+    }
+
+    const hasOverride = config !== undefined
+    this.#ownsConfig = hasOverride || !normalized
+
+    if (normalized && !hasOverride) {
+      this.#config = normalized.spring.#config
+    } else {
+      this.#config = config ?? SpringConfig.default
+    }
+
+    this.#target = numericTarget
+    this.#motion = new Motion(this.#config, value - numericTarget, 0)
 
     if (!this.#motion.isResting) {
       this.#motions.add(this.#motion)
     }
+
+    if (normalized) {
+      this.#leader = normalized.spring
+      this.#offset = normalized.offset
+      this.#unsubLeader = normalized.spring.onUpdate(() => {
+        this.#setTarget(this.#leader!.#target + this.#leader!.#motion.position + this.#offset)
+      })
+    }
   }
 
-  get target() {
+  get target(): number {
     return this.#target
+  }
+
+  set target(value: SpringTarget) {
+    if (typeof value === 'number') {
+      this.#unfollow()
+      this.#setTarget(value)
+    } else {
+      const normalized = normalizeTarget(value)!
+      this.#follow(normalized.spring, normalized.offset)
+    }
   }
 
   get value() {
@@ -56,7 +111,6 @@ export abstract class SpringBase {
     const position = value - this.#target
     if (position !== this.#motion.position) {
       this.#motions.add(this.#motion)
-
       this.#motion.position = position
       this.#motion.tick(0)
     }
@@ -95,6 +149,30 @@ export abstract class SpringBase {
     return this.#config.precision
   }
 
+  set config(value: SpringConfig | null) {
+    if (value) {
+      if (this.#leader && !this.#ownsConfig) {
+        // Fork: create own config so we don't mutate the leader's
+        this.#ownsConfig = true
+        this.#config = new SpringConfig({
+          tension: value.tension,
+          damping: value.damping,
+          mass: value.mass,
+          precision: value.precision,
+        })
+        this.#motion.configure(this.#config)
+      } else {
+        SpringConfig.assign(this.#config, value)
+      }
+      this.#motions.add(this.#motion)
+    } else if (this.#ownsConfig) {
+      this.#ownsConfig = false
+      this.#config = this.#leader ? this.#leader.#config : SpringConfig.default
+      this.#motion.configure(this.#config)
+      this.#motions.add(this.#motion)
+    }
+  }
+
   get timeRemaining() {
     return this.#motion.timeRemaining
   }
@@ -103,11 +181,20 @@ export abstract class SpringBase {
     return this.#motion.isResting
   }
 
-  configure(config: SpringConfig) {
-    SpringConfig.assign(this.#config, config)
-    // Motion will detect the version change on next tick.
-    // But we need to ensure it's in the active set to get ticked.
-    this.#motions.add(this.#motion)
+  jumpTo(value: number) {
+    this.#target = value
+    this.#motion.position = 0
+    this.#motion.velocity = 0
+    this.#motion.tick(0)
+  }
+
+  dispose() {
+    if (this.#unsubLeader) {
+      this.#unsubLeader()
+      this.#unsubLeader = null
+    }
+    this.#motions.remove(this.#motion)
+    this.#motion.dispose()
   }
 
   onUpdate(callback: () => void) {
@@ -122,139 +209,53 @@ export abstract class SpringBase {
     return this.#motion.onStop(callback)
   }
 
-  jumpTo(value: number) {
-    this.#target = value
-    this.#motion.position = 0
-    this.#motion.velocity = 0
-    this.#motion.tick(0)
-  }
-
-  dispose() {
-    this.#motions.remove(this.#motion)
-    this.#motion.dispose()
-  }
-
-  /** @internal Raw unrounded value — only for linked spring target tracking. */
-  protected static rawValue(spring: SpringBase) {
-    return spring.#target + spring.#motion.position
-  }
-
-  protected setConfig(config: SpringConfig) {
-    this.#config = config
-    this.#motions.add(this.#motion)
-  }
-
-  protected setTarget(value: number) {
+  #setTarget(value: number) {
     if (value !== this.#target) {
       this.#motions.add(this.#motion)
-
-      // Use raw position to avoid injecting rounding error
       const rawValue = this.#target + this.#motion.position
       this.#target = value
       this.#motion.position = rawValue - this.#target
       this.#motion.tick(0)
     }
   }
-}
 
-// ── Spring ───────────────────────────────────────────────────────────
-
-export class Spring extends SpringBase {
-  constructor(motions: MotionSet, position: SpringPosition, config: SpringConfig) {
-    let target: number
-    let value: number
-
-    if (typeof position === 'number') {
-      target = position
-      value = position
-    } else {
-      target = position.target ?? position.value ?? 0
-      value = position.value ?? target
+  #follow(leader: Spring, offset: number) {
+    if (this.#unsubLeader) {
+      this.#unsubLeader()
     }
-
-    super(motions, target, value, config)
-  }
-
-  override get target() {
-    return super.target
-  }
-
-  override set target(value: number) {
-    this.setTarget(value)
-  }
-}
-
-// ── LinkedSpring ─────────────────────────────────────────────────────
-
-export class LinkedSpring extends SpringBase {
-  readonly #leader: SpringBase
-  #offset: number
-  #hasConfigOverride: boolean
-  readonly #unsubUpdate: () => void
-
-  constructor(motions: MotionSet, position: LinkedSpringPosition, config?: SpringConfig) {
-    const leader = position.target
-    const offset = position.offset ?? 0
-    const hasOverride = config !== undefined
-    const target = SpringBase.rawValue(leader) + offset
-    const value = position.value ?? target
-
-    // Share the leader's config instance when no override is provided.
-    // SpringConfig.assign mutates in place, so when the leader configures,
-    // the follower's config is already updated — no listeners needed.
-    const resolvedConfig = hasOverride ? config : leader.config
-
-    super(motions, target, value, resolvedConfig)
 
     this.#leader = leader
     this.#offset = offset
-    this.#hasConfigOverride = hasOverride
 
-    this.#unsubUpdate = leader.onUpdate(() => {
-      this.setTarget(SpringBase.rawValue(this.#leader) + this.#offset)
+    if (!this.#ownsConfig) {
+      this.#config = leader.#config
+      this.#motion.configure(this.#config)
+    }
+
+    this.#unsubLeader = leader.onUpdate(() => {
+      this.#setTarget(this.#leader!.#target + this.#leader!.#motion.position + this.#offset)
     })
+
+    this.#setTarget(leader.#target + leader.#motion.position + offset)
   }
 
-  get leader(): SpringBase {
-    return this.#leader
-  }
+  #unfollow() {
+    if (!this.#leader) return
 
-  get offset() {
-    return this.#offset
-  }
+    this.#unsubLeader!()
+    this.#unsubLeader = null
+    this.#leader = null
+    this.#offset = 0
 
-  set offset(value: number) {
-    if (value !== this.#offset) {
-      this.#offset = value
-      this.setTarget(SpringBase.rawValue(this.#leader) + this.#offset)
+    if (!this.#ownsConfig) {
+      this.#ownsConfig = true
+      this.#config = new SpringConfig({
+        tension: this.#config.tension,
+        damping: this.#config.damping,
+        mass: this.#config.mass,
+        precision: this.#config.precision,
+      })
+      this.#motion.configure(this.#config)
     }
-  }
-
-  override configure(config: SpringConfig) {
-    if (!this.#hasConfigOverride) {
-      // Fork: create our own config instance so we don't mutate the leader's
-      this.#hasConfigOverride = true
-      this.setConfig(
-        new SpringConfig({
-          tension: this.config.tension,
-          damping: this.config.damping,
-          mass: this.config.mass,
-          precision: this.config.precision,
-        }),
-      )
-    }
-    super.configure(config)
-  }
-
-  clearConfigOverride() {
-    this.#hasConfigOverride = false
-    this.setConfig(this.#leader.config)
-  }
-
-  override dispose() {
-    this.#unsubUpdate()
-    super.dispose()
   }
 }
-
-export { isLinkedPosition }

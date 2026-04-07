@@ -4,4 +4,3 @@ export function invariant(condition: unknown, message?: string): asserts conditi
   }
   throw new Error(message ?? 'Invariant Failed')
 }
-

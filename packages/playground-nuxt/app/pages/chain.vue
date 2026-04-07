@@ -6,15 +6,16 @@ const count = 512
 const playgroundRef = ref<HTMLElement | null>(null)
 const { width: winW, height: winH } = useElementSize(playgroundRef)
 
-const mouseX = ref(typeof window !== 'undefined' ? window.innerWidth / 2 : 960)
-const mouseY = ref(typeof window !== 'undefined' ? window.innerHeight / 2 : 540)
+const mouse = ref({
+  x: typeof window !== 'undefined' ? window.innerWidth / 2 : 960,
+  y: typeof window !== 'undefined' ? window.innerHeight / 2 : 540,
+})
 const autoMode = ref(true)
 let autoTimer: ReturnType<typeof setInterval> | undefined
 
 function onMouseMove(event: MouseEvent) {
   if (!autoMode.value) {
-    mouseX.value = event.clientX
-    mouseY.value = event.clientY
+    mouse.value = { x: event.clientX, y: event.clientY }
   }
 }
 
@@ -39,8 +40,7 @@ function teleport() {
   driftX += -driftX * Math.min(0.1 + 4 * Math.max(0, Math.abs(driftX) - 0.35), 1)
   driftY += -driftY * Math.min(0.1 + 4 * Math.max(0, Math.abs(driftY) - 0.35), 1)
 
-  mouseX.value = (0.5 + driftX) * w
-  mouseY.value = (0.5 + driftY) * h
+  mouse.value = { x: (0.5 + driftX) * w, y: (0.5 + driftY) * h }
 }
 
 function scheduleAuto() {
@@ -72,13 +72,11 @@ onBeforeUnmount(() => clearTimeout(autoTimer))
 
 const chainConfig = { bounce: -1, duration: 1000, precision: 3 } satisfies SpringOptions
 
-// Build chains by passing each spring as the target for the next
-const xSprings: SpringRef[] = []
-const ySprings: SpringRef[] = []
+// Build chain: first spring follows mouse, each subsequent spring follows the previous
+const springs: SpringRef2D[] = []
 
 for (let i = 0; i < count; i++) {
-  xSprings.push(useSpring(i === 0 ? mouseX : xSprings[i - 1]!, chainConfig))
-  ySprings.push(useSpring(i === 0 ? mouseY : ySprings[i - 1]!, chainConfig))
+  springs.push(useSpring2D(i === 0 ? mouse : springs[i - 1]!, chainConfig))
 }
 
 const colors = Array.from({ length: count }, (_, i) => {
@@ -107,8 +105,8 @@ const colors = Array.from({ length: count }, (_, i) => {
       :key="i"
       class="ball"
       :style="{
-        '--x': xSprings[i - 1]!.value,
-        '--y': ySprings[i - 1]!.value,
+        '--x': springs[i - 1]!.value.x,
+        '--y': springs[i - 1]!.value.y,
         '--color': colors[i - 1],
         '--size': 60 - i * 0.01,
         '--z': count - (i - 1),

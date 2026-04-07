@@ -1,4 +1,6 @@
 export { createSpringSystem, type SpringSystem, type SpringSystemOptions } from './system.ts'
-export type { Spring, LinkedSpring, SpringBase, SpringPosition, LinkedSpringPosition } from './spring.ts'
+export type { Spring, SpringPosition, SpringTarget, SpringWithOffset } from './spring.ts'
+export type { Spring2D, Spring2DPosition, Spring2DTarget, Spring2DWithOffset } from './spring2d.ts'
+export type { Vector2 } from './vector2.ts'
 export { type SpringConfig, type SpringState, defineSpring, type SpringOptions } from './config.ts'
 export type { TickerOptions } from './ticker.ts'
