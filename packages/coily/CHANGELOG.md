@@ -1,5 +1,57 @@
 # Change Log
 
+## 0.12.0
+
+### Minor Changes
+
+- 0b96dd8: **BREAKING:** `SpringValue` component now takes a single `config` prop instead of individual `mass`/`tension`/`damping`/`precision` props. Accepts `SpringOptions` or a `SpringConfig` from `defineSpring()`.
+
+  - `jumpTo` is now available in the slot scope
+  - Component exposes `value`, `velocity`, `isResting`, `timeRemaining`, and `jumpTo` via template ref
+
+- 0b96dd8: **BREAKING:** Rename `resting` to `isResting` across all APIs.
+
+  - `spring.resting` → `spring.isResting`
+  - `useSpring().resting` → `useSpring().isResting`
+  - `SpringValue` slot prop `resting` → `isResting`
+
+- 0b96dd8: **BREAKING:** `useSpring()` now returns a `SpringRef` instead of an object with separate `value`/`velocity`/`isResting`/`timeRemaining` refs.
+
+  - `spring.value.value` → `spring.value` (the ref _is_ the value)
+  - `spring.velocity`, `spring.isResting`, `spring.timeRemaining` are still refs on the object
+  - `spring.jumpTo()` is now a method on the ref
+  - Auto-unwraps in templates: `<div :style="{ opacity: spring }" />`
+
+- 0b96dd8: Add `timeRemaining` property to springs, exposing the analytically estimated time (in milliseconds) until the spring comes to rest.
+
+  - `spring.timeRemaining` available on the core `Spring` instance
+  - `useSpring()` returns a reactive `timeRemaining` ref for Vue apps
+  - `SpringConfig.computeTimeRemaining(state)` is available for standalone estimation
+
+- 1f5ba85: Added `Spring2D` and `useSpring2D` for multi-dimensional spring animations. A `Spring2D` bundles two scalar springs behind a `Vector2`-aware API — no changes to the solver, each axis is independent.
+
+  ```ts
+  // Core
+  const spring = system.createSpring2D({ x: 0, y: 0 });
+  spring.target = { x: 100, y: 200 };
+
+  // Vue
+  const pos = useSpring2D(mouse, { dampingRatio: 1, duration: 500 });
+  ```
+
+  Springs can follow other springs via the `target` setter:
+
+  ```ts
+  const a = system.createSpring2D({ x: 0, y: 0 });
+  const b = system.createSpring2D({ target: a });
+  ```
+
+- 0b96dd8: `useSpring` and `useSpring2D` now accept an array of targets, returning a tuple of refs sharing the same config.
+
+  ```ts
+  const [width, height] = useSpring([targetWidth, targetHeight], bouncyOptions);
+  ```
+
 ## 0.11.0
 
 ### Minor Changes
