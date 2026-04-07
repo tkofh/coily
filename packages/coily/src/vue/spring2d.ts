@@ -9,63 +9,63 @@ import {
   toValue,
   watchSyncEffect,
 } from 'vue'
-import { SpringConfig, type SpringOptions } from '../config.ts'
-import { Spring } from '../spring.ts'
+import { SpringConfig } from '../config.ts'
+import { Spring2D } from '../spring2d.ts'
+import type { Vector2 } from '../vector2.ts'
 import { SpringSystemKey } from './system.ts'
+import type { UseSpringOptions } from './spring.ts'
 
-export type UseSpringOptions = MaybeRefOrGetter<SpringOptions | SpringConfig | undefined>
+// ── SpringRef2D ─────────────────────────────────────────────────────
 
-// ── SpringRef ───────────────────────────────────────────────────────
-
-export interface SpringRef extends Ref<number> {
-  readonly velocity: Ref<number>
+export interface SpringRef2D extends Ref<Readonly<Vector2>> {
+  readonly velocity: Ref<Readonly<Vector2>>
   readonly timeRemaining: Ref<number>
   readonly isResting: Ref<boolean>
-  readonly jumpTo: (value: number) => void
+  readonly jumpTo: (value: Vector2) => void
 }
 
-/** @internal Symbol to access the underlying Spring from a SpringRef */
-const SpringInstanceKey = Symbol('spring')
+/** @internal Symbol to access the underlying Spring2D from a SpringRef2D */
+const Spring2DInstanceKey = Symbol('spring2d')
 
-type SpringRefWithInstance = SpringRef & { [SpringInstanceKey]: Spring }
+type Spring2DRefWithInstance = SpringRef2D & { [Spring2DInstanceKey]: Spring2D }
 
-function hasSpringInstance(value: unknown): value is SpringRefWithInstance {
-  return typeof value === 'object' && value !== null && SpringInstanceKey in value
+function hasSpring2DInstance(value: unknown): value is Spring2DRefWithInstance {
+  return typeof value === 'object' && value !== null && Spring2DInstanceKey in value
 }
 
-// ── useSpring ───────────────────────────────────────────────────────
+// ── useSpring2D ─────────────────────────────────────────────────────
 
-export function useSpring(
-  target: MaybeRefOrGetter<number>,
+export function useSpring2D(
+  target: MaybeRefOrGetter<Vector2>,
   options?: UseSpringOptions,
-): SpringRef
-export function useSpring(
-  target: SpringRef,
+): SpringRef2D
+export function useSpring2D(
+  target: SpringRef2D,
   options?: UseSpringOptions,
-): SpringRef
-export function useSpring<const T extends readonly MaybeRefOrGetter<number>[]>(
+): SpringRef2D
+export function useSpring2D<const T extends readonly MaybeRefOrGetter<Vector2>[]>(
   targets: T,
   options?: UseSpringOptions,
-): { [K in keyof T]: SpringRef }
-export function useSpring(
-  target: MaybeRefOrGetter<number> | SpringRef | readonly MaybeRefOrGetter<number>[],
+): { [K in keyof T]: SpringRef2D }
+export function useSpring2D(
+  target: MaybeRefOrGetter<Vector2> | SpringRef2D | readonly MaybeRefOrGetter<Vector2>[],
   options?: UseSpringOptions,
-): SpringRef | SpringRef[] {
+): SpringRef2D | SpringRef2D[] {
   if (Array.isArray(target)) {
-    return Array.from(target as MaybeRefOrGetter<number>[], (t) =>
-      createSpringRef(t, options),
+    return Array.from(target as MaybeRefOrGetter<Vector2>[], (t) =>
+      createSpringRef2D(t, options),
     )
   }
-  if (hasSpringInstance(target)) {
-    return createLinkedSpringRef(target, options)
+  if (hasSpring2DInstance(target)) {
+    return createLinkedSpringRef2D(target, options)
   }
-  return createSpringRef(target as MaybeRefOrGetter<number>, options)
+  return createSpringRef2D(target as MaybeRefOrGetter<Vector2>, options)
 }
 
-function createSpringRef(
-  target: MaybeRefOrGetter<number>,
+function createSpringRef2D(
+  target: MaybeRefOrGetter<Vector2>,
   options: UseSpringOptions | undefined,
-): SpringRef {
+): SpringRef2D {
   const system = inject(SpringSystemKey)
 
   if (!system) {
@@ -78,7 +78,7 @@ function createSpringRef(
     return opts ? new SpringConfig(opts) : undefined
   })
 
-  const spring = system.createSpring(toValue(target), config.value ?? undefined)
+  const spring = system.createSpring2D(toValue(target), config.value ?? undefined)
 
   watchSyncEffect(() => {
     const c = config.value
@@ -105,7 +105,7 @@ function createSpringRef(
       track()
       return spring.value
     },
-    set(value: number) {
+    set(value: Vector2) {
       spring.value = value
       trigger()
     },
@@ -117,7 +117,7 @@ function createSpringRef(
       track()
       return spring.velocity
     },
-    set(value: number) {
+    set(value: Vector2) {
       spring.velocity = value
       trigger()
     },
@@ -157,25 +157,25 @@ function createSpringRef(
     velocity,
     timeRemaining,
     isResting,
-    jumpTo: (value: number) => spring.jumpTo(value),
-  }) as SpringRef
+    jumpTo: (value: Vector2) => spring.jumpTo(value),
+  }) as SpringRef2D
 
-  Object.defineProperty(ref, SpringInstanceKey, { value: spring })
+  Object.defineProperty(ref, Spring2DInstanceKey, { value: spring })
 
   return ref
 }
 
-function createLinkedSpringRef(
-  leaderRef: SpringRefWithInstance,
+function createLinkedSpringRef2D(
+  leaderRef: Spring2DRefWithInstance,
   options: UseSpringOptions | undefined,
-): SpringRef {
+): SpringRef2D {
   const system = inject(SpringSystemKey)
 
   if (!system) {
     throw new Error('No SpringSystem found')
   }
 
-  const leaderSpring = leaderRef[SpringInstanceKey]
+  const leaderSpring = leaderRef[Spring2DInstanceKey]
 
   const config = computed(() => {
     const opts = toValue(options)
@@ -184,7 +184,7 @@ function createLinkedSpringRef(
     return new SpringConfig(opts)
   })
 
-  const spring = system.createSpring({ target: leaderSpring }, config.value)
+  const spring = system.createSpring2D({ target: leaderSpring }, config.value)
 
   watchSyncEffect(() => {
     const c = config.value
@@ -211,7 +211,7 @@ function createLinkedSpringRef(
       track()
       return spring.value
     },
-    set(value: number) {
+    set(value: Vector2) {
       spring.value = value
       trigger()
     },
@@ -223,7 +223,7 @@ function createLinkedSpringRef(
       track()
       return spring.velocity
     },
-    set(value: number) {
+    set(value: Vector2) {
       spring.velocity = value
       trigger()
     },
@@ -259,10 +259,10 @@ function createLinkedSpringRef(
     velocity,
     timeRemaining,
     isResting,
-    jumpTo: (value: number) => spring.jumpTo(value),
-  }) as SpringRef
+    jumpTo: (value: Vector2) => spring.jumpTo(value),
+  }) as SpringRef2D
 
-  Object.defineProperty(ref, SpringInstanceKey, { value: spring })
+  Object.defineProperty(ref, Spring2DInstanceKey, { value: spring })
 
   return ref
 }
