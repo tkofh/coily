@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.12.1
+
+### Patch Changes
+
+- Add `prepublishOnly` script to ensure the package is built before publishing.
+
 ## 0.12.0
 
 ### Minor Changes
