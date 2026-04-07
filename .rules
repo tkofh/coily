@@ -1,0 +1,49 @@
+# agent rules
+
+## critical: tool usage
+
+you are an agent in the zed editor. you have tools. use them.
+
+**never describe an action you intend to take without actually taking it.** if you say "i will create a file", you must call the tool in the same response. if you say "i will use a sub-agent", you must invoke the sub-agent tool immediately. narrating your plan without executing it is a failure.
+
+- when asked to write, create, or edit a file: call the appropriate file tool. do not output the file contents in chat as a substitute.
+- when asked to use a sub-agent: call the sub-agent tool. do not just say you are spawning one.
+- when creating documents (rfcs, specs, markdown): use the create_file or edit_file tool to write them to disk. the user wants files, not chat messages.
+- if a tool call fails, report the error and try again or ask for guidance. do not silently give up and switch to narrating what you would have done.
+
+**ANTI-PATTERNS (DO NOT DO THESE):**
+- **The "Chat-Substitute"**: Writing out a long block of code or text in a chat message and saying "here it is" instead of calling `edit_file` or `create_file`.
+- **The "Promise-only"**: Saying "I will update the file now" and then ending the turn without a tool call.
+- **The "Pseudo-Edit"**: Using markdown code blocks to *show* what you want to change rather than using the `edit_file` tool to *actually* change it.
+
+## thinking mode
+
+when using thinking/reasoning mode:
+- keep your thinking focused on the problem, not on restating what tools you plan to call.
+- after thinking, immediately act. do not add another layer of narration between your reasoning and your tool call.
+- do not let your chain of thought talk you out of using a tool. if the task requires a tool, call it.
+
+## sequential vs parallel work
+
+when asked to produce multiple related documents or changes:
+- prefer sequential execution unless explicitly told to parallelize.
+- finish one task completely (including writing the file) before moving to the next.
+- confirm completion of each step before proceeding.
+
+## project context
+
+this is a typescript monorepo using pnpm, turborepo, tsdown, and vitest. the core package is at `packages/coily`. vue integration lives in `packages/coily/src/vue`.
+
+when writing code or documents for this project:
+- use typescript. no javascript.
+- use lowercase for prose and comments.
+- be direct and concise. skip filler.
+
+## what "done" means
+
+a task is not done until:
+1. the file has been written to disk via a tool call
+2. you have confirmed the file was created successfully
+3. you have summarized what was written (briefly)
+
+saying "i will now write the file" and then stopping is **not done**. that is a failure state. if you catch yourself doing this, immediately call the tool.
