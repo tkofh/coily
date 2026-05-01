@@ -108,8 +108,8 @@ export type SpringOptions =
 export class SpringConfig {
   static readonly default = new SpringConfig({ dampingRatio: 1, duration: 500 })
 
-  /** @internal Incremented by `SpringConfig.assign` to signal mutations. */
-  #version = 0
+  /** @internal Incremented by `assign` to signal mutations. Do not read or write directly. */
+  _version = 0
 
   readonly mass: number
   readonly tension: number
@@ -229,13 +229,10 @@ export class SpringConfig {
     this.dampingRatio = this.damping / this.criticalDamping
   }
 
-  static version(config: SpringConfig) {
-    return config.#version
-  }
-
-  static assign(target: SpringConfig, source: SpringConfig) {
-    target.#version++
-    const t = target as Writable<SpringConfig>
+  /** @internal Copies physical parameters from `source` onto this config and bumps `_version`. */
+  assign(source: SpringConfig) {
+    this._version++
+    const t = this as Writable<SpringConfig>
     t.mass = source.mass
     t.tension = source.tension
     t.damping = source.damping

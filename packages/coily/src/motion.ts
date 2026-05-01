@@ -63,17 +63,17 @@ export class Motion {
   configure(config: SpringConfig) {
     this.#config = config
     this.#state.configure(config)
-    this.#configVersion = SpringConfig.version(config)
+    this.#configVersion = config._version
     this.#needsUpdate = true
   }
 
   tick(dt: number, emit = true) {
     invariant(this.#currentSolver, 'Cannot tick a disposed motion')
 
-    // Detect config mutations (e.g. from SpringConfig.assign on a shared instance)
-    if (SpringConfig.version(this.#config) !== this.#configVersion) {
+    // Detect config mutations (e.g. from config.assign on a shared instance)
+    if (this.#config._version !== this.#configVersion) {
       this.#state.configure(this.#config)
-      this.#configVersion = SpringConfig.version(this.#config)
+      this.#configVersion = this.#config._version
       this.#needsUpdate = true
     }
 

@@ -162,7 +162,7 @@ export class Spring {
         })
         this.#motion.configure(this.#config)
       } else {
-        SpringConfig.assign(this.#config, value)
+        this.#config.assign(value)
       }
       this.#motions.add(this.#motion)
     } else if (this.#ownsConfig) {
