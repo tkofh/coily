@@ -16,6 +16,8 @@ export class Motion {
   #needsUpdate = false
   #needsReset = false
   #timeRemaining = 0
+  /** Logical animation state — `start` fires only on the false→true edge, `stop` on true→false. */
+  #running: boolean
 
   readonly #emitter: Emitter
 
@@ -23,6 +25,7 @@ export class Motion {
     this.#config = config
     this.#state = new State(config, position, velocity)
     this.#emitter = new Emitter()
+    this.#running = !this.#state.isResting
 
     this.#updateSolver()
     this.#timeRemaining = this.#config.computeTimeRemaining(this.#state)
@@ -35,10 +38,7 @@ export class Motion {
   set position(value: number) {
     this.#state.position = value
     this.#needsReset = true
-
-    if (!this.#state.isResting) {
-      this.#emitter.emit('start')
-    }
+    this.#syncStart()
   }
 
   get velocity() {
@@ -48,6 +48,7 @@ export class Motion {
   set velocity(value: number) {
     this.#state.velocity = value
     this.#needsReset = true
+    this.#syncStart()
   }
 
   get timeRemaining() {
@@ -62,6 +63,8 @@ export class Motion {
     this.#config = config
     this.#state.configure(config)
     this.#needsUpdate = true
+    // A precision change can lift sub-threshold state above the resting threshold
+    this.#syncStart()
   }
 
   tick(dt: number, emit = true) {
@@ -89,10 +92,21 @@ export class Motion {
 
     if (emit) {
       this.#emitter.emit('update')
+    }
 
-      if (this.#state.isResting) {
+    if (this.#state.isResting) {
+      if (this.#running) {
+        this.#running = false
         this.#timeRemaining = 0
-        this.#emitter.emit('stop')
+        if (emit) {
+          this.#emitter.emit('stop')
+        }
+      }
+    } else if (!this.#running) {
+      // A sub-threshold nudge can grow past the resting threshold mid-tick
+      this.#running = true
+      if (emit) {
+        this.#emitter.emit('start')
       }
     }
   }
@@ -115,6 +129,15 @@ export class Motion {
     this.#criticallyDampedSolver = null
     this.#overdampedSolver = null
     this.#currentSolver = null
+  }
+
+  #syncStart() {
+    if (!this.#running && !this.#state.isResting) {
+      this.#running = true
+      this.#emitter.emit('start')
+    }
+    // The inverse transition (a mutation that parks the spring) is left to the
+    // next tick, so `stop` always arrives after that tick's `update`.
   }
 
   #updateSolver() {

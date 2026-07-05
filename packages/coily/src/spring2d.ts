@@ -183,8 +183,14 @@ export class Spring2D {
   }
 
   onStart(callback: () => void) {
-    const a = this.#x.onStart(callback)
-    const b = this.#y.onStart(callback)
+    // Fire only on the fully-resting → moving transition: when one axis
+    // starts, forward it only if the other axis hasn't already.
+    const a = this.#x.onStart(() => {
+      if (this.#y.isResting) callback()
+    })
+    const b = this.#y.onStart(() => {
+      if (this.#x.isResting) callback()
+    })
     return () => {
       a()
       b()

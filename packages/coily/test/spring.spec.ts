@@ -189,6 +189,104 @@ describe('Spring: events', () => {
     expect(onStart).toHaveBeenCalledOnce()
   })
 
+  test('onStart does not fire again when retargeted mid-flight', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
+
+    const onStart = vi.fn()
+    spring.onStart(onStart)
+
+    spring.target = 100
+    system.advance(1000 / 60)
+    spring.target = 200
+    system.advance(1000 / 60)
+    spring.target = 300
+    system.advance(1000 / 60)
+
+    expect(onStart).toHaveBeenCalledOnce()
+  })
+
+  test('onStart fires again after the spring comes to rest', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
+
+    const onStart = vi.fn()
+    spring.onStart(onStart)
+
+    spring.target = 100
+    for (let i = 0; i < 600; i++) {
+      system.advance(1000 / 60)
+      if (spring.isResting) break
+    }
+    expect(spring.isResting).toBe(true)
+
+    spring.target = 200
+    expect(onStart).toHaveBeenCalledTimes(2)
+  })
+
+  test('setting velocity on a resting spring fires onStart', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
+
+    const onStart = vi.fn()
+    spring.onStart(onStart)
+
+    spring.velocity = 500
+    expect(onStart).toHaveBeenCalledOnce()
+  })
+
+  test('start and stop alternate strictly across interruptions', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
+
+    const events: string[] = []
+    spring.onStart(() => events.push('start'))
+    spring.onStop(() => events.push('stop'))
+
+    // Two full animation cycles, with a mid-flight interruption in the first
+    spring.target = 100
+    for (let i = 0; i < 30; i++) system.advance(1000 / 60)
+    spring.target = 50
+    for (let i = 0; i < 600; i++) {
+      system.advance(1000 / 60)
+      if (spring.isResting) break
+    }
+    spring.target = 200
+    for (let i = 0; i < 600; i++) {
+      system.advance(1000 / 60)
+      if (spring.isResting) break
+    }
+
+    expect(events).toEqual(['start', 'stop', 'start', 'stop'])
+  })
+
+  test('jumpTo on a resting spring does not fire onStop', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
+
+    const onStop = vi.fn()
+    spring.onStop(onStop)
+
+    spring.jumpTo(100)
+    system.advance(1000 / 60)
+
+    expect(onStop).not.toHaveBeenCalled()
+  })
+
+  test('jumpTo interrupting a moving spring fires onStop', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
+
+    const onStop = vi.fn()
+    spring.onStop(onStop)
+
+    spring.target = 100
+    system.advance(1000 / 60)
+    spring.jumpTo(100)
+
+    expect(onStop).toHaveBeenCalledOnce()
+  })
+
   test('onStop fires when spring comes to rest', () => {
     const system = createSpringSystem()
     const spring = system.createSpring(

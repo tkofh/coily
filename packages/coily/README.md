@@ -61,7 +61,7 @@ Without a config, springs are critically damped with a ~500ms settle time.
 - `spring.jumpTo(v)` — snap to a value with no animation
 - `spring.config` — assign a new `SpringConfig`, or `null` to revert to the default (or the leader's, if following)
 - `spring.isResting`, `spring.timeRemaining` — settle state and estimated ms until rest
-- `spring.onUpdate(cb)` / `onStart(cb)` / `onStop(cb)` — subscribe; each returns an unsubscribe function
+- `spring.onUpdate(cb)` / `onStart(cb)` / `onStop(cb)` — subscribe; each returns an unsubscribe function. `start` fires when the spring leaves rest, `stop` when it settles — the two always alternate, and retargeting mid-flight fires neither
 - `spring.dispose()` — release the spring
 
 ### Chaining

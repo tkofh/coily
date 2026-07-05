@@ -213,10 +213,7 @@ describe('Spring2D: events', () => {
 
   test('onStop fires when both axes come to rest', () => {
     const system = createSpringSystem()
-    const spring = system.createSpring2D(
-      { target: { x: 0, y: 0 }, value: { x: 1, y: 1 } },
-      config,
-    )
+    const spring = system.createSpring2D({ target: { x: 0, y: 0 }, value: { x: 1, y: 1 } }, config)
 
     const onStop = vi.fn()
     spring.onStop(onStop)
@@ -240,6 +237,35 @@ describe('Spring2D: events', () => {
     spring.target = { x: 100, y: 100 }
 
     expect(onStart).toHaveBeenCalled()
+  })
+
+  test('onStart fires once when both axes start together', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring2D({ x: 0, y: 0 }, config)
+
+    const onStart = vi.fn()
+    spring.onStart(onStart)
+
+    spring.target = { x: 100, y: 100 }
+
+    expect(onStart).toHaveBeenCalledOnce()
+  })
+
+  test('onStart does not fire when a second axis wakes mid-motion', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring2D({ x: 0, y: 0 }, config)
+
+    const onStart = vi.fn()
+    spring.onStart(onStart)
+
+    // Only x moves
+    spring.target = { x: 100, y: 0 }
+    system.advance(1000 / 60)
+    expect(onStart).toHaveBeenCalledOnce()
+
+    // y joins in while x is still moving — the 2D spring never stopped
+    spring.target = { x: 100, y: 100 }
+    expect(onStart).toHaveBeenCalledOnce()
   })
 
   test('unsubscribe works', () => {
