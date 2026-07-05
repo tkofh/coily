@@ -206,7 +206,9 @@ export class Spring {
       const rawValue = this.#target + this.#motion.position
       this.#target = value
       this.#motion.position = rawValue - this.#target
-      this.#motion.tick(0)
+      // Re-baseline without emitting `update`: a retarget preserves the
+      // current value, so consumers hear about it on the next real tick.
+      this.#motion.tick(0, false)
     }
   }
 

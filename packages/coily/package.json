@@ -29,6 +29,7 @@
   "scripts": {
     "prepublishOnly": "tsdown",
     "build": "tsdown",
+    "check": "tsc -p .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "bench": "vitest bench --run",
@@ -45,6 +46,7 @@
     "fast-check": "^4.6.0",
     "happy-dom": "^20.8.4",
     "tsdown": "^0.21.3",
+    "typescript": "^5.9.3",
     "vitest": "^4.1.0",
     "vitest-browser-vue": "^2.1.0",
     "vue": "^3.5.30"
@@ -60,8 +62,5 @@
     "@nuxt/kit": {
       "optional": true
     }
-  },
-  "engines": {
-    "node": ">=24.10.0"
   }
 }

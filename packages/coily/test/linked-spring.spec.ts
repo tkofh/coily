@@ -254,6 +254,43 @@ describe('Spring: following', () => {
 
       expect(callback).toHaveBeenCalled()
     })
+
+    test('a follower emits exactly one update per frame', () => {
+      const system = createSpringSystem()
+      const leader = system.createSpring(0, config)
+      const follower = system.createSpring({ target: leader })
+      const callback = vi.fn()
+
+      follower.onUpdate(callback)
+      leader.target = 100
+
+      system.advance(1000 / 60)
+      expect(callback).toHaveBeenCalledOnce()
+
+      system.advance(1000 / 60)
+      expect(callback).toHaveBeenCalledTimes(2)
+    })
+
+    test('a follower woken mid-pass by its leader does not tick twice in one frame', () => {
+      const system = createSpringSystem()
+      // Construct a follower whose motion sits BEFORE its leader's in the
+      // motion set: it rests and is removed during the pass, then the leader's
+      // update re-adds it — it must not advance (or emit) twice that frame.
+      const follower = system.createSpring(0, config)
+      const leader = system.createSpring(0, config)
+
+      // Wake the follower with a sub-threshold displacement so it occupies a
+      // set slot ahead of the leader while rounding to "resting".
+      follower.value = 0.004
+      follower.target = leader
+      leader.target = 100
+
+      const callback = vi.fn()
+      follower.onUpdate(callback)
+
+      system.advance(1000 / 60)
+      expect(callback).toHaveBeenCalledOnce()
+    })
   })
 
   describe('dispose', () => {

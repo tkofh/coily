@@ -81,6 +81,33 @@ describe('Spring: input validation', () => {
       spring.config = defineSpring({ tension: 1, damping: 1, precision: -1 })
     }).toThrow('Precision must be greater than or equal to 0')
   })
+
+  // The following shapes are rejected by the types too — the casts simulate
+  // untyped (plain JS) callers, who should get a clear error instead of a
+  // silently ignored or misinterpreted parameter.
+  test('throws when mass accompanies tension, damping, and dampingRatio', () => {
+    expect(() =>
+      defineSpring({ mass: 2, tension: 170, damping: 26, dampingRatio: 1 } as never),
+    ).toThrow('mass is derived when tension, damping, and dampingRatio are all provided')
+  })
+
+  test('throws when mass accompanies a tension + duration config', () => {
+    expect(() =>
+      defineSpring({ mass: 2, tension: 170, dampingRatio: 1, duration: 500 } as never),
+    ).toThrow('mass is derived in duration-based configs with tension')
+  })
+
+  test('throws when mass accompanies a damping + duration config', () => {
+    expect(() =>
+      defineSpring({ mass: 2, damping: 26, dampingRatio: 1, duration: 500 } as never),
+    ).toThrow('mass is derived in duration-based configs with damping')
+  })
+
+  test('throws when both dampingRatio and bounce are provided', () => {
+    expect(() => defineSpring({ tension: 170, dampingRatio: 1, bounce: 0.2 } as never)).toThrow(
+      'Provide either dampingRatio or bounce, not both',
+    )
+  })
 })
 
 describe('Spring: default values', () => {
@@ -271,6 +298,21 @@ describe('Spring: events', () => {
     system.advance(1000 / 60)
 
     expect(onStop).not.toHaveBeenCalled()
+  })
+
+  test('retargeting does not emit update synchronously', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
+
+    const onUpdate = vi.fn()
+    spring.onUpdate(onUpdate)
+
+    // A retarget preserves the current value — no update until a real tick
+    spring.target = 100
+    expect(onUpdate).not.toHaveBeenCalled()
+
+    system.advance(1000 / 60)
+    expect(onUpdate).toHaveBeenCalledOnce()
   })
 
   test('jumpTo interrupting a moving spring fires onStop', () => {

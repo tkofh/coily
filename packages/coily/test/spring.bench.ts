@@ -140,6 +140,52 @@ describe('springs with listeners', () => {
   })
 })
 
+describe('linked spring chains', () => {
+  function createChain(system: ReturnType<typeof createSpringSystem>, length: number) {
+    const head = system.createSpring(0, defaultConfig)
+    const springs = [head]
+    let prev = head
+    for (let i = 1; i < length; i++) {
+      prev = system.createSpring({ target: prev })
+      springs.push(prev)
+    }
+    return springs
+  }
+
+  bench('64-spring chain: 60 frames of continuous motion', () => {
+    const system = createSpringSystem()
+    const springs = createChain(system, 64)
+    springs[0]!.target = 100
+    for (let i = 0; i < 60; i++) {
+      system.advance(FRAME)
+    }
+  })
+
+  bench('64-spring chain with onUpdate listeners: 60 frames', () => {
+    const system = createSpringSystem()
+    const springs = createChain(system, 64)
+    let sum = 0
+    for (const spring of springs) {
+      spring.onUpdate(() => {
+        sum += spring.value
+      })
+    }
+    springs[0]!.target = 100
+    for (let i = 0; i < 60; i++) {
+      system.advance(FRAME)
+    }
+  })
+
+  bench('settle 256-spring chain to rest', () => {
+    const system = createSpringSystem()
+    const springs = createChain(system, 256)
+    springs[0]!.target = 100
+    while (springs.some((s) => !s.isResting)) {
+      system.advance(FRAME)
+    }
+  })
+})
+
 describe('mixed operations', () => {
   bench('create, animate, dispose cycle (100 springs)', () => {
     const system = createSpringSystem()

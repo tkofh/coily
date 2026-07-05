@@ -5,6 +5,9 @@ import { CriticallyDampedSolver, OverdampedSolver, UnderdampedSolver } from './s
 import { invariant } from './util.ts'
 
 export class Motion {
+  /** Tick-pass stamp owned by MotionSet — prevents double-ticking a motion re-added mid-pass. */
+  _pass = 0
+
   #config: SpringConfig
   readonly #state: State
 
@@ -94,20 +97,18 @@ export class Motion {
       this.#emitter.emit('update')
     }
 
+    // `emit` gates only `update` — start/stop transitions always fire,
+    // otherwise a non-emitting tick could swallow one and break alternation.
     if (this.#state.isResting) {
       if (this.#running) {
         this.#running = false
         this.#timeRemaining = 0
-        if (emit) {
-          this.#emitter.emit('stop')
-        }
+        this.#emitter.emit('stop')
       }
     } else if (!this.#running) {
       // A sub-threshold nudge can grow past the resting threshold mid-tick
       this.#running = true
-      if (emit) {
-        this.#emitter.emit('start')
-      }
+      this.#emitter.emit('start')
     }
   }
 
