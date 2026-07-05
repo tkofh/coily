@@ -22,6 +22,7 @@ interface SpringLike<V> {
   velocity: V
   readonly timeRemaining: number
   readonly isResting: boolean
+  readonly settled: Promise<void>
   set config(value: SpringConfig | null)
   jumpTo(value: V): void
   dispose(): void
@@ -34,6 +35,8 @@ export interface ReactiveSpringRef<V> extends Ref<V> {
   readonly velocity: Ref<V>
   readonly timeRemaining: Ref<number>
   readonly isResting: Ref<boolean>
+  /** Resolves when the spring next comes to rest — see `Spring#settled`. */
+  readonly settled: Promise<void>
   readonly jumpTo: (value: V) => void
 }
 
@@ -140,6 +143,11 @@ export function createReactiveSpringRef<V>(
     jumpTo: (next: V) => spring.jumpTo(next),
   }) as ReactiveSpringRef<V>
 
+  // A getter so each access reflects the spring's current motion cycle —
+  // Object.assign would snapshot a single promise instance.
+  Object.defineProperty(ref, 'settled', {
+    get: () => spring.settled,
+  })
   Object.defineProperty(ref, instanceKey, { value: spring })
 
   return ref

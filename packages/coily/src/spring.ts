@@ -31,6 +31,8 @@ function normalizeTarget(
   return null
 }
 
+const RESOLVED = Promise.resolve()
+
 export class Spring {
   #target: number
   /** Explicitly assigned config, or `null` to inherit from the leader (or the default). */
@@ -44,6 +46,10 @@ export class Spring {
   #leader: Spring | null = null
   #offset = 0
   #unsubLeader: (() => void) | null = null
+
+  #settled: Promise<void> | null = null
+  #resolveSettled: (() => void) | null = null
+  #disposed = false
 
   constructor(motions: MotionSet, position: SpringPosition, config?: SpringConfig) {
     this.#motions = motions
@@ -160,6 +166,28 @@ export class Spring {
     return this.#motion.isResting
   }
 
+  /**
+   * Resolves when the spring next comes to rest — immediately if it is
+   * already resting. The same promise is returned for the duration of a
+   * motion cycle, and retargeting mid-flight extends the wait: it resolves
+   * only at true rest. Disposing the spring resolves a pending promise.
+   */
+  get settled(): Promise<void> {
+    if (this.#disposed || this.#motion.isResting) return RESOLVED
+
+    this.#settled ??= new Promise((resolve) => {
+      this.#resolveSettled = resolve
+      const unsubscribe = this.onStop(() => {
+        unsubscribe()
+        this.#settled = null
+        this.#resolveSettled = null
+        resolve()
+      })
+    })
+
+    return this.#settled
+  }
+
   jumpTo(value: number) {
     this.#target = value
     this.#motion.position = 0
@@ -168,6 +196,14 @@ export class Spring {
   }
 
   dispose() {
+    this.#disposed = true
+
+    if (this.#resolveSettled) {
+      this.#resolveSettled()
+      this.#settled = null
+      this.#resolveSettled = null
+    }
+
     if (this.#unsubLeader) {
       this.#unsubLeader()
       this.#unsubLeader = null

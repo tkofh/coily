@@ -331,3 +331,55 @@ describe('Spring2D: value and velocity setters', () => {
     expect(spring.value.y).not.toBe(0)
   })
 })
+
+describe('Spring2D: settled promise', () => {
+  const flush = () => new Promise((resolve) => setTimeout(resolve))
+
+  test('resolves immediately when already resting', async () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring2D({ x: 0, y: 0 }, config)
+
+    await expect(spring.settled).resolves.toBeUndefined()
+  })
+
+  test('resolves only when both axes have come to rest', async () => {
+    const system = createSpringSystem()
+    // y travels 1000x farther, so x settles well before y
+    const spring = system.createSpring2D(
+      { target: { x: 1, y: 1000 }, value: { x: 0, y: 0 } },
+      config,
+    )
+
+    let resolved = false
+    spring.settled.then(() => {
+      resolved = true
+    })
+
+    // One second in: x has settled, y is still traveling
+    for (let i = 0; i < 60; i++) system.advance(1000 / 60)
+    await flush()
+    expect(spring.value.x).toBe(1)
+    expect(spring.isResting).toBe(false)
+    expect(resolved).toBe(false)
+
+    for (let i = 0; i < 1200; i++) {
+      system.advance(1000 / 60)
+      if (spring.isResting) break
+    }
+    await flush()
+    expect(resolved).toBe(true)
+  })
+
+  test('dispose resolves a pending promise', async () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring2D(
+      { target: { x: 100, y: 100 }, value: { x: 0, y: 0 } },
+      config,
+    )
+
+    const settled = spring.settled
+    spring.dispose()
+
+    await expect(settled).resolves.toBeUndefined()
+  })
+})

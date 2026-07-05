@@ -43,11 +43,17 @@ function toScalarPos(target: SpringTarget, value: number | undefined): SpringPos
   return { target, value }
 }
 
+const RESOLVED = Promise.resolve()
+
 export class Spring2D {
   readonly #x: Spring
   readonly #y: Spring
   readonly #value: Vector2 = { x: 0, y: 0 }
   readonly #velocity: Vector2 = { x: 0, y: 0 }
+
+  #settled: Promise<void> | null = null
+  #resolveSettled: (() => void) | null = null
+  #disposed = false
 
   constructor(motions: MotionSet, position: Spring2DPosition, config?: SpringConfig) {
     let xPos: SpringPosition
@@ -159,6 +165,28 @@ export class Spring2D {
     return this.#x.isResting && this.#y.isResting
   }
 
+  /**
+   * Resolves when both axes next come to rest — immediately if already
+   * resting. The same promise is returned for the duration of a motion
+   * cycle, and retargeting mid-flight extends the wait: it resolves only
+   * at true rest. Disposing the spring resolves a pending promise.
+   */
+  get settled(): Promise<void> {
+    if (this.#disposed || this.isResting) return RESOLVED
+
+    this.#settled ??= new Promise((resolve) => {
+      this.#resolveSettled = resolve
+      const unsubscribe = this.onStop(() => {
+        unsubscribe()
+        this.#settled = null
+        this.#resolveSettled = null
+        resolve()
+      })
+    })
+
+    return this.#settled
+  }
+
   // ── Lifecycle ───────────────────────────────────────────────────
 
   jumpTo(value: Vector2) {
@@ -167,6 +195,14 @@ export class Spring2D {
   }
 
   dispose() {
+    this.#disposed = true
+
+    if (this.#resolveSettled) {
+      this.#resolveSettled()
+      this.#settled = null
+      this.#resolveSettled = null
+    }
+
     this.#x.dispose()
     this.#y.dispose()
   }

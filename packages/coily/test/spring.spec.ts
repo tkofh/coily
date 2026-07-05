@@ -613,3 +613,84 @@ describe('Spring: config value semantics', () => {
     expect(spring.tension).toBe(tensionBefore)
   })
 })
+
+describe('Spring: settled promise', () => {
+  const flush = () => new Promise((resolve) => setTimeout(resolve))
+
+  test('resolves immediately when already resting', async () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
+
+    await expect(spring.settled).resolves.toBeUndefined()
+  })
+
+  test('returns the same promise instance while moving', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
+
+    spring.target = 100
+    expect(spring.settled).toBe(spring.settled)
+  })
+
+  test('stays pending across retargets and resolves at true rest', async () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
+
+    spring.target = 100
+    let resolved = false
+    spring.settled.then(() => {
+      resolved = true
+    })
+
+    for (let i = 0; i < 10; i++) system.advance(1000 / 60)
+    spring.target = 200
+    for (let i = 0; i < 10; i++) system.advance(1000 / 60)
+    await flush()
+    expect(resolved).toBe(false)
+
+    for (let i = 0; i < 600; i++) {
+      system.advance(1000 / 60)
+      if (spring.isResting) break
+    }
+    await flush()
+    expect(resolved).toBe(true)
+  })
+
+  test('a new motion cycle gets a new promise', async () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
+
+    spring.target = 100
+    const first = spring.settled
+    for (let i = 0; i < 600; i++) {
+      system.advance(1000 / 60)
+      if (spring.isResting) break
+    }
+    await flush()
+
+    spring.target = 200
+    expect(spring.settled).not.toBe(first)
+  })
+
+  test('jumpTo resolves a pending promise', async () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
+
+    spring.target = 100
+    const settled = spring.settled
+
+    spring.jumpTo(100)
+    await expect(settled).resolves.toBeUndefined()
+  })
+
+  test('dispose resolves a pending promise', async () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
+
+    spring.target = 100
+    const settled = spring.settled
+
+    spring.dispose()
+    await expect(settled).resolves.toBeUndefined()
+  })
+})
