@@ -200,6 +200,45 @@ describe('Spring: following', () => {
       follower.config = null
       expect(follower.tension).toBe(leader.tension)
     })
+
+    test('config changes propagate through a chain of inheriting followers', () => {
+      const system = createSpringSystem()
+      const leader = system.createSpring(0, config)
+      const middle = system.createSpring({ target: leader })
+      const tail = system.createSpring({ target: middle })
+
+      leader.config = defineSpring({ mass: 1, tension: 300, damping: 30 })
+
+      expect(middle.tension).toBe(300)
+      expect(tail.tension).toBe(300)
+    })
+
+    test('an overriding follower stops propagation to itself but keeps its own followers', () => {
+      const system = createSpringSystem()
+      const leader = system.createSpring(0, config)
+      const middle = system.createSpring(
+        { target: leader },
+        defineSpring({ mass: 1, tension: 400, damping: 20 }),
+      )
+      const tail = system.createSpring({ target: middle })
+
+      leader.config = defineSpring({ mass: 1, tension: 300, damping: 30 })
+
+      expect(middle.tension).toBe(400)
+      expect(tail.tension).toBe(400)
+    })
+
+    test('unfollowing keeps the inherited config but stops tracking the ex-leader', () => {
+      const system = createSpringSystem()
+      const leader = system.createSpring(0, config)
+      const follower = system.createSpring({ target: leader })
+
+      follower.target = 50
+      expect(follower.tension).toBe(config.tension)
+
+      leader.config = defineSpring({ mass: 1, tension: 999, damping: 99 })
+      expect(follower.tension).toBe(config.tension)
+    })
   })
 
   describe('events', () => {
@@ -249,6 +288,25 @@ describe('Spring: following', () => {
 
       // Follower keeps its position
       expect(follower.value).toBe(posBeforeDispose)
+    })
+
+    test('leader dispose detaches followers, which stay usable', () => {
+      const system = createSpringSystem()
+      const leader = system.createSpring(0, config)
+      const follower = system.createSpring({ target: leader })
+
+      leader.dispose()
+
+      // Follower keeps the inherited config and can be retargeted normally
+      expect(follower.tension).toBe(config.tension)
+      follower.target = 100
+
+      for (let i = 0; i < 600; i++) {
+        system.advance(1000 / 60)
+        if (follower.isResting) break
+      }
+
+      expect(follower.value).toBeCloseTo(100, 0)
     })
   })
 })

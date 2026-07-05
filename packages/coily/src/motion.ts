@@ -15,7 +15,6 @@ export class Motion {
 
   #needsUpdate = false
   #needsReset = false
-  #configVersion = 0
   #timeRemaining = 0
 
   readonly #emitter: Emitter
@@ -32,7 +31,6 @@ export class Motion {
   get position() {
     return this.#state.position
   }
-
 
   set position(value: number) {
     this.#state.position = value
@@ -63,19 +61,11 @@ export class Motion {
   configure(config: SpringConfig) {
     this.#config = config
     this.#state.configure(config)
-    this.#configVersion = config._version
     this.#needsUpdate = true
   }
 
   tick(dt: number, emit = true) {
     invariant(this.#currentSolver, 'Cannot tick a disposed motion')
-
-    // Detect config mutations (e.g. from config.assign on a shared instance)
-    if (this.#config._version !== this.#configVersion) {
-      this.#state.configure(this.#config)
-      this.#configVersion = this.#config._version
-      this.#needsUpdate = true
-    }
 
     const needsTimeRemaining = this.#needsUpdate || this.#needsReset
 

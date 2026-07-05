@@ -45,9 +45,9 @@ describe('Spring: input validation', () => {
   })
 
   test('throws when precision is negative', () => {
-    expect(() =>
-      defineSpring({ mass: 1, tension: 1, damping: 1, precision: -1 }),
-    ).toThrow('Precision must be greater than or equal to 0')
+    expect(() => defineSpring({ mass: 1, tension: 1, damping: 1, precision: -1 })).toThrow(
+      'Precision must be greater than or equal to 0',
+    )
   })
 
   test('throws on config set with invalid mass', () => {
@@ -417,5 +417,59 @@ describe('Spring: dispose', () => {
     system.advance(1000 / 60)
     // onUpdate should not fire again — emitter was cleared
     expect(onUpdate).toHaveBeenCalledOnce()
+  })
+})
+
+describe('Spring: config value semantics', () => {
+  test('assigning a config to a default-config spring does not affect other default-config springs', () => {
+    const system = createSpringSystem()
+    const a = system.createSpring(0)
+    const b = system.createSpring(0)
+    const tensionBefore = b.tension
+
+    a.config = defineSpring({ tension: 500, damping: 5 })
+
+    expect(a.tension).toBe(500)
+    expect(b.tension).toBe(tensionBefore)
+  })
+
+  test('springs constructed with a shared config instance are not coupled', () => {
+    const system = createSpringSystem()
+    const shared = defineSpring({ mass: 1, tension: 100, damping: 10 })
+    const a = system.createSpring(0, shared)
+    const b = system.createSpring(0, shared)
+
+    a.config = defineSpring({ mass: 1, tension: 300, damping: 10 })
+
+    expect(a.tension).toBe(300)
+    expect(b.tension).toBe(100)
+    expect(shared.tension).toBe(100)
+  })
+
+  test('assigning a config does not mutate the assigned instance', () => {
+    const system = createSpringSystem()
+    const original = defineSpring({ mass: 1, tension: 100, damping: 10 })
+    const spring = system.createSpring(0, original)
+
+    spring.config = defineSpring({ mass: 1, tension: 300, damping: 10 })
+    spring.config = null
+
+    expect(original.tension).toBe(100)
+  })
+
+  test('config instances are frozen', () => {
+    const config = defineSpring({ mass: 1, tension: 100, damping: 10 })
+
+    expect(Object.isFrozen(config)).toBe(true)
+  })
+
+  test('setting config to null on a default-config spring keeps the default', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(0)
+    const tensionBefore = spring.tension
+
+    spring.config = null
+
+    expect(spring.tension).toBe(tensionBefore)
   })
 })

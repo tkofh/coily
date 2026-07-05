@@ -33,13 +33,16 @@ function normalizeTarget(
 
 export class Spring {
   #target: number
-  #config: SpringConfig
+  /** Explicitly assigned config, or `null` to inherit from the leader (or the default). */
+  #override: SpringConfig | null
+  /** Cached effective config — always what the motion is currently using. */
+  #resolved: SpringConfig
   readonly #motion: Motion
   readonly #motions: MotionSet
+  readonly #followers = new Set<Spring>()
 
   #leader: Spring | null = null
   #offset = 0
-  #ownsConfig: boolean
   #unsubLeader: (() => void) | null = null
 
   constructor(motions: MotionSet, position: SpringPosition, config?: SpringConfig) {
@@ -64,17 +67,11 @@ export class Spring {
       }
     }
 
-    const hasOverride = config !== undefined
-    this.#ownsConfig = hasOverride || !normalized
-
-    if (normalized && !hasOverride) {
-      this.#config = normalized.spring.#config
-    } else {
-      this.#config = config ?? SpringConfig.default
-    }
+    this.#override = config ?? null
+    this.#resolved = config ?? (normalized ? normalized.spring.#resolved : SpringConfig.default)
 
     this.#target = numericTarget
-    this.#motion = new Motion(this.#config, value - numericTarget, 0)
+    this.#motion = new Motion(this.#resolved, value - numericTarget, 0)
 
     if (!this.#motion.isResting) {
       this.#motions.add(this.#motion)
@@ -83,6 +80,7 @@ export class Spring {
     if (normalized) {
       this.#leader = normalized.spring
       this.#offset = normalized.offset
+      normalized.spring.#followers.add(this)
       this.#unsubLeader = normalized.spring.onUpdate(() => {
         this.#setTarget(this.#leader!.#target + this.#leader!.#motion.position + this.#offset)
       })
@@ -126,51 +124,32 @@ export class Spring {
   }
 
   get config() {
-    return this.#config
+    return this.#resolved
   }
 
   get mass() {
-    return this.#config.mass
+    return this.#resolved.mass
   }
 
   get tension() {
-    return this.#config.tension
+    return this.#resolved.tension
   }
 
   get damping() {
-    return this.#config.damping
+    return this.#resolved.damping
   }
 
   get dampingRatio() {
-    return this.#config.dampingRatio
+    return this.#resolved.dampingRatio
   }
 
   get precision() {
-    return this.#config.precision
+    return this.#resolved.precision
   }
 
   set config(value: SpringConfig | null) {
-    if (value) {
-      if (this.#leader && !this.#ownsConfig) {
-        // Fork: create own config so we don't mutate the leader's
-        this.#ownsConfig = true
-        this.#config = new SpringConfig({
-          tension: value.tension,
-          damping: value.damping,
-          mass: value.mass,
-          precision: value.precision,
-        })
-        this.#motion.configure(this.#config)
-      } else {
-        this.#config.assign(value)
-      }
-      this.#motions.add(this.#motion)
-    } else if (this.#ownsConfig) {
-      this.#ownsConfig = false
-      this.#config = this.#leader ? this.#leader.#config : SpringConfig.default
-      this.#motion.configure(this.#config)
-      this.#motions.add(this.#motion)
-    }
+    this.#override = value
+    this.#applyConfig(value ?? (this.#leader ? this.#leader.#resolved : SpringConfig.default))
   }
 
   get timeRemaining() {
@@ -193,6 +172,18 @@ export class Spring {
       this.#unsubLeader()
       this.#unsubLeader = null
     }
+    if (this.#leader) {
+      this.#leader.#followers.delete(this)
+      this.#leader = null
+    }
+
+    // Detach followers so they don't reference a disposed spring. Each keeps
+    // its current config and target, and can be retargeted normally.
+    // Set iteration tolerates each follower removing itself as it detaches.
+    for (const follower of this.#followers) {
+      follower.#unfollow()
+    }
+
     this.#motions.remove(this.#motion)
     this.#motion.dispose()
   }
@@ -222,14 +213,15 @@ export class Spring {
   #follow(leader: Spring, offset: number) {
     if (this.#unsubLeader) {
       this.#unsubLeader()
+      this.#leader!.#followers.delete(this)
     }
 
     this.#leader = leader
     this.#offset = offset
+    leader.#followers.add(this)
 
-    if (!this.#ownsConfig) {
-      this.#config = leader.#config
-      this.#motion.configure(this.#config)
+    if (this.#override === null) {
+      this.#applyConfig(leader.#resolved)
     }
 
     this.#unsubLeader = leader.onUpdate(() => {
@@ -244,18 +236,28 @@ export class Spring {
 
     this.#unsubLeader!()
     this.#unsubLeader = null
+    this.#leader.#followers.delete(this)
     this.#leader = null
     this.#offset = 0
 
-    if (!this.#ownsConfig) {
-      this.#ownsConfig = true
-      this.#config = new SpringConfig({
-        tension: this.#config.tension,
-        damping: this.#config.damping,
-        mass: this.#config.mass,
-        precision: this.#config.precision,
-      })
-      this.#motion.configure(this.#config)
+    if (this.#override === null) {
+      // Snapshot the inherited config so the spring keeps behaving the same,
+      // decoupled from the ex-leader's future config changes.
+      this.#override = this.#resolved
+    }
+  }
+
+  #applyConfig(next: SpringConfig) {
+    if (this.#resolved === next) return
+
+    this.#resolved = next
+    this.#motion.configure(next)
+    this.#motions.add(this.#motion)
+
+    for (const follower of this.#followers) {
+      if (follower.#override === null) {
+        follower.#applyConfig(next)
+      }
     }
   }
 }
