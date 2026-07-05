@@ -135,4 +135,81 @@ describe('useSpring', () => {
     const { spring } = mountSpring(() => 25)
     expect(spring.value).toBe(25)
   })
+
+  test('writing to the ref displaces the spring', async () => {
+    const target = ref(0)
+    const { spring, system } = mountSpring(target)
+
+    spring.value = 50
+    expect(spring.value).toBe(50)
+    expect(spring.isResting.value).toBe(false)
+
+    for (let i = 0; i < 500; i++) system.advance(16)
+    expect(spring.value).toBe(0)
+  })
+
+  test('an array of targets returns one SpringRef each', () => {
+    const system = createSpringSystem()
+    let springs!: readonly SpringRef[]
+    mount(
+      defineComponent({
+        setup() {
+          springs = useSpring([0, () => 10, ref(20)])
+          return {}
+        },
+        render: () => h('div'),
+      }),
+      { global: { provide: { [SpringSystemKey as symbol]: system } } },
+    )
+
+    expect(springs).toHaveLength(3)
+    expect(springs.map((s) => s.value)).toEqual([0, 10, 20])
+  })
+
+  test('a SpringRef target links the springs', async () => {
+    const system = createSpringSystem()
+    const target = ref(0)
+    let leader!: SpringRef
+    let follower!: SpringRef
+    mount(
+      defineComponent({
+        setup() {
+          leader = useSpring(target)
+          follower = useSpring(leader)
+          return {}
+        },
+        render: () => h('div'),
+      }),
+      { global: { provide: { [SpringSystemKey as symbol]: system } } },
+    )
+
+    target.value = 100
+    await nextTick()
+
+    for (let i = 0; i < 10; i++) system.advance(16)
+    expect(follower.value).toBeGreaterThan(0)
+    expect(follower.value).toBeLessThan(100)
+
+    for (let i = 0; i < 1000; i++) {
+      system.advance(16)
+      if (leader.isResting.value && follower.isResting.value) break
+    }
+    expect(follower.value).toBe(100)
+  })
+
+  test('disposing the component disposes the spring', async () => {
+    const target = ref(0)
+    const { wrapper, spring, system } = mountSpring(target)
+
+    target.value = 100
+    await nextTick()
+    system.advance(16)
+
+    wrapper.unmount()
+
+    // A disposed spring's motion is removed — advancing must not move it
+    const valueAtUnmount = spring.value
+    system.advance(16)
+    expect(spring.value).toBe(valueAtUnmount)
+  })
 })
