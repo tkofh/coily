@@ -694,3 +694,31 @@ describe('Spring: settled promise', () => {
     await expect(settled).resolves.toBeUndefined()
   })
 })
+
+describe('Spring: dispose', () => {
+  test('onDispose fires when the spring is disposed', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
+
+    const onDispose = vi.fn()
+    spring.onDispose(onDispose)
+
+    spring.dispose()
+    expect(onDispose).toHaveBeenCalledOnce()
+  })
+
+  test('double dispose is a no-op', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(
+      { target: 100, value: 0 },
+      defineSpring({ mass: 1, tension: 170, damping: 26 }),
+    )
+
+    const onDispose = vi.fn()
+    spring.onDispose(onDispose)
+
+    spring.dispose()
+    expect(() => spring.dispose()).not.toThrow()
+    expect(onDispose).toHaveBeenCalledOnce()
+  })
+})

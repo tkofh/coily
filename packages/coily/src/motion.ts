@@ -131,7 +131,12 @@ export class Motion {
     return this.#emitter.on('stop', callback)
   }
 
+  onDispose(callback: () => void) {
+    return this.#emitter.on('dispose', callback)
+  }
+
   dispose() {
+    this.#emitter.emit('dispose')
     this.#emitter.clear()
     this.#underdampedSolver = null
     this.#criticallyDampedSolver = null

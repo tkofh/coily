@@ -62,8 +62,8 @@ Without a config, springs are critically damped with a ~500ms settle time.
 - `spring.config` — assign a new `SpringConfig`, or `null` to revert to the default (or the leader's, if following)
 - `spring.isResting`, `spring.timeRemaining` — settle state and estimated ms until rest
 - `spring.settled` — a promise that resolves when the spring next comes to rest (immediately if already resting). Retargeting mid-flight extends the wait; disposing resolves it. `await spring.settled` to sequence animations
-- `spring.onUpdate(cb)` / `onStart(cb)` / `onStop(cb)` — subscribe; each returns an unsubscribe function. `start` fires when the spring leaves rest, `stop` when it settles — the two always alternate, and retargeting mid-flight fires neither
-- `spring.dispose()` — release the spring
+- `spring.onUpdate(cb)` / `onStart(cb)` / `onStop(cb)` / `onDispose(cb)` — subscribe; each returns an unsubscribe function. `start` fires when the spring leaves rest, `stop` when it settles — the two always alternate, and retargeting mid-flight fires neither
+- `spring.dispose()` — release the spring (calling it twice is a no-op)
 
 ### Chaining
 
@@ -89,16 +89,15 @@ Control it with the `reducedMotion` system option: `'user'` (default — follow 
 
 ## Vue
 
-Provide a spring system once, near the root of your app:
+Call `useSpringSystem()` once near the root of your app. It returns the spring system provided by this component or an ancestor; if none exists, it creates one, provides it to descendants, and starts/stops it with the component lifecycle. It's idempotent, and options apply only when a system is actually created:
 
 ```ts
 import { useSpringSystem } from 'coily/vue'
 
-// in setup(): creates a system, provides it, starts it on mount
-useSpringSystem()
+const system = useSpringSystem() // e.g. read system.reducedMotion to gate decorative effects
 ```
 
-(Or `provideSpringSystem(system, app)` to install an existing system app-wide.)
+(`provideSpringSystem(system, app?)` remains for plugging in a system you created yourself — mostly useful in tests. You manage `start()`/`stop()` for it.)
 
 Then animate anywhere below:
 
@@ -119,6 +118,8 @@ const x = useSpring(target, { duration: 500, bounce: 0.3 })
 
 There's also a renderless `<SpringValue :target="n">` component exposing `{ value, velocity, isResting, timeRemaining, jumpTo }` through its default slot.
 
+For imperative work — a dynamic set of springs created and disposed at arbitrary times (particles, per-item effects) — `useSpringPool()` returns `createSpring`/`createSpring2D` bound to the provided system. Every spring created through the pool is disposed automatically when the component's scope is torn down, so leaked motions are structurally impossible; disposing a spring manually before that is fine.
+
 ## Nuxt
 
 ```ts
@@ -131,7 +132,7 @@ export default defineNuxtConfig({
 })
 ```
 
-The module provides a spring system for the whole app (started on the client), auto-imports `useSpring`, `useSpring2D`, and `defineSpring`, and registers the `SpringValue` component.
+The module provides a spring system for the whole app (started on the client), auto-imports `useSpring`, `useSpring2D`, `useSpringSystem`, `useSpringPool`, and `defineSpring`, and registers the `SpringValue` component.
 
 ## Timing
 

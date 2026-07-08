@@ -212,6 +212,7 @@ export class Spring {
   }
 
   dispose() {
+    if (this.#disposed) return
     this.#disposed = true
 
     if (this.#resolveSettled) {
@@ -250,6 +251,10 @@ export class Spring {
 
   onStop(callback: () => void) {
     return this.#motion.onStop(callback)
+  }
+
+  onDispose(callback: () => void) {
+    return this.#motion.onDispose(callback)
   }
 
   #setTarget(value: number) {

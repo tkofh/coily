@@ -5,13 +5,13 @@ import {
   computed,
   customRef,
   getCurrentScope,
-  inject,
   onScopeDispose,
   toValue,
   watchSyncEffect,
 } from 'vue'
 import { SpringConfig, type SpringOptions } from '../config.ts'
 import type { SpringSystem } from '../system.ts'
+import { injectLocal } from './local.ts'
 import { SpringSystemKey } from './system.ts'
 
 export type UseSpringOptions = MaybeRefOrGetter<SpringOptions | SpringConfig | undefined>
@@ -41,10 +41,12 @@ export interface ReactiveSpringRef<V> extends Ref<V> {
 }
 
 export function injectSpringSystem(): SpringSystem {
-  const system = inject(SpringSystemKey)
+  const system = injectLocal(SpringSystemKey)
 
   if (!system) {
-    throw new Error('No SpringSystem found')
+    throw new Error(
+      'No SpringSystem found — install the coily/nuxt module or call useSpringSystem() in an ancestor component',
+    )
   }
 
   return system

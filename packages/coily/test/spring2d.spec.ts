@@ -383,3 +383,28 @@ describe('Spring2D: settled promise', () => {
     await expect(settled).resolves.toBeUndefined()
   })
 })
+
+describe('Spring2D: dispose', () => {
+  test('onDispose fires once for both axes', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring2D({ x: 0, y: 0 }, config)
+
+    const onDispose = vi.fn()
+    spring.onDispose(onDispose)
+
+    spring.dispose()
+    expect(onDispose).toHaveBeenCalledOnce()
+  })
+
+  test('double dispose is a no-op', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring2D({ x: 0, y: 0 }, config)
+
+    const onDispose = vi.fn()
+    spring.onDispose(onDispose)
+
+    spring.dispose()
+    expect(() => spring.dispose()).not.toThrow()
+    expect(onDispose).toHaveBeenCalledOnce()
+  })
+})

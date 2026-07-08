@@ -195,6 +195,7 @@ export class Spring2D {
   }
 
   dispose() {
+    if (this.#disposed) return
     this.#disposed = true
 
     if (this.#resolveSettled) {
@@ -243,5 +244,11 @@ export class Spring2D {
       a()
       b()
     }
+  }
+
+  onDispose(callback: () => void) {
+    // Both axes dispose together and only through this class, so one axis
+    // is a sufficient signal.
+    return this.#x.onDispose(callback)
   }
 }
