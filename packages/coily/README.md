@@ -81,6 +81,12 @@ Followers inherit the leader's config unless given their own. Assigning a number
 
 `system.createSpring2D({ x: 0, y: 0 })` runs one spring per axis behind a single `Spring`-like API that takes and returns `{ x, y }` vectors — including chaining onto other 2D springs.
 
+## Reduced motion
+
+Coily respects `prefers-reduced-motion` by default. When it's active, springs snap to their targets instead of animating: retargets and value writes apply instantly, velocity impulses are ignored, and springs created displaced start at their target. Events stay coherent — one `update` per change, no `start`/`stop`, and `settled` resolves immediately — so code written against the animated path keeps working.
+
+Control it with the `reducedMotion` system option: `'user'` (default — follow the OS setting, including live changes, which finish in-flight animations instantly), `'always'`, or `'never'`. Read `system.reducedMotion` to gate purely decorative effects (particles, flourishes) in your own code.
+
 ## Vue
 
 Provide a spring system once, near the root of your app:
@@ -118,7 +124,10 @@ There's also a renderless `<SpringValue :target="n">` component exposing `{ valu
 ```ts
 export default defineNuxtConfig({
   modules: ['coily/nuxt'],
-  coily: { debug: false }, // debug logs active motion counts
+  coily: {
+    debug: false, // debug logs active motion counts
+    reducedMotion: 'user', // 'user' | 'always' | 'never'
+  },
 })
 ```
 

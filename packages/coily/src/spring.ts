@@ -73,6 +73,12 @@ export class Spring {
       }
     }
 
+    // Reduced motion: the suppressed animation would end at the target, so
+    // the spring is simply created there.
+    if (motions.reduced) {
+      value = numericTarget
+    }
+
     this.#override = config ?? null
     this.#resolved = config ?? (normalized ? normalized.spring.#resolved : SpringConfig.default)
 
@@ -112,6 +118,15 @@ export class Spring {
   }
 
   set value(value: number) {
+    if (this.#motions.reduced) {
+      // Honoring the written position is not motion — what gets skipped is
+      // the spring-back animation, so the value becomes the new resting point.
+      if (value !== this.value) {
+        this.jumpTo(value)
+      }
+      return
+    }
+
     const position = value - this.#target
     if (position !== this.#motion.position) {
       this.#motions.add(this.#motion)
@@ -125,6 +140,9 @@ export class Spring {
   }
 
   set velocity(value: number) {
+    // A velocity impulse is pure motion — ignored under reduced motion.
+    if (this.#motions.reduced) return
+
     this.#motions.add(this.#motion)
     this.#motion.velocity = value
   }
@@ -190,9 +208,7 @@ export class Spring {
 
   jumpTo(value: number) {
     this.#target = value
-    this.#motion.position = 0
-    this.#motion.velocity = 0
-    this.#motion.tick(0)
+    this.#motion.finish()
   }
 
   dispose() {
@@ -238,6 +254,11 @@ export class Spring {
 
   #setTarget(value: number) {
     if (value !== this.#target) {
+      if (this.#motions.reduced) {
+        this.jumpTo(value)
+        return
+      }
+
       this.#motions.add(this.#motion)
       const rawValue = this.#target + this.#motion.position
       this.#target = value

@@ -112,6 +112,13 @@ export class Motion {
     }
   }
 
+  /** Snap to rest at the target (zero displacement and velocity). */
+  finish() {
+    this.position = 0
+    this.velocity = 0
+    this.tick(0)
+  }
+
   onUpdate(callback: () => void) {
     return this.#emitter.on('update', callback)
   }

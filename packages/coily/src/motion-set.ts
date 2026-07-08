@@ -1,6 +1,9 @@
 import type { Motion } from './motion.ts'
 
 export class MotionSet {
+  /** When true, springs snap to their targets instead of animating. */
+  reduced = false
+
   readonly #motions = new Set<Motion>()
   readonly #debug: boolean
   #lastSize = 0
@@ -16,6 +19,14 @@ export class MotionSet {
 
   remove(motion: Motion) {
     this.#motions.delete(motion)
+  }
+
+  /** Snap every active motion to rest at its target. */
+  finishAll() {
+    for (const motion of this.#motions) {
+      motion.finish()
+      this.#motions.delete(motion)
+    }
   }
 
   tick(dt: number) {

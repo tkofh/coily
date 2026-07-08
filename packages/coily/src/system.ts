@@ -6,6 +6,20 @@ import { Ticker, type TickerOptions } from './ticker.ts'
 
 export interface SpringSystemOptions extends TickerOptions {
   debug?: boolean | undefined
+  /**
+   * How the system responds to the user's reduced-motion preference. When
+   * active, springs snap to their targets instead of animating: retargets and
+   * value writes apply instantly, velocity impulses are ignored, and springs
+   * created displaced start at their target.
+   *
+   * - `'user'` — follow `prefers-reduced-motion` and react to live changes
+   *   (inactive where `matchMedia` is unavailable, e.g. during SSR)
+   * - `'always'` — reduced motion is always active
+   * - `'never'` — reduced motion is never active
+   *
+   * @default 'user'
+   */
+  reducedMotion?: 'user' | 'always' | 'never' | undefined
 }
 
 class SpringSystemImpl implements SpringSystem {
@@ -15,6 +29,33 @@ class SpringSystemImpl implements SpringSystem {
   constructor(options?: SpringSystemOptions) {
     this.#motion = new MotionSet(options?.debug)
     this.#ticker = new Ticker(this.#motion, options)
+
+    const mode = options?.reducedMotion ?? 'user'
+    if (mode === 'always') {
+      this.#motion.reduced = true
+    } else if (
+      mode === 'user' &&
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function'
+    ) {
+      const query = window.matchMedia('(prefers-reduced-motion: reduce)')
+      this.#applyReducedMotion(query.matches)
+      query.addEventListener('change', (event) => {
+        this.#applyReducedMotion(event.matches)
+      })
+    }
+  }
+
+  #applyReducedMotion(reduced: boolean) {
+    this.#motion.reduced = reduced
+    if (reduced) {
+      // Complete in-flight animations instantly rather than letting them play out
+      this.#motion.finishAll()
+    }
+  }
+
+  get reducedMotion() {
+    return this.#motion.reduced
   }
 
   createSpring(position: SpringPosition, config?: SpringConfig): Spring {
@@ -78,6 +119,12 @@ export interface SpringSystem {
   stop(): void
   /** Whether the animation loop is currently running. */
   readonly running: boolean
+  /**
+   * Whether reduced motion is currently active — see
+   * `SpringSystemOptions.reducedMotion`. Useful for gating purely decorative
+   * effects (particles, flourishes) in application code.
+   */
+  readonly reducedMotion: boolean
 
   fps: number
   lagThreshold: number

@@ -3,15 +3,23 @@ import type { NuxtModule } from '@nuxt/schema'
 
 export interface CoilyModuleOptions {
   debug?: boolean
+  /** How the spring system responds to `prefers-reduced-motion`. @default 'user' */
+  reducedMotion?: 'user' | 'always' | 'never'
 }
 
 function getPluginTemplate(options: CoilyModuleOptions) {
+  const systemOptions: Record<string, unknown> = {}
+  if (options.debug) systemOptions.debug = true
+  if (options.reducedMotion) systemOptions.reducedMotion = options.reducedMotion
+
+  const args = Object.keys(systemOptions).length > 0 ? JSON.stringify(systemOptions) : ''
+
   return `import { createSpringSystem } from 'coily'
 import { provideSpringSystem } from 'coily/vue'
 
 export default defineNuxtPlugin((nuxtApp) => {
   nuxtApp.hook('app:created', (vueApp) => {
-    const system = createSpringSystem(${options.debug ? '{ debug: true }' : ''})
+    const system = createSpringSystem(${args})
     provideSpringSystem(system, vueApp)
 
     if(import.meta.client) {
