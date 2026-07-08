@@ -185,6 +185,19 @@ describe('Spring2D: following', () => {
       expect(callback).toHaveBeenCalled()
     })
 
+    test('onUpdate fires once per frame while following', () => {
+      const system = createSpringSystem()
+      const leader = system.createSpring2D({ x: 0, y: 0 }, config)
+      const follower = system.createSpring2D({ target: leader })
+      const onUpdate = vi.fn()
+
+      follower.onUpdate(onUpdate)
+      leader.target = { x: 100, y: 100 }
+      system.advance(1000 / 60)
+
+      expect(onUpdate).toHaveBeenCalledTimes(1)
+    })
+
     test('onStop fires when fully settled', () => {
       const system = createSpringSystem()
       const leader = system.createSpring2D({ x: 0, y: 0 }, config)

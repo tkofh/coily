@@ -186,6 +186,44 @@ describe('linked spring chains', () => {
   })
 })
 
+describe('2d springs', () => {
+  bench('advance 1,000 active 2d springs (1 frame)', () => {
+    const system = createSpringSystem()
+    for (let i = 0; i < 1_000; i++) {
+      system.createSpring2D({ target: { x: 100, y: 100 }, value: { x: 0, y: 0 } }, defaultConfig)
+    }
+    system.advance(FRAME)
+  })
+
+  bench('settle 100 2d springs to rest (with onUpdate)', () => {
+    const system = createSpringSystem()
+    let sum = 0
+    const springs = Array.from({ length: 100 }, () => {
+      const spring = system.createSpring2D(
+        { target: { x: 100, y: 100 }, value: { x: 0, y: 0 } },
+        defaultConfig,
+      )
+      spring.onUpdate(() => {
+        sum += spring.value.x
+      })
+      return spring
+    })
+    while (springs.some((s) => !s.isResting)) {
+      system.advance(FRAME)
+    }
+  })
+
+  bench('settle 100 2d springs to rest (no listeners)', () => {
+    const system = createSpringSystem()
+    const springs = Array.from({ length: 100 }, () =>
+      system.createSpring2D({ target: { x: 100, y: 100 }, value: { x: 0, y: 0 } }, defaultConfig),
+    )
+    while (springs.some((s) => !s.isResting)) {
+      system.advance(FRAME)
+    }
+  })
+})
+
 describe('mixed operations', () => {
   bench('create, animate, dispose cycle (100 springs)', () => {
     const system = createSpringSystem()

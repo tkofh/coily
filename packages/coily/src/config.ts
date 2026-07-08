@@ -10,7 +10,7 @@ interface BaseOptions {
    * Precision for resting threshold.
    * @default 2
    */
-  precision?: number | undefined
+  readonly precision?: number | undefined
 }
 
 interface WithMass {
@@ -18,7 +18,7 @@ interface WithMass {
    * Mass of the spring system.
    * @default 1
    */
-  mass?: number | undefined
+  readonly mass?: number | undefined
 }
 
 interface WithoutMass {
@@ -26,7 +26,7 @@ interface WithoutMass {
    * Mass is derived from the other parameters in this input shape
    * and cannot be provided.
    */
-  mass?: undefined
+  readonly mass?: undefined
 }
 
 interface WithTension {
@@ -34,7 +34,7 @@ interface WithTension {
    * Spring stiffness coefficient.
    * Must be greater than 0.
    */
-  tension: number
+  readonly tension: number
 }
 
 interface WithDamping {
@@ -42,7 +42,7 @@ interface WithDamping {
    * Viscous damping coefficient.
    * Must be greater than or equal to 0.
    */
-  damping: number
+  readonly damping: number
 }
 
 interface WithDampingRatio {
@@ -50,7 +50,7 @@ interface WithDampingRatio {
    * Ratio of damping to critical damping (0 = undamped, 1 = critically damped).
    * Must be greater than or equal to 0.
    */
-  dampingRatio: number
+  readonly dampingRatio: number
 }
 
 interface WithBounce {
@@ -58,7 +58,7 @@ interface WithBounce {
    * Bounciness of the spring. Converted to dampingRatio as `1 - bounce`.
    * [-1, 1]
    */
-  bounce: number
+  readonly bounce: number
 }
 
 interface WithDuration {
@@ -66,7 +66,7 @@ interface WithDuration {
    * Target settle duration in milliseconds.
    * Must be greater than 0.
    */
-  duration: number
+  readonly duration: number
 }
 
 interface WithDisplacement {
@@ -74,7 +74,7 @@ interface WithDisplacement {
    * Initial displacement used for duration-based envelope calculation.
    * @default 1
    */
-  displacement?: number | undefined
+  readonly displacement?: number | undefined
 }
 
 interface DirectOptions extends BaseOptions, WithMass, WithTension, WithDamping {}

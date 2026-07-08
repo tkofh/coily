@@ -384,6 +384,105 @@ describe('Spring2D: settled promise', () => {
   })
 })
 
+describe('Spring2D: coalesced events', () => {
+  test('onUpdate fires exactly once per frame while both axes move', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring2D(
+      { target: { x: 100, y: 200 }, value: { x: 0, y: 0 } },
+      config,
+    )
+
+    const onUpdate = vi.fn()
+    spring.onUpdate(onUpdate)
+
+    system.advance(1000 / 60)
+    expect(onUpdate).toHaveBeenCalledTimes(1)
+
+    system.advance(1000 / 60)
+    expect(onUpdate).toHaveBeenCalledTimes(2)
+  })
+
+  test('the coalesced update reads final per-frame state on both axes', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring2D(
+      { target: { x: 100, y: 200 }, value: { x: 0, y: 0 } },
+      config,
+    )
+
+    const seen: { x: number; y: number }[] = []
+    spring.onUpdate(() => {
+      seen.push({ ...spring.value })
+    })
+
+    system.advance(1000 / 60)
+
+    expect(seen).toHaveLength(1)
+    expect(seen[0]).toEqual(spring.value)
+  })
+
+  test('jumpTo emits a single update synchronously', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring2D({ x: 0, y: 0 }, config)
+
+    const onUpdate = vi.fn()
+    spring.onUpdate(onUpdate)
+
+    spring.jumpTo({ x: 50, y: 75 })
+
+    expect(onUpdate).toHaveBeenCalledTimes(1)
+  })
+
+  test('setting value emits a single update synchronously', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring2D({ x: 0, y: 0 }, config)
+
+    const onUpdate = vi.fn()
+    spring.onUpdate(onUpdate)
+
+    spring.value = { x: 10, y: 20 }
+
+    expect(onUpdate).toHaveBeenCalledTimes(1)
+  })
+
+  test('stop arrives after the final update of the frame', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring2D({ target: { x: 0, y: 0 }, value: { x: 1, y: 1 } }, config)
+
+    const order: string[] = []
+    spring.onUpdate(() => order.push('update'))
+    spring.onStop(() => order.push('stop'))
+
+    for (let i = 0; i < 240 && !spring.isResting; i++) {
+      system.advance(1000 / 60)
+    }
+
+    expect(spring.isResting).toBe(true)
+    expect(order.filter((event) => event === 'stop')).toHaveLength(1)
+    expect(order.at(-1)).toBe('stop')
+    expect(order.at(-2)).toBe('update')
+  })
+
+  test('start and stop alternate strictly across restarts', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring2D({ x: 0, y: 0 }, config)
+
+    const order: string[] = []
+    spring.onStart(() => order.push('start'))
+    spring.onStop(() => order.push('stop'))
+
+    spring.target = { x: 100, y: 100 }
+    for (let i = 0; i < 240 && !spring.isResting; i++) {
+      system.advance(1000 / 60)
+    }
+    spring.target = { x: 0, y: 50 }
+    for (let i = 0; i < 240 && !spring.isResting; i++) {
+      system.advance(1000 / 60)
+    }
+
+    expect(order).toEqual(['start', 'stop', 'start', 'stop'])
+  })
+})
+
 describe('Spring2D: dispose', () => {
   test('onDispose fires once for both axes', () => {
     const system = createSpringSystem()

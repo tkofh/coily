@@ -7,7 +7,7 @@ export interface TickerOptions {
    *
    * must be greater than 0, defaults to 60
    */
-  fps?: number | undefined
+  readonly fps?: number | undefined
   /**
    * The maximum elapsed time (in ms) before a frame is considered a lag spike
    * (e.g. from a backgrounded tab). When exceeded, `adjustedLag` is used instead
@@ -15,14 +15,14 @@ export interface TickerOptions {
    *
    * must be greater than or equal to 0, defaults to 500
    */
-  lagThreshold?: number | undefined
+  readonly lagThreshold?: number | undefined
   /**
    * The substitute elapsed time (in ms) used when a lag spike is detected.
    * Clamped to be at most `lagThreshold`.
    *
    * must be greater than or equal to 0, defaults to 33
    */
-  adjustedLag?: number | undefined
+  readonly adjustedLag?: number | undefined
 }
 
 const hasWindow = typeof window !== 'undefined'

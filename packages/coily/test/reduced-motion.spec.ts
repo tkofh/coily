@@ -96,6 +96,24 @@ describe('reduced motion: always', () => {
     expect(spring.value).toEqual({ x: 100, y: 200 })
     expect(spring.isResting).toBe(true)
   })
+
+  test('2d retargets emit one update and no start/stop', () => {
+    const system = createSpringSystem({ reducedMotion: 'always' })
+    const spring = system.createSpring2D({ x: 0, y: 0 }, config)
+
+    const onUpdate = vi.fn()
+    const onStart = vi.fn()
+    const onStop = vi.fn()
+    spring.onUpdate(onUpdate)
+    spring.onStart(onStart)
+    spring.onStop(onStop)
+
+    spring.target = { x: 100, y: 200 }
+
+    expect(onUpdate).toHaveBeenCalledOnce()
+    expect(onStart).not.toHaveBeenCalled()
+    expect(onStop).not.toHaveBeenCalled()
+  })
 })
 
 describe('reduced motion: never and default', () => {
@@ -171,6 +189,28 @@ describe("reduced motion: 'user' media query", () => {
     expect(system.reducedMotion).toBe(true)
     expect(spring.value).toBe(100)
     expect(spring.isResting).toBe(true)
+  })
+
+  test('finishes 2d springs with one coalesced update and stop', () => {
+    const media = stubMatchMedia(false)
+    const system = createSpringSystem()
+    const spring = system.createSpring2D(
+      { target: { x: 100, y: 200 }, value: { x: 0, y: 0 } },
+      config,
+    )
+
+    system.advance(1000 / 60)
+
+    const onUpdate = vi.fn()
+    const onStop = vi.fn()
+    spring.onUpdate(onUpdate)
+    spring.onStop(onStop)
+
+    media.setMatches(true)
+
+    expect(spring.value).toEqual({ x: 100, y: 200 })
+    expect(onUpdate).toHaveBeenCalledOnce()
+    expect(onStop).toHaveBeenCalledOnce()
   })
 
   test('resumes animating when the preference changes back', () => {
