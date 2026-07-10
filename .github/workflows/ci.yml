@@ -44,9 +44,6 @@ jobs:
       - name: Install Playwright Chromium
         run: pnpm --dir packages/coily exec playwright install chromium --with-deps
 
-      - name: Lint and check formatting
-        run: pnpm run check
-
       # The turbo "check" task is the per-package tsc; oxlint/oxfmt ran above.
-      - name: Typecheck, build, test
+      - name: Lint, typecheck, build, test
         run: pnpm turbo run check build test
