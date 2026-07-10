@@ -99,7 +99,7 @@ interface DampingDurationOptions
 interface DampingBounceDurationOptions
   extends BaseOptions, WithoutMass, WithDamping, WithBounce, WithDuration, WithDisplacement {}
 
-type SpringOptionKeys =
+export type SpringOptionKeys =
   | 'mass'
   | 'tension'
   | 'damping'

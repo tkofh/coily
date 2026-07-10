@@ -64,17 +64,21 @@ describe('SpringObject: creation', () => {
   test('throws on empty shapes and empty subtrees', () => {
     const system = createSpringSystem()
 
-    expect(() => system.createSpringObject({})).toThrow('at least one channel')
-    expect(() => system.createSpringObject({ position: {} })).toThrow('at least one channel')
-    expect(() => system.createSpringObject({ items: [] })).toThrow('at least one channel')
+    // The `Shape` constraint also rejects these at compile time; the casts
+    // keep the runtime backstop covered for untyped callers.
+    expect(() => system.createSpringObject({} as never)).toThrow('at least one channel')
+    expect(() => system.createSpringObject({ position: {} } as never)).toThrow(
+      'at least one channel',
+    )
+    expect(() => system.createSpringObject({ items: [] } as never)).toThrow('at least one channel')
   })
 
   test('throws on non-plain objects in the shape', () => {
     const system = createSpringSystem()
 
-    expect(() =>
-      system.createSpringObject({ when: new Date() as unknown as number }),
-    ).toThrow("Invalid value at 'when'")
+    expect(() => system.createSpringObject({ when: new Date() as unknown as number })).toThrow(
+      "Invalid value at 'when'",
+    )
   })
 })
 
@@ -263,19 +267,16 @@ describe('SpringObject: config shapes', () => {
     // is a config shape and its numeric leaves are invalid configs — it must
     // throw rather than silently apply as uniform options.
     expect(() =>
-      system.createSpringObject(
-        { tension: 0, damping: 0 },
-        { tension: 170, damping: 26 } as never,
-      ),
+      system.createSpringObject({ tension: 0, damping: 0 }, { tension: 170, damping: 26 } as never),
     ).toThrow("Invalid config for 'tension'")
   })
 
   test('throws on config keys matching neither the shape nor spring options', () => {
     const system = createSpringSystem()
 
-    expect(() =>
-      system.createSpringObject({ x: 0 }, { opacityy: config } as never),
-    ).toThrow('Invalid config for the root')
+    expect(() => system.createSpringObject({ x: 0 }, { opacityy: config } as never)).toThrow(
+      'Invalid config for the root',
+    )
   })
 })
 

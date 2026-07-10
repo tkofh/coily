@@ -1,4 +1,4 @@
-import { SpringConfig, type SpringOptions } from './config.ts'
+import { SpringConfig, type SpringOptionKeys, type SpringOptions } from './config.ts'
 import { Emitter } from './emitter.ts'
 import type { MotionSet } from './motion-set.ts'
 import {
@@ -13,6 +13,36 @@ import { Spring } from './spring.ts'
 import { invariant } from './util.ts'
 
 /**
+ * Compile-time validation of a value shape: every channel must be a `number`,
+ * every branch a plain object or array with at least one channel. Used as
+ * `value: T & Shape<T>` so an invalid channel errors on that property rather
+ * than on the whole argument. Purely structural — interfaces like `Vector2`
+ * satisfy it without index signatures — and mirrored by the runtime
+ * validation for untyped callers. Optional and `undefined`-typed channels
+ * are rejected: a channel that may be absent would make two springs of the
+ * same declared shape structurally incompatible at runtime.
+ */
+export type Shape<T> = 0 extends 1 & T
+  ? T // any defers wholly to the runtime checks
+  : T extends number
+    ? number
+    : T extends ((...args: never) => unknown) | (abstract new (...args: never) => unknown)
+      ? never
+      : T extends readonly never[]
+        ? never
+        : T extends object
+          ? keyof T extends never
+            ? never
+            : {
+                [K in keyof T]-?: 0 extends 1 & T[K]
+                  ? T[K]
+                  : undefined extends T[K]
+                    ? never
+                    : Shape<T[K]>
+              }
+          : never
+
+/**
  * A partial view of a value shape: the same nesting with any subset of the
  * numeric channels present. Absent (or `undefined`) channels are left alone.
  */
@@ -21,15 +51,27 @@ export type PartialShape<T> = T extends number
   : { [K in keyof T]?: PartialShape<T[K]> | undefined }
 
 /**
+ * A deep-readonly view of a value shape. Composite reads (`target`, `value`,
+ * `velocity`) return the spring's live mirror objects — refreshed in place
+ * on every read — so their channels are typed read-only.
+ */
+export type ReadonlyShape<T> = T extends number
+  ? number
+  : { readonly [K in keyof T]: ReadonlyShape<T[K]> }
+
+/**
  * Configuration for a spring object: a single config applied to every
  * channel, or an object mirroring the value shape with configs at any level.
  * A value at a subtree applies to every channel below it; deeper values win.
  * `null` reverts to the default config (or the leader's while following).
- * Plain option objects are accepted anywhere a `SpringConfig` is.
+ * Plain option objects are accepted anywhere a `SpringConfig` is — except
+ * that value shapes own their key namespace: where a channel shares a spring
+ * option's name, a bare options object is ambiguous and rejected (pass a
+ * `SpringConfig` or a per-channel shape instead), mirroring the runtime rule.
  */
 export type ConfigShape<T> =
   | SpringConfig
-  | SpringOptions
+  | (SpringOptions & { [K in Extract<keyof T, SpringOptionKeys>]?: never })
   | null
   | (T extends number ? never : { [K in keyof T]?: ConfigShape<T[K]> | undefined })
 
@@ -45,16 +87,19 @@ export type SpringObjectTarget<T extends object> =
 
 // ── Config resolution ───────────────────────────────────────────────
 
-const SPRING_OPTION_KEYS = new Set([
-  'mass',
-  'tension',
-  'damping',
-  'dampingRatio',
-  'bounce',
-  'duration',
-  'displacement',
-  'precision',
-])
+/** Runtime mirror of `SpringOptionKeys` — `satisfies` keeps the two in lockstep. */
+const SPRING_OPTION_KEYS: ReadonlySet<string> = new Set(
+  Object.keys({
+    mass: true,
+    tension: true,
+    damping: true,
+    dampingRatio: true,
+    bounce: true,
+    duration: true,
+    displacement: true,
+    precision: true,
+  } satisfies Record<SpringOptionKeys, true>),
+)
 
 function invalidConfig(path: string): string {
   return `Invalid config for ${describePath(path)}: expected a SpringConfig, spring options, null, or a config shape matching the value`
@@ -126,8 +171,12 @@ const RESOLVED = Promise.resolve()
  * scalar machinery. Composite events are coalesced: `update` fires at most
  * once per frame with every channel in its final per-frame state, and `stop`
  * lands after the frame's final `update`.
+ *
+ * Invariant in `T` (`in out`): following and offsets require exactly
+ * matching shapes, so a spring object is never substitutable for one of a
+ * wider or narrower shape.
  */
-export class SpringObject<T extends object> {
+export class SpringObject<in out T extends object> {
   readonly #motions: MotionSet
   readonly #map: ShapeMap<Spring>
   readonly #targetView: ShapeView<Spring>
@@ -169,7 +218,7 @@ export class SpringObject<T extends object> {
     }
   }
 
-  constructor(motions: MotionSet, value: T, config?: ConfigShape<T>) {
+  constructor(motions: MotionSet, value: T & Shape<T>, config?: ConfigShape<T>) {
     this.#motions = motions
 
     invariant(
@@ -202,9 +251,9 @@ export class SpringObject<T extends object> {
     }
   }
 
-  get target(): Readonly<T> {
+  get target(): ReadonlyShape<T> {
     this.#targetView.refresh()
-    return this.#targetView.root as T
+    return this.#targetView.root as ReadonlyShape<T>
   }
 
   /**
@@ -230,9 +279,9 @@ export class SpringObject<T extends object> {
     }
   }
 
-  get value(): Readonly<T> {
+  get value(): ReadonlyShape<T> {
     this.#valueView.refresh()
-    return this.#valueView.root as T
+    return this.#valueView.root as ReadonlyShape<T>
   }
 
   set value(value: PartialShape<T>) {
@@ -241,9 +290,9 @@ export class SpringObject<T extends object> {
     })
   }
 
-  get velocity(): Readonly<T> {
+  get velocity(): ReadonlyShape<T> {
     this.#velocityView.refresh()
-    return this.#velocityView.root as T
+    return this.#velocityView.root as ReadonlyShape<T>
   }
 
   set velocity(value: PartialShape<T>) {

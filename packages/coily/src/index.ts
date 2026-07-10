@@ -4,6 +4,8 @@ export type { Spring2D, Spring2DPosition, Spring2DTarget, Spring2DWithOffset } f
 export type {
   ConfigShape,
   PartialShape,
+  ReadonlyShape,
+  Shape,
   SpringObject,
   SpringObjectTarget,
   SpringObjectWithOffset,

@@ -1,7 +1,7 @@
 import type { SpringConfig } from './config.ts'
 import { MotionSet } from './motion-set.ts'
 import { Spring, type SpringPosition } from './spring.ts'
-import { type ConfigShape, SpringObject } from './spring-object.ts'
+import { type ConfigShape, type Shape, SpringObject } from './spring-object.ts'
 import { Spring2D, type Spring2DPosition } from './spring2d.ts'
 import { Ticker, type TickerOptions } from './ticker.ts'
 
@@ -67,7 +67,10 @@ class SpringSystemImpl implements SpringSystem {
     return new Spring2D(this.#motion, position, config)
   }
 
-  createSpringObject<T extends object>(value: T, config?: ConfigShape<T>): SpringObject<T> {
+  createSpringObject<T extends object>(
+    value: T & Shape<T>,
+    config?: ConfigShape<T>,
+  ): SpringObject<T> {
     return new SpringObject(this.#motion, value, config)
   }
 
@@ -120,9 +123,14 @@ export interface SpringSystem {
    * array whose leaves are all numbers, resting at `value`. Each leaf
    * becomes an independent scalar spring channel; `config` is a single
    * config for every channel or a shape mirroring `value` with configs at
-   * any level (a subtree value applies to every channel below it).
+   * any level (a subtree value applies to every channel below it). The
+   * `Shape` constraint validates the value at compile time; the runtime
+   * repeats the validation for untyped callers.
    */
-  createSpringObject<T extends object>(value: T, config?: ConfigShape<T>): SpringObject<T>
+  createSpringObject<T extends object>(
+    value: T & Shape<T>,
+    config?: ConfigShape<T>,
+  ): SpringObject<T>
   /** Advance all springs by `dt` milliseconds, without affecting internal timing. */
   advance(dt: number): void
 
