@@ -1,4 +1,5 @@
-import { type MaybeRefOrGetter, toValue, watchSyncEffect } from 'vue'
+import { type MaybeRefOrGetter, type Ref, toValue, watchSyncEffect } from 'vue'
+import type { Shape } from '../spring-object.ts'
 import type { Spring } from '../spring.ts'
 import {
   type ReactiveSpringRef,
@@ -7,6 +8,14 @@ import {
   injectSpringSystem,
   resolveSpringConfig,
 } from './reactive-spring.ts'
+import {
+  type AnyShape,
+  type SpringObjectRef,
+  type UseSpringObjectOptions,
+  createLinkedSpringObjectRef,
+  createSpringObjectRef,
+  hasSpringObjectInstance,
+} from './spring-object.ts'
 
 export type { UseSpringOptions } from './reactive-spring.ts'
 
@@ -25,23 +34,55 @@ function hasSpringInstance(value: unknown): value is SpringRefWithInstance {
 
 // ── useSpring ───────────────────────────────────────────────────────
 
+/**
+ * A spring as a writable ref. Numbers (plain, ref, or getter) create scalar
+ * springs; numeric shapes — records and arrays alike, equally wrapped —
+ * create spring objects with one channel per numeric leaf. Passing another
+ * spring ref links to it as a follower. For several independent scalar
+ * springs, map: `targets.map((t) => useSpring(t))`.
+ *
+ * Plain shapes, refs, and getters are separate overloads (not one
+ * `MaybeRefOrGetter`): the union defeats inference of `T` through the
+ * `T & Shape<T>` validation intersection, per-kind signatures do not.
+ */
 export function useSpring(target: MaybeRefOrGetter<number>, options?: UseSpringOptions): SpringRef
 export function useSpring(target: SpringRef, options?: UseSpringOptions): SpringRef
-export function useSpring<const T extends readonly MaybeRefOrGetter<number>[]>(
-  targets: T,
-  options?: UseSpringOptions,
-): { [K in keyof T]: SpringRef }
+export function useSpring<T extends object>(
+  target: SpringObjectRef<T>,
+  options?: UseSpringObjectOptions<T>,
+): SpringObjectRef<T>
+export function useSpring<T extends object>(
+  target: T & Shape<T>,
+  options?: UseSpringObjectOptions<T>,
+): SpringObjectRef<T>
+export function useSpring<T extends object>(
+  target: Ref<T & Shape<T>>,
+  options?: UseSpringObjectOptions<T>,
+): SpringObjectRef<T>
+export function useSpring<T extends object>(
+  target: () => T & Shape<T>,
+  options?: UseSpringObjectOptions<T>,
+): SpringObjectRef<T>
 export function useSpring(
-  target: MaybeRefOrGetter<number> | SpringRef | readonly MaybeRefOrGetter<number>[],
-  options?: UseSpringOptions,
-): SpringRef | SpringRef[] {
-  if (Array.isArray(target)) {
-    return Array.from(target as MaybeRefOrGetter<number>[], (t) => createSpringRef(t, options))
-  }
+  target: unknown,
+  options?: unknown,
+): SpringRef | SpringObjectRef<AnyShape> {
+  // The overloads bind the real types; the implementation only dispatches.
   if (hasSpringInstance(target)) {
-    return createLinkedSpringRef(target, options)
+    return createLinkedSpringRef(target, options as UseSpringOptions)
   }
-  return createSpringRef(target as MaybeRefOrGetter<number>, options)
+  if (hasSpringObjectInstance(target)) {
+    return createLinkedSpringObjectRef(target, options as UseSpringObjectOptions<AnyShape>)
+  }
+  // Refs and getters of numbers vs. shapes only differ in what they hold —
+  // resolve once to pick the path (creation resolves again for the initial).
+  if (typeof toValue(target as MaybeRefOrGetter<unknown>) === 'number') {
+    return createSpringRef(target as MaybeRefOrGetter<number>, options as UseSpringOptions)
+  }
+  return createSpringObjectRef(
+    target as MaybeRefOrGetter<AnyShape>,
+    options as UseSpringObjectOptions<AnyShape>,
+  )
 }
 
 function createSpringRef(

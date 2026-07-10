@@ -1,5 +1,6 @@
 import { onScopeDispose } from 'vue'
 import type { SpringConfig } from '../config.ts'
+import type { ConfigShape, Shape, SpringObject } from '../spring-object.ts'
 import type { Spring, SpringPosition } from '../spring.ts'
 import type { Spring2D, Spring2DPosition } from '../spring2d.ts'
 import { injectSpringSystem } from './reactive-spring.ts'
@@ -7,6 +8,15 @@ import { injectSpringSystem } from './reactive-spring.ts'
 export interface SpringPool {
   createSpring(position: SpringPosition, config?: SpringConfig): Spring
   createSpring2D(position: Spring2DPosition, config?: SpringConfig): Spring2D
+  createSpringObject<T extends object>(
+    value: T & Shape<T>,
+    config?: ConfigShape<T>,
+  ): SpringObject<T>
+}
+
+interface PoolSpring {
+  dispose(): void
+  onDispose(callback: () => void): () => void
 }
 
 /**
@@ -18,9 +28,9 @@ export interface SpringPool {
  */
 export function useSpringPool(): SpringPool {
   const system = injectSpringSystem()
-  const live = new Set<Spring | Spring2D>()
+  const live = new Set<PoolSpring>()
 
-  const adopt = <T extends Spring | Spring2D>(spring: T): T => {
+  const adopt = <T extends PoolSpring>(spring: T): T => {
     live.add(spring)
     spring.onDispose(() => {
       live.delete(spring)
@@ -37,5 +47,8 @@ export function useSpringPool(): SpringPool {
   return {
     createSpring: (position, config) => adopt(system.createSpring(position, config)),
     createSpring2D: (position, config) => adopt(system.createSpring2D(position, config)),
+    createSpringObject<T extends object>(value: T & Shape<T>, config?: ConfigShape<T>) {
+      return adopt(system.createSpringObject<T>(value, config))
+    },
   }
 }

@@ -53,9 +53,8 @@ describe('ShapeMap: applyPartial', () => {
     const map = createMap({ position: { x: 0, y: 0 }, color: [0, 0, 0] })
     const seen: [string, number][] = []
 
-    map.applyPartial(
-      { position: { x: 5, y: undefined }, color: [undefined, 6] },
-      (leaf, value) => seen.push([leaf.path, value]),
+    map.applyPartial({ position: { x: 5, y: undefined }, color: [undefined, 6] }, (leaf, value) =>
+      seen.push([leaf.path, value]),
     )
 
     expect(seen).toEqual([

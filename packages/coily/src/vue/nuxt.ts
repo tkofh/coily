@@ -52,6 +52,7 @@ const coilyModule: NuxtModule = defineNuxtModule<CoilyModuleOptions>({
       { from: 'coily/vue', name: 'useSpringPool' },
       { from: 'coily/vue', name: 'SpringRef', type: true },
       { from: 'coily/vue', name: 'SpringRef2D', type: true },
+      { from: 'coily/vue', name: 'SpringObjectRef', type: true },
       { from: 'coily/vue', name: 'SpringPool', type: true },
       { from: 'coily', name: 'defineSpring' },
       { from: 'coily', name: 'SpringConfig', type: true },

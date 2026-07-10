@@ -11,9 +11,7 @@ import {
 
 // ── SpringRef2D ─────────────────────────────────────────────────────
 
-export interface SpringRef2D extends ReactiveSpringRef<Readonly<Vector2>> {
-  readonly jumpTo: (value: Vector2) => void
-}
+export interface SpringRef2D extends ReactiveSpringRef<Readonly<Vector2>, Vector2> {}
 
 /** @internal Symbol to access the underlying Spring2D from a SpringRef2D */
 const Spring2DInstanceKey = Symbol('spring2d')
@@ -31,17 +29,10 @@ export function useSpring2D(
   options?: UseSpringOptions,
 ): SpringRef2D
 export function useSpring2D(target: SpringRef2D, options?: UseSpringOptions): SpringRef2D
-export function useSpring2D<const T extends readonly MaybeRefOrGetter<Vector2>[]>(
-  targets: T,
-  options?: UseSpringOptions,
-): { [K in keyof T]: SpringRef2D }
 export function useSpring2D(
-  target: MaybeRefOrGetter<Vector2> | SpringRef2D | readonly MaybeRefOrGetter<Vector2>[],
+  target: MaybeRefOrGetter<Vector2> | SpringRef2D,
   options?: UseSpringOptions,
-): SpringRef2D | SpringRef2D[] {
-  if (Array.isArray(target)) {
-    return Array.from(target as MaybeRefOrGetter<Vector2>[], (t) => createSpringRef2D(t, options))
-  }
+): SpringRef2D {
   if (hasSpring2DInstance(target)) {
     return createLinkedSpringRef2D(target, options)
   }

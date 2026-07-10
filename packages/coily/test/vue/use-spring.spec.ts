@@ -148,13 +148,13 @@ describe('useSpring', () => {
     expect(spring.value).toBe(0)
   })
 
-  test('an array of targets returns one SpringRef each', () => {
+  test('several independent scalar springs compose via map', () => {
     const system = createSpringSystem()
     let springs!: readonly SpringRef[]
     mount(
       defineComponent({
         setup() {
-          springs = useSpring([0, () => 10, ref(20)])
+          springs = [0, () => 10, ref(20)].map((target) => useSpring(target))
           return {}
         },
         render: () => h('div'),
