@@ -316,7 +316,14 @@ export class Spring {
 
     this.#resolved = next
     this.#motion.configure(next)
-    this.#motions.add(this.#motion)
+    // A resting motion stays out of the set: nothing about it observably
+    // changed (configure wakes it first if the new precision lifts it above
+    // the resting threshold). Parking it in the set would also burn its
+    // once-per-pass tick ahead of a leader's wake-up, adding a frame of lag
+    // to follows wired after creation.
+    if (!this.#motion.isResting) {
+      this.#motions.add(this.#motion)
+    }
 
     for (const follower of this.#followers) {
       if (follower.#override === null) {

@@ -91,6 +91,24 @@ describe('Spring: following', () => {
       expect(c.value).toBeCloseTo(100, 0)
     })
 
+    test('a follow wired after creation propagates in the same frame', () => {
+      // Regression: config inheritance on follow used to park the resting
+      // follower in the motion set, where it consumed its once-per-pass tick
+      // before the leader emitted — adding a frame of lag per chain link.
+      const system = createSpringSystem()
+      const a = system.createSpring(0, config)
+      const b = system.createSpring(0)
+      const c = system.createSpring(0)
+      b.target = a
+      c.target = b
+
+      a.target = 100
+      system.advance(1000 / 60)
+
+      expect(b.value).not.toBe(0)
+      expect(c.isResting).toBe(false)
+    })
+
     test('can switch from standalone to following', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(100, config)

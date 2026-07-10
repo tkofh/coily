@@ -1,6 +1,7 @@
 import type { SpringConfig } from './config.ts'
 import { MotionSet } from './motion-set.ts'
 import { Spring, type SpringPosition } from './spring.ts'
+import { type ConfigShape, SpringObject } from './spring-object.ts'
 import { Spring2D, type Spring2DPosition } from './spring2d.ts'
 import { Ticker, type TickerOptions } from './ticker.ts'
 
@@ -66,6 +67,10 @@ class SpringSystemImpl implements SpringSystem {
     return new Spring2D(this.#motion, position, config)
   }
 
+  createSpringObject<T extends object>(value: T, config?: ConfigShape<T>): SpringObject<T> {
+    return new SpringObject(this.#motion, value, config)
+  }
+
   advance(dt: number) {
     this.#motion.tick(dt / 1000)
   }
@@ -110,6 +115,14 @@ class SpringSystemImpl implements SpringSystem {
 export interface SpringSystem {
   createSpring(position: SpringPosition, config?: SpringConfig): Spring
   createSpring2D(position: Spring2DPosition, config?: SpringConfig): Spring2D
+  /**
+   * Creates a spring over an arbitrary numeric shape — a plain object or
+   * array whose leaves are all numbers, resting at `value`. Each leaf
+   * becomes an independent scalar spring channel; `config` is a single
+   * config for every channel or a shape mirroring `value` with configs at
+   * any level (a subtree value applies to every channel below it).
+   */
+  createSpringObject<T extends object>(value: T, config?: ConfigShape<T>): SpringObject<T>
   /** Advance all springs by `dt` milliseconds, without affecting internal timing. */
   advance(dt: number): void
 
