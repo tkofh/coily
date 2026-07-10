@@ -426,6 +426,22 @@ describe('SpringObject: following', () => {
     expect(follower.value.opacity).toBeCloseTo(1, 1)
   })
 
+  test('chains: a follower of a follower propagates in the same frame', () => {
+    const system = createSpringSystem()
+    const a = system.createSpringObject({ x: 0 }, config)
+    const b = system.createSpringObject({ x: 0 })
+    const c = system.createSpringObject({ x: 0 })
+
+    b.target = a
+    c.target = b
+    a.target = { x: 100 }
+
+    system.advance(FRAME)
+
+    expect(b.value.x).toBeGreaterThan(0)
+    expect(c.isResting).toBe(false)
+  })
+
   test('follows with an offset shape', () => {
     const system = createSpringSystem()
     const leader = system.createSpringObject({ position: { x: 0, y: 0 }, opacity: 0 }, config)

@@ -42,17 +42,18 @@ describe('useSpringPool', () => {
     const { wrapper, pool, system } = mountPool()
 
     const spring = pool.createSpring({ target: 100, value: 0 }, config)
-    const spring2d = pool.createSpring2D({ target: { x: 100, y: 100 }, value: { x: 0, y: 0 } })
+    const object = pool.createSpringObject({ x: 0, y: 0 })
+    object.target = { x: 100, y: 100 }
     system.advance(1000 / 60)
 
     wrapper.unmount()
 
     const value = spring.value
-    const value2d = { ...spring2d.value }
+    const objectValue = { ...object.value }
     system.advance(1000 / 60)
 
     expect(spring.value).toBe(value)
-    expect(spring2d.value).toEqual(value2d)
+    expect(object.value).toEqual(objectValue)
   })
 
   test('manually disposed springs unregister from the pool', () => {

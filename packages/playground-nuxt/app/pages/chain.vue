@@ -73,10 +73,10 @@ onBeforeUnmount(() => clearTimeout(autoTimer))
 const chainConfig = { bounce: -1, duration: 1000, precision: 3 } satisfies SpringOptions
 
 // Build chain: first spring follows mouse, each subsequent spring follows the previous
-const springs: SpringRef2D[] = []
+const springs: SpringObjectRef<{ x: number; y: number }>[] = []
 
 for (let i = 0; i < count; i++) {
-  springs.push(useSpring2D(i === 0 ? mouse : springs[i - 1]!, chainConfig))
+  springs.push(useSpring(i === 0 ? mouse : springs[i - 1]!, chainConfig))
 }
 
 const colors = Array.from({ length: count }, (_, i) => {

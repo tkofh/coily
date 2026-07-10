@@ -17,8 +17,8 @@ import { SpringSystemKey } from './system.ts'
 export type UseSpringOptions = MaybeRefOrGetter<SpringOptions | SpringConfig | undefined>
 
 /**
- * The subset of Spring / Spring2D / SpringObject the reactive bridge relies
- * on. Springs read `V` but may accept a wider write type `W` (spring objects
+ * The subset of Spring / SpringObject the reactive bridge relies on.
+ * Springs read `V` but may accept a wider write type `W` (spring objects
  * take partial shapes), and configure with `C` (spring objects take config
  * shapes).
  */

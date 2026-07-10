@@ -2,7 +2,7 @@
 
 Simulate values using spring physics.
 
-Coily animates numbers (and 2D vectors) with damped spring motion. Each frame is computed from the closed-form solution of the spring equation — underdamped, critically damped, or overdamped — rather than numerical integration, so motion doesn't accumulate error and springs can be retargeted mid-flight without losing momentum.
+Coily animates numbers — and whole numeric shapes — with damped spring motion. Each frame is computed from the closed-form solution of the spring equation — underdamped, critically damped, or overdamped — rather than numerical integration, so motion doesn't accumulate error and springs can be retargeted mid-flight without losing momentum.
 
 The core has zero dependencies and runs anywhere (it falls back from `requestAnimationFrame` to `setTimeout` outside the browser). Vue and Nuxt integrations ship as separate entry points; `vue` and `@nuxt/kit` are optional peer dependencies.
 
@@ -77,9 +77,35 @@ const trailing = system.createSpring({ target: { spring: leader, offset: 20 } })
 
 Followers inherit the leader's config unless given their own. Assigning a number to `target` unfollows.
 
-### 2D
+### Objects
 
-`system.createSpring2D({ x: 0, y: 0 })` runs one spring per axis behind a single `Spring`-like API that takes and returns `{ x, y }` vectors — including chaining onto other 2D springs.
+`system.createSpringObject(value, config?)` springs over any numeric shape — a plain object or array whose leaves are all numbers, nested arbitrarily. Each leaf becomes an independent channel behind one composite API:
+
+```ts
+const spring = system.createSpringObject({ position: { x: 0, y: 0 }, opacity: 1 })
+
+spring.target = { position: { x: 100 } } // partial — other channels are left alone
+spring.value // { position: { x, y }, opacity } — a stable, read-only mirror
+```
+
+The shape is fixed at creation, and unknown channels throw with their path (`position.z`). `value`, `velocity`, and `jumpTo` take the same partial shapes. Composite events are coalesced: `update` fires at most once per frame with every channel in its final per-frame state, and `stop` always lands after that frame's final `update`. `settled` and reduced motion compose channel-wise.
+
+Shapes are validated at compile time too (the `Shape` type — interfaces like your own `Vector2` work without index signatures): non-numeric, optional, or `undefined`-typed channels are rejected where they're declared.
+
+Configs apply per channel. Pass a single config for every channel, or a shape mirroring the value with configs (or plain option objects, or `null` to revert) at any level — a config at a subtree covers every channel below it:
+
+```ts
+spring.config = { position: stiff, opacity: { duration: 300, dampingRatio: 1 } }
+```
+
+One rule where the two vocabularies meet: value shapes own their key namespace. If a channel is named like a spring option (`{ tension: 0 }` as a value shape), a bare options object would be ambiguous there — pass a `SpringConfig` or a per-channel shape instead.
+
+Spring objects chain channel-wise. Assign another spring object of the exact same shape (optionally with a partial offset shape), and a partial numeric target detaches only the channels it names:
+
+```ts
+follower.target = leader
+trailing.target = { spring: leader, offset: { position: { x: 20 } } }
+```
 
 ## Reduced motion
 
@@ -114,11 +140,13 @@ const x = useSpring(target, { duration: 500, bounce: 0.3 })
 </template>
 ```
 
-`useSpring` returns a `SpringRef`: a writable ref of the animated value with `velocity`, `isResting`, and `timeRemaining` refs plus `jumpTo()` attached. The target can be a ref, a getter, or another `SpringRef` (which chains the springs). Options are also reactive — swap configs and the spring reconfigures in place. `useSpring2D` is the same for `{ x, y }` values.
+`useSpring` returns a `SpringRef`: a writable ref of the animated value with `velocity`, `isResting`, and `timeRemaining` refs plus `jumpTo()` attached. The target can be a ref, a getter, or another `SpringRef` (which chains the springs). Options are also reactive — swap configs and the spring reconfigures in place.
+
+Numeric shapes work the same way: pass a record or array (plain, ref, or getter) and get a `SpringObjectRef`. Reads are the deep-readonly composite value, writes take partial shapes, options accept reactive per-channel config shapes, and passing another `SpringObjectRef` follows it channel-wise. Deeply reactive targets retarget on nested mutation. For several *independent* scalar springs, map over the targets — composables are loop-safe: `targets.map((t) => useSpring(t))`.
 
 There's also a renderless `<SpringValue :target="n">` component exposing `{ value, velocity, isResting, timeRemaining, jumpTo }` through its default slot.
 
-For imperative work — a dynamic set of springs created and disposed at arbitrary times (particles, per-item effects) — `useSpringPool()` returns `createSpring`/`createSpring2D` bound to the provided system. Every spring created through the pool is disposed automatically when the component's scope is torn down, so leaked motions are structurally impossible; disposing a spring manually before that is fine.
+For imperative work — a dynamic set of springs created and disposed at arbitrary times (particles, per-item effects) — `useSpringPool()` returns `createSpring`/`createSpringObject` bound to the provided system. Every spring created through the pool is disposed automatically when the component's scope is torn down, so leaked motions are structurally impossible; disposing a spring manually before that is fine.
 
 ## Nuxt
 
@@ -132,7 +160,7 @@ export default defineNuxtConfig({
 })
 ```
 
-The module provides a spring system for the whole app (started on the client), auto-imports `useSpring`, `useSpring2D`, `useSpringSystem`, `useSpringPool`, and `defineSpring`, and registers the `SpringValue` component.
+The module provides a spring system for the whole app (started on the client), auto-imports `useSpring`, `useSpringSystem`, `useSpringPool`, and `defineSpring`, and registers the `SpringValue` component.
 
 ## Timing
 

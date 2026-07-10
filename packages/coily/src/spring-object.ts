@@ -16,8 +16,8 @@ import { invariant } from './util.ts'
  * Compile-time validation of a value shape: every channel must be a `number`,
  * every branch a plain object or array with at least one channel. Used as
  * `value: T & Shape<T>` so an invalid channel errors on that property rather
- * than on the whole argument. Purely structural — interfaces like `Vector2`
- * satisfy it without index signatures — and mirrored by the runtime
+ * than on the whole argument. Purely structural — interfaces satisfy it
+ * without index signatures — and mirrored by the runtime
  * validation for untyped callers. Optional and `undefined`-typed channels
  * are rejected: a channel that may be absent would make two springs of the
  * same declared shape structurally incompatible at runtime.

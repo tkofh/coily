@@ -15,7 +15,6 @@ import type {
   SpringOptions,
   SpringPosition,
   SpringSystem,
-  Vector2,
 } from '../src/index.ts'
 
 declare const system: SpringSystem
@@ -30,6 +29,10 @@ system.createSpringObject({ 0: 10, 1: 20 })
 system.createSpringObject({ items: [{ x: 0 }, { x: 1 }] })
 
 // Interfaces satisfy `Shape` without index signatures
+interface Vector2 {
+  x: number
+  y: number
+}
 declare const vec: Vector2
 system.createSpringObject(vec)
 

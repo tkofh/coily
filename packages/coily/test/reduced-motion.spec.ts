@@ -87,9 +87,9 @@ describe('reduced motion: always', () => {
     expect(tail.isResting).toBe(true)
   })
 
-  test('2d springs jump on both axes', () => {
+  test('spring objects jump on every channel', () => {
     const system = createSpringSystem({ reducedMotion: 'always' })
-    const spring = system.createSpring2D({ x: 0, y: 0 }, config)
+    const spring = system.createSpringObject({ x: 0, y: 0 }, config)
 
     spring.target = { x: 100, y: 200 }
 
@@ -97,9 +97,9 @@ describe('reduced motion: always', () => {
     expect(spring.isResting).toBe(true)
   })
 
-  test('2d retargets emit one update and no start/stop', () => {
+  test('spring object retargets emit one update and no start/stop', () => {
     const system = createSpringSystem({ reducedMotion: 'always' })
-    const spring = system.createSpring2D({ x: 0, y: 0 }, config)
+    const spring = system.createSpringObject({ x: 0, y: 0 }, config)
 
     const onUpdate = vi.fn()
     const onStart = vi.fn()
@@ -191,13 +191,11 @@ describe("reduced motion: 'user' media query", () => {
     expect(spring.isResting).toBe(true)
   })
 
-  test('finishes 2d springs with one coalesced update and stop', () => {
+  test('finishes spring objects with one coalesced update and stop', () => {
     const media = stubMatchMedia(false)
     const system = createSpringSystem()
-    const spring = system.createSpring2D(
-      { target: { x: 100, y: 200 }, value: { x: 0, y: 0 } },
-      config,
-    )
+    const spring = system.createSpringObject({ x: 0, y: 0 }, config)
+    spring.target = { x: 100, y: 200 }
 
     system.advance(1000 / 60)
 

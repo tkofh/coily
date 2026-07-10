@@ -2,7 +2,6 @@ import type { SpringConfig } from './config.ts'
 import { MotionSet } from './motion-set.ts'
 import { Spring, type SpringPosition } from './spring.ts'
 import { type ConfigShape, type Shape, SpringObject } from './spring-object.ts'
-import { Spring2D, type Spring2DPosition } from './spring2d.ts'
 import { Ticker, type TickerOptions } from './ticker.ts'
 
 export interface SpringSystemOptions extends TickerOptions {
@@ -63,10 +62,6 @@ class SpringSystemImpl implements SpringSystem {
     return new Spring(this.#motion, position, config)
   }
 
-  createSpring2D(position: Spring2DPosition, config?: SpringConfig): Spring2D {
-    return new Spring2D(this.#motion, position, config)
-  }
-
   createSpringObject<T extends object>(
     value: T & Shape<T>,
     config?: ConfigShape<T>,
@@ -117,7 +112,6 @@ class SpringSystemImpl implements SpringSystem {
 
 export interface SpringSystem {
   createSpring(position: SpringPosition, config?: SpringConfig): Spring
-  createSpring2D(position: Spring2DPosition, config?: SpringConfig): Spring2D
   /**
    * Creates a spring over an arbitrary numeric shape — a plain object or
    * array whose leaves are all numbers, resting at `value`. Each leaf

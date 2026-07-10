@@ -6,7 +6,7 @@
  * `*.spec.ts`, `*.browser.ts`, and `*.bench.ts`). Each `@ts-expect-error`
  * is self-validating: tsc fails if the line stops erroring.
  */
-import { ref } from 'vue'
+import { type Ref, ref } from 'vue'
 import type { SpringConfig } from '../../src/index.ts'
 import { type SpringRef, useSpring } from '../../src/vue/spring.ts'
 import type { SpringObjectRef } from '../../src/vue/spring-object.ts'
@@ -69,6 +69,11 @@ useSpring(ref(5))
 useSpring(() => 10)
 
 // ── Linked object refs ──────────────────────────────────────────────
+
+// Chain-building unions (ref-or-leader, as in a follower loop) collapse
+// into the Ref overload; runtime dispatch still links via the instance.
+declare const chainTarget: Ref<{ x: number; y: number }> | SpringObjectRef<{ x: number; y: number }>
+useSpring(chainTarget)
 
 const follower = useSpring(obj)
 const followerTyped: SpringObjectRef<{ position: { x: number; y: number }; opacity: number }> =

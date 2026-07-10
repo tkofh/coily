@@ -186,26 +186,37 @@ describe('linked spring chains', () => {
   })
 })
 
-describe('2d springs', () => {
-  bench('advance 1,000 active 2d springs (1 frame)', () => {
+describe('spring objects', () => {
+  // Four channels per object — comparable to four scalar springs.
+  const shape = { position: { x: 0, y: 0 }, scale: 1, opacity: 1 }
+  const fullTarget = { position: { x: 100, y: 100 }, scale: 2, opacity: 0 }
+
+  bench('create 1,000 spring objects (4 channels)', () => {
     const system = createSpringSystem()
     for (let i = 0; i < 1_000; i++) {
-      system.createSpring2D({ target: { x: 100, y: 100 }, value: { x: 0, y: 0 } }, defaultConfig)
+      system.createSpringObject(shape, defaultConfig)
+    }
+  })
+
+  bench('advance 250 spring objects × 4 channels (1 frame)', () => {
+    // Same motion count as "advance 1,000 active springs".
+    const system = createSpringSystem()
+    for (let i = 0; i < 250; i++) {
+      const spring = system.createSpringObject(shape, defaultConfig)
+      spring.target = fullTarget
     }
     system.advance(FRAME)
   })
 
-  bench('settle 100 2d springs to rest (with onUpdate)', () => {
+  bench('settle 100 spring objects to rest (with onUpdate)', () => {
     const system = createSpringSystem()
     let sum = 0
     const springs = Array.from({ length: 100 }, () => {
-      const spring = system.createSpring2D(
-        { target: { x: 100, y: 100 }, value: { x: 0, y: 0 } },
-        defaultConfig,
-      )
+      const spring = system.createSpringObject(shape, defaultConfig)
       spring.onUpdate(() => {
-        sum += spring.value.x
+        sum += spring.value.position.x
       })
+      spring.target = fullTarget
       return spring
     })
     while (springs.some((s) => !s.isResting)) {
@@ -213,13 +224,37 @@ describe('2d springs', () => {
     }
   })
 
-  bench('settle 100 2d springs to rest (no listeners)', () => {
+  bench('settle 100 spring objects to rest (no listeners)', () => {
     const system = createSpringSystem()
-    const springs = Array.from({ length: 100 }, () =>
-      system.createSpring2D({ target: { x: 100, y: 100 }, value: { x: 0, y: 0 } }, defaultConfig),
-    )
+    const springs = Array.from({ length: 100 }, () => {
+      const spring = system.createSpringObject(shape, defaultConfig)
+      spring.target = fullTarget
+      return spring
+    })
     while (springs.some((s) => !s.isResting)) {
       system.advance(FRAME)
+    }
+  })
+
+  bench('partial retargets on 1,000 spring objects', () => {
+    const system = createSpringSystem()
+    const springs = Array.from({ length: 1_000 }, () =>
+      system.createSpringObject(shape, defaultConfig),
+    )
+    for (const spring of springs) {
+      spring.target = { position: { x: 100 } }
+    }
+  })
+
+  bench('read composite value 10,000 times (4 channels)', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpringObject(shape, defaultConfig)
+    spring.target = fullTarget
+    system.advance(FRAME)
+    // oxlint-disable-next-line no-unused-vars
+    let sum = 0
+    for (let i = 0; i < 10_000; i++) {
+      sum += spring.value.position.x
     }
   })
 })
