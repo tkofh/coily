@@ -1,5 +1,5 @@
 ---
-"coily": minor
+'coily': minor
 ---
 
 Add spring objects: springs over arbitrary numeric shapes.

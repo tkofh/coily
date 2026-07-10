@@ -11,8 +11,8 @@
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "check": "oxlint && oxfmt --check .",
-    "publish-packages": "turbo run check build test && changeset version && changeset publish",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "version-packages": "changeset version && pnpm run format"
   },
   "devDependencies": {
     "@changesets/cli": "^2.30.0",

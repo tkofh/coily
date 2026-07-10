@@ -1,5 +1,5 @@
 ---
-"coily": minor
+'coily': minor
 ---
 
 `onStart` and `onStop` now describe the spring's logical animation state and

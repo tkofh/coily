@@ -1,5 +1,5 @@
 ---
-"coily": minor
+'coily': minor
 ---
 
 `useSpring` and `useSpring2D` no longer take arrays of targets. An array

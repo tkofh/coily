@@ -1,5 +1,5 @@
 ---
-"coily": patch
+'coily': patch
 ---
 
 Remove the `engines` field from the published package. It declared

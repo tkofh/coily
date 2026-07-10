@@ -39,9 +39,7 @@ describe('computeTimeRemaining', () => {
 
   test('returns nonzero when displacement exceeds threshold', () => {
     const config = defineSpring({ mass: 1, tension: 100, damping: 10 })
-    expect(
-      config.computeTimeRemaining({ position: 0.02, velocity: 0 }),
-    ).toBeGreaterThan(0)
+    expect(config.computeTimeRemaining({ position: 0.02, velocity: 0 })).toBeGreaterThan(0)
   })
 
   test('returns Infinity for zero damping', () => {

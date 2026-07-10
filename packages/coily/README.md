@@ -36,10 +36,10 @@ spring.target = 300
 `defineSpring` accepts several input shapes; whatever you leave out is derived:
 
 ```ts
-defineSpring({ tension: 500, damping: 40 })      // direct physical parameters
+defineSpring({ tension: 500, damping: 40 }) // direct physical parameters
 defineSpring({ tension: 500, dampingRatio: 0.7 }) // damping derived
-defineSpring({ tension: 500, bounce: 0.3 })       // bounce = 1 - dampingRatio
-defineSpring({ duration: 750, dampingRatio: 1 })  // tuned to settle in ~750ms
+defineSpring({ tension: 500, bounce: 0.3 }) // bounce = 1 - dampingRatio
+defineSpring({ duration: 750, dampingRatio: 1 }) // tuned to settle in ~750ms
 defineSpring({ duration: 750, bounce: 0.5 })
 ```
 
@@ -49,7 +49,7 @@ defineSpring({ duration: 750, bounce: 0.5 })
 - **`bounce`** — friendlier alias for damping ratio: −1 (overdamped) to 1 (max bounce)
 - **`duration`** — target settle time in ms. Assumes an initial displacement of 1; pass `displacement` matching your animation range for accurate timing
 - **`mass`** — defaults to 1
-- **`precision`** — decimal places for reported values (default 2). A spring is *resting* once position and velocity both round to zero
+- **`precision`** — decimal places for reported values (default 2). A spring is _resting_ once position and velocity both round to zero
 
 Without a config, springs are critically damped with a ~500ms settle time.
 
@@ -142,7 +142,7 @@ const x = useSpring(target, { duration: 500, bounce: 0.3 })
 
 `useSpring` returns a `SpringRef`: a writable ref of the animated value with `velocity`, `isResting`, and `timeRemaining` refs plus `jumpTo()` attached. The target can be a ref, a getter, or another `SpringRef` (which chains the springs). Options are also reactive — swap configs and the spring reconfigures in place.
 
-Numeric shapes work the same way: pass a record or array (plain, ref, or getter) and get a `SpringObjectRef`. Reads are the deep-readonly composite value, writes take partial shapes, options accept reactive per-channel config shapes, and passing another `SpringObjectRef` follows it channel-wise. Deeply reactive targets retarget on nested mutation. For several *independent* scalar springs, map over the targets — composables are loop-safe: `targets.map((t) => useSpring(t))`.
+Numeric shapes work the same way: pass a record or array (plain, ref, or getter) and get a `SpringObjectRef`. Reads are the deep-readonly composite value, writes take partial shapes, options accept reactive per-channel config shapes, and passing another `SpringObjectRef` follows it channel-wise. Deeply reactive targets retarget on nested mutation. For several _independent_ scalar springs, map over the targets — composables are loop-safe: `targets.map((t) => useSpring(t))`.
 
 There's also a renderless `<SpringValue :target="n">` component exposing `{ value, velocity, isResting, timeRemaining, jumpTo }` through its default slot.
 

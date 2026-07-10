@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { SpringOptions } from 'coily'
 
-
 const count = 512
 const playgroundRef = ref<HTMLElement | null>(null)
 const { width: winW, height: winH } = useElementSize(playgroundRef)
@@ -98,7 +97,16 @@ const colors = Array.from({ length: count }, (_, i) => {
         </pattern>
       </defs>
       <rect :x="-winW / 2" :y="-winH / 2" :width="winW" :height="winH" fill="url(#grid)" />
-      <circle v-for="r in 6" :key="r" cx="0" cy="0" :r="r * 120" fill="none" stroke="#555" stroke-width="0.5" />
+      <circle
+        v-for="r in 6"
+        :key="r"
+        cx="0"
+        cy="0"
+        :r="r * 120"
+        fill="none"
+        stroke="#555"
+        stroke-width="0.5"
+      />
     </svg>
     <div
       v-for="i in count"

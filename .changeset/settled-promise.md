@@ -1,5 +1,5 @@
 ---
-"coily": minor
+'coily': minor
 ---
 
 Add `spring.settled` — a promise that resolves when the spring next comes to

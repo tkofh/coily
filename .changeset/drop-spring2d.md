@@ -1,5 +1,5 @@
 ---
-"coily": minor
+'coily': minor
 ---
 
 Remove the 2D API: `createSpring2D`, `Spring2D`, `useSpring2D`,
@@ -8,11 +8,11 @@ objects are a strict superset — a 2D spring is a spring object over
 `{ x, y }`:
 
 ```ts
-system.createSpring2D({ x: 0, y: 0 })     // before
+system.createSpring2D({ x: 0, y: 0 }) // before
 system.createSpringObject({ x: 0, y: 0 }) // after — same API, plus partial writes
 
 useSpring2D(target) // before
-useSpring(target)   // after
+useSpring(target) // after
 ```
 
 Displaced creation composes from create + retarget, with identical

@@ -1,5 +1,5 @@
 ---
-"coily": minor
+'coily': minor
 ---
 
 Respect `prefers-reduced-motion` by default.

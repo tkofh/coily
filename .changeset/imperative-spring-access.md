@@ -1,5 +1,5 @@
 ---
-"coily": minor
+'coily': minor
 ---
 
 First-class imperative access to the provided spring system in Vue.

@@ -5,5 +5,5 @@ export default defineNuxtConfig({
   modules: ['coily/nuxt', '@vueuse/nuxt'],
   coily: {
     debug: true,
-  }
+  },
 })

@@ -1,5 +1,5 @@
 ---
-"coily": patch
+'coily': patch
 ---
 
 Springs now emit exactly one `update` per frame.
