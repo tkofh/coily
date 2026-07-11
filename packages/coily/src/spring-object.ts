@@ -1,9 +1,15 @@
 import { SpringConfig } from './config.ts'
 import { Emitter } from './emitter.ts'
 import type { MotionSet } from './motion-set.ts'
-import { ShapeMap, type ShapeView, describePath, isRecord, isRecordOrArray } from './shape-map.ts'
+import {
+  BRANCH,
+  ChannelTree,
+  type ChannelView,
+  type Coverage,
+  describePath,
+} from './channel-tree.ts'
 import { Spring } from './spring.ts'
-import { invariant } from './util.ts'
+import { invariant, isRecord, isRecordOrArray } from './util.ts'
 
 /**
  * Compile-time validation of a value shape: every channel must be a `number`,
@@ -41,7 +47,7 @@ export type Shape<T> = 0 extends 1 & T
  */
 export type PartialShape<T> = T extends number
   ? number
-  : { [K in keyof T]?: PartialShape<T[K]> | undefined }
+  : { readonly [K in keyof T]?: PartialShape<T[K]> | undefined }
 
 /**
  * A deep-readonly view of a value shape. Composite reads (`target`, `value`,
@@ -64,11 +70,11 @@ export type ReadonlyShape<T> = T extends number
 export type ConfigShape<T> =
   | SpringConfig
   | null
-  | (T extends number ? never : { [K in keyof T]?: ConfigShape<T[K]> | undefined })
+  | (T extends number ? never : { readonly [K in keyof T]?: ConfigShape<T[K]> | undefined })
 
 export interface SpringObjectWithOffset<T extends object> {
-  spring: SpringObject<T>
-  offset?: PartialShape<T> | undefined
+  readonly spring: SpringObject<T>
+  readonly offset?: PartialShape<T> | undefined
 }
 
 export type SpringObjectTarget<T extends object> =
@@ -82,20 +88,15 @@ function invalidConfig(path: string): string {
   return `Invalid config for ${describePath(path)}: expected a SpringConfig, null, or a config shape matching the value`
 }
 
-const BRANCH = { branch: true } as const
-
 /**
  * Decides what a config node means: `null` and `SpringConfig` instances are
  * configs covering the whole subtree, any other object or array is a config
  * shape to descend into (its structure is checked on the way down), and
  * anything else — a bare number, string, or options object — is invalid.
  */
-function resolveConfigNode(
-  node: unknown,
-  path: string,
-): { branch: true } | { value: SpringConfig | null } {
-  if (node === null) return { value: null }
-  if (node instanceof SpringConfig) return { value: node }
+function resolveConfigNode(node: unknown, path: string): Coverage<SpringConfig | null> {
+  if (node === null) return null
+  if (node instanceof SpringConfig) return node
   if (isRecordOrArray(node)) return BRANCH
   throw new Error(invalidConfig(path))
 }
@@ -129,10 +130,10 @@ const RESOLVED = Promise.resolve()
 
 export class SpringObject<in out T extends object> {
   readonly #motions: MotionSet
-  readonly #map: ShapeMap<Spring>
-  readonly #targetView: ShapeView<Spring>
-  readonly #valueView: ShapeView<Spring>
-  readonly #velocityView: ShapeView<Spring>
+  readonly #map: ChannelTree<Spring>
+  readonly #targetView: ChannelView<Spring>
+  readonly #valueView: ChannelView<Spring>
+  readonly #velocityView: ChannelView<Spring>
 
   readonly #emitter = new Emitter()
   #running = false
@@ -169,7 +170,7 @@ export class SpringObject<in out T extends object> {
       'Spring object value must be a plain object or an array of numeric channels',
     )
 
-    this.#map = new ShapeMap(value, (leafValue) => new Spring(motions, leafValue))
+    this.#map = new ChannelTree(value, (leafValue) => new Spring(motions, leafValue))
     if (config !== undefined) {
       this.#map.broadcast(config, resolveConfigNode, assignConfig, 'config')
     }

@@ -1,20 +1,20 @@
-import { type Coverage, ShapeNode, ShapeView, isRecordOrArray } from './shape-node.ts'
-import { invariant } from './util.ts'
+import { type Coverage, ChannelTreeNode, ChannelView } from './channel-tree-node.ts'
+import { invariant, isRecordOrArray } from './util.ts'
 
-export { ShapeView, describePath, isRecord, isRecordOrArray } from './shape-node.ts'
-export type { Coverage } from './shape-node.ts'
+export { BRANCH, ChannelView, describePath } from './channel-tree-node.ts'
+export type { Coverage } from './channel-tree-node.ts'
 
 /**
  * A numeric shape — a plain object or array whose leaves are all numbers —
  * flattened into one leaf object per number, with the nesting preserved as a
- * tree of `ShapeNode`s. The shape is fixed at construction. Knows nothing
+ * tree of `ChannelTreeNode`s. The shape is fixed at construction. Knows nothing
  * about what the leaves are: construction, views, scatter, zip, and
  * broadcast are all structural; leaf semantics
  * live with the caller. Paths appear as dot-joined strings (`position.x`,
  * `color.2`) in every error.
  */
-export class ShapeMap<L> {
-  readonly #root: ShapeNode<L>
+export class ChannelTree<L> {
+  readonly #root: ChannelTreeNode<L>
   readonly #leaves: L[] = []
 
   constructor(shape: object, factory: (value: number, path: string) => L) {
@@ -22,7 +22,7 @@ export class ShapeMap<L> {
       isRecordOrArray(shape),
       'A shape must be a plain object or an array of numeric channels',
     )
-    this.#root = ShapeNode.build(shape, '', factory, this.#leaves)
+    this.#root = ChannelTreeNode.build(shape, '', factory, this.#leaves)
   }
 
   /** Every leaf in depth-first shape order. */
@@ -31,11 +31,11 @@ export class ShapeMap<L> {
   }
 
   /**
-   * Builds a live mirror of the shape with `read(leaf)` at every leaf —
-   * see `ShapeView`.
+   * Builds a live view of the shape with `read(leaf)` at every leaf —
+   * see `ChannelView`.
    */
-  createView(read: (leaf: L) => number): ShapeView<L> {
-    return new ShapeView(this.#root, read)
+  createView(read: (leaf: L) => number): ChannelView<L> {
+    return new ChannelView(this.#root, read)
   }
 
   /**
@@ -44,7 +44,7 @@ export class ShapeMap<L> {
    * mismatches throw; `undefined` entries (and array holes) are skipped.
    */
   scatter(input: unknown, apply: (leaf: L, value: number) => void): void {
-    this.#root.scatter(input, '', apply)
+    this.#root.scatter(input, apply)
   }
 
   /**
@@ -54,12 +54,12 @@ export class ShapeMap<L> {
    * arrive as `undefined`.
    */
   zip(
-    other: ShapeMap<L>,
+    other: ChannelTree<L>,
     values: unknown,
     valuesLabel: string,
     fn: (mine: L, theirs: L, value: number | undefined, path: string) => void,
   ): void {
-    this.#root.zip(other.#root, values, '', { fn, label: valuesLabel })
+    this.#root.zip(other.#root, values, { fn, label: valuesLabel })
   }
 
   /**
@@ -76,6 +76,6 @@ export class ShapeMap<L> {
     label: string,
   ): void {
     if (input === undefined) return
-    this.#root.broadcast(input, '', { resolve, apply, label })
+    this.#root.broadcast(input, { resolve, apply, label })
   }
 }
