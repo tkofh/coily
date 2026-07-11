@@ -12,5 +12,4 @@ forcing style damage at input rate; retarget round trips are now exact.
 
 Rest is also a fixpoint now: when a tick lands inside the resting
 threshold, the exact state is zeroed before the final update, so a
-follower's last rebase sees its leader's target precisely. Reads are
-unchanged — `value` and `velocity` still round to the configured precision.
+follower's last rebase sees its leader's target precisely.

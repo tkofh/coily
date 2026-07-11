@@ -7,7 +7,9 @@ export interface SpringState {
 
 interface BaseOptions {
   /**
-   * Precision for resting threshold.
+   * Decimal places of the resting threshold: a spring rests once its
+   * remaining motion cannot reach half a unit in the last place,
+   * 0.5 × 10⁻ᵖ. Values are never rounded — precision only decides rest.
    * @default 2
    */
   readonly precision?: number | undefined
@@ -147,7 +149,7 @@ export class SpringConfig {
   readonly criticalDamping: number
   readonly dampingRatio: number
 
-  readonly precisionMultiplier: number
+  /** Resting threshold in value units: half a unit in the last `precision` place. */
   readonly restingMagnitude: number
 
   constructor(input: SpringOptions) {
@@ -185,8 +187,7 @@ export class SpringConfig {
     invariant(precision >= 0, 'Precision must be greater than or equal to 0')
 
     this.precision = precision
-    this.precisionMultiplier = 10 ** precision
-    this.restingMagnitude = 0.5 / this.precisionMultiplier
+    this.restingMagnitude = 0.5 / 10 ** precision
 
     const hasM = mass !== undefined
     const hasK = tension !== undefined

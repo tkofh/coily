@@ -20,9 +20,9 @@ const springParamsArb = fc
     tension: fc.double({ min: 10, max: 500, noNaN: true }),
     // Damping ratio between 0.1 and 3 (covers underdamped, critical, overdamped)
     dampingRatio: fc.double({ min: 0.1, max: 3, noNaN: true }),
-    // Displacement magnitude well above the resting threshold (0.01 at precision 2).
-    // Sub-threshold displacements are trivial and dominated by rounding artifacts,
-    // not spring physics — not useful to test analytically.
+    // Displacement magnitude well above the resting threshold (0.005 at precision 2).
+    // Sub-threshold displacements rest immediately by design — not useful to
+    // test analytically.
     displacement: fc.double({ min: 1, max: 500, noNaN: true }),
     target: fc.double({ min: -200, max: 200, noNaN: true }),
     sign: fc.constantFrom(1, -1),

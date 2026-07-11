@@ -49,7 +49,7 @@ defineSpring({ duration: 750, bounce: 0.5 })
 - **`bounce`** — friendlier alias for damping ratio: −1 (overdamped) to 1 (max bounce)
 - **`duration`** — target settle time in ms. Assumes an initial displacement of 1; pass `displacement` matching your animation range for accurate timing
 - **`mass`** — defaults to 1
-- **`precision`** — decimal places for reported values (default 2). A spring is _resting_ once position and velocity both round to zero
+- **`precision`** — decimal places of the resting threshold (default 2). A spring is _resting_ once its remaining motion cannot reach half a unit in the last place — 0.005 at the default. Values are never rounded; set precision to match your domain's resolution (see [PRECISION.md](https://github.com/tkofh/coily/blob/main/PRECISION.md))
 
 Without a config, springs are critically damped with a ~500ms settle time.
 
