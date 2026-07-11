@@ -1,14 +1,7 @@
-import { SpringConfig, type SpringOptionKeys, type SpringOptions } from './config.ts'
+import { SpringConfig } from './config.ts'
 import { Emitter } from './emitter.ts'
 import type { MotionSet } from './motion-set.ts'
-import {
-  type AnnotationContext,
-  ShapeMap,
-  type ShapeView,
-  describePath,
-  isRecord,
-  isRecordOrArray,
-} from './shape-map.ts'
+import { ShapeMap, type ShapeView, describePath, isRecord, isRecordOrArray } from './shape-map.ts'
 import { Spring } from './spring.ts'
 import { invariant } from './util.ts'
 
@@ -60,18 +53,16 @@ export type ReadonlyShape<T> = T extends number
   : { readonly [K in keyof T]: ReadonlyShape<T[K]> }
 
 /**
- * Configuration for a spring object: a single config applied to every
+ * Configuration for a spring object: a single `SpringConfig` applied to every
  * channel, or an object mirroring the value shape with configs at any level.
- * A value at a subtree applies to every channel below it; deeper values win.
+ * A config at a subtree applies to every channel below it; deeper configs win.
  * `null` reverts to the default config (or the leader's while following).
- * Plain option objects are accepted anywhere a `SpringConfig` is — except
- * that value shapes own their key namespace: where a channel shares a spring
- * option's name, a bare options object is ambiguous and rejected (pass a
- * `SpringConfig` or a per-channel shape instead), mirroring the runtime rule.
+ * Configs are always `SpringConfig` instances (from `defineSpring`), so a
+ * plain object is unambiguously a config shape and any non-config leaf it
+ * reaches is an error.
  */
 export type ConfigShape<T> =
   | SpringConfig
-  | (SpringOptions & { [K in Extract<keyof T, SpringOptionKeys>]?: never })
   | null
   | (T extends number ? never : { [K in keyof T]?: ConfigShape<T[K]> | undefined })
 
@@ -87,52 +78,25 @@ export type SpringObjectTarget<T extends object> =
 
 // ── Config resolution ───────────────────────────────────────────────
 
-/** Runtime mirror of `SpringOptionKeys` — `satisfies` keeps the two in lockstep. */
-const SPRING_OPTION_KEYS: ReadonlySet<string> = new Set(
-  Object.keys({
-    mass: true,
-    tension: true,
-    damping: true,
-    dampingRatio: true,
-    bounce: true,
-    duration: true,
-    displacement: true,
-    precision: true,
-  } satisfies Record<SpringOptionKeys, true>),
-)
-
 function invalidConfig(path: string): string {
-  return `Invalid config for ${describePath(path)}: expected a SpringConfig, spring options, null, or a config shape matching the value`
+  return `Invalid config for ${describePath(path)}: expected a SpringConfig, null, or a config shape matching the value`
 }
 
 const BRANCH = { branch: true } as const
 
 /**
- * Decides what a config node means at a given position in the shape. A plain
- * object is a config shape when every key belongs to the value shape at this
- * position, and spring options otherwise — value shapes own the namespace, so
- * a shape whose channels are all named like spring options resolves as a
- * config shape and reports its (numeric, hence invalid) leaves instead of
- * silently configuring the wrong thing.
+ * Decides what a config node means: `null` and `SpringConfig` instances are
+ * configs covering the whole subtree, any other object or array is a config
+ * shape to descend into (its structure is checked on the way down), and
+ * anything else — a bare number, string, or options object — is invalid.
  */
 function resolveConfigNode(
   node: unknown,
-  context: AnnotationContext,
   path: string,
 ): { branch: true } | { value: SpringConfig | null } {
   if (node === null) return { value: null }
   if (node instanceof SpringConfig) return { value: node }
-  if (Array.isArray(node)) {
-    invariant(context.position === 'list', invalidConfig(path))
-    return BRANCH
-  }
-  if (isRecord(node)) {
-    if (context.keysMatch) return BRANCH
-    const keys = Object.keys(node)
-    if (keys.length > 0 && keys.every((key) => SPRING_OPTION_KEYS.has(key))) {
-      return { value: new SpringConfig(node as unknown as SpringOptions) }
-    }
-  }
+  if (isRecordOrArray(node)) return BRANCH
   throw new Error(invalidConfig(path))
 }
 

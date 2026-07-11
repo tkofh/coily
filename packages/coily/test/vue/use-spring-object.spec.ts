@@ -114,7 +114,7 @@ describe('useSpring: object shapes', () => {
 
   test('reactive options update the config', async () => {
     const target = ref({ x: 0 })
-    const options = ref({ mass: 1, tension: 100, damping: 10 })
+    const options = ref(defineSpring({ mass: 1, tension: 100, damping: 10 }))
     const { spring, system } = mountObject(() => useSpring(target, options))
 
     target.value = { x: 100 }
@@ -126,7 +126,7 @@ describe('useSpring: object shapes', () => {
     await nextTick()
     for (let i = 0; i < 500; i++) system.advance(16)
 
-    options.value = { mass: 1, tension: 1000, damping: 10 }
+    options.value = defineSpring({ mass: 1, tension: 1000, damping: 10 })
     target.value = { x: 100 }
     await nextTick()
     system.advance(16)

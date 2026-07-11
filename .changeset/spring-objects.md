@@ -18,12 +18,12 @@ await spring.settled
 - Partial writes throughout: `target`, `value`, `velocity`, and `jumpTo`
   all take partial shapes and leave unnamed channels alone. Unknown
   channels throw with their path (`position.z`).
-- Per-channel configs: pass one config for every channel, or a shape
-  mirroring the value with configs (or option objects, or `null`) at any
-  level — a config at a subtree covers every channel below it. Value
-  shapes own their key namespace: where a channel is named like a spring
-  option, pass a `SpringConfig` or per-channel shape, not a bare options
-  object.
+- Per-channel configs: pass one `SpringConfig` for every channel, or a
+  shape mirroring the value with configs (or `null`) at any level — a
+  config at a subtree covers every channel below it. Configs are always
+  `SpringConfig` instances (from `defineSpring`), so a plain object is
+  unambiguously a per-channel shape, and any non-config leaf it reaches
+  throws with its path.
 - Channel-wise chaining: assign another spring object of the exact same
   shape as `target`, optionally `{ spring, offset }` with a partial offset
   shape. A partial numeric target detaches only the channels it names.

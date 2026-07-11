@@ -164,26 +164,20 @@ describe('ShapeMap: applyAnnotation', () => {
     )
   })
 
-  test('exposes position and key matching to the resolver', () => {
+  test('passes the traversal path to the resolver', () => {
     const map = createMap({ position: { x: 0 }, color: [0] })
-    const contexts: [string, string, boolean][] = []
+    const paths: string[] = []
 
     map.applyAnnotation(
       { position: { x: 1 }, color: [2] },
-      (input, context, path) => {
-        contexts.push([path, context.position, context.keysMatch])
+      (input, path) => {
+        paths.push(path)
         return typeof input === 'number' ? { value: input } : { branch: true as const }
       },
       vi.fn(),
       'annotation',
     )
 
-    expect(contexts).toEqual([
-      ['', 'record', true],
-      ['position', 'record', true],
-      ['position.x', 'leaf', false],
-      ['color', 'list', false],
-      ['color.0', 'leaf', false],
-    ])
+    expect(paths).toEqual(['', 'position', 'position.x', 'color', 'color.0'])
   })
 })

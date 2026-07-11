@@ -194,11 +194,15 @@ describe('SpringObject: config shapes', () => {
     expect(spring.config).toBe(config)
   })
 
-  test('accepts spring options as a single config', () => {
+  test('rejects a bare options object as a single config', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ x: 0 }, { mass: 1, tension: 170, damping: 26 })
 
-    expect(spring.config?.tension).toBe(170)
+    // Configs must be `SpringConfig` instances (via `defineSpring`); a bare
+    // options object reads as a config shape, so its option keys are unknown
+    // channels.
+    expect(() =>
+      system.createSpringObject({ x: 0 }, { mass: 1, tension: 170, damping: 26 } as never),
+    ).toThrow("Unknown channel 'mass'")
   })
 
   test('per-channel configs animate channels at different speeds', () => {
@@ -226,19 +230,6 @@ describe('SpringObject: config shapes', () => {
     expect(spring.value.position.x).toBeGreaterThan(spring.value.opacity)
   })
 
-  test('accepts spring options at config shape leaves', () => {
-    const system = createSpringSystem()
-    const spring = system.createSpringObject(
-      { fast: 0, slow: 0 },
-      { fast: { tension: 1000, dampingRatio: 1 }, slow: { tension: 10, dampingRatio: 1 } },
-    )
-
-    spring.target = { fast: 100, slow: 100 }
-    system.advance(100)
-
-    expect(spring.value.fast).toBeGreaterThan(spring.value.slow)
-  })
-
   test('setting config to null reverts all channels to the default', () => {
     const system = createSpringSystem()
     const spring = system.createSpringObject({ x: 0, y: 0 }, config)
@@ -260,22 +251,21 @@ describe('SpringObject: config shapes', () => {
     expect(spring.value.x).not.toBe(spring.value.y)
   })
 
-  test('a shape whose channels are named like spring options resolves as a config shape', () => {
+  test('rejects a numeric leaf in a config shape', () => {
     const system = createSpringSystem()
 
-    // { tension, damping } are channels of this shape, so the config object
-    // is a config shape and its numeric leaves are invalid configs — it must
-    // throw rather than silently apply as uniform options.
+    // A plain object is a config shape, so its leaves must be configs — a
+    // number is not, even when the channel is named like a spring option.
     expect(() =>
       system.createSpringObject({ tension: 0, damping: 0 }, { tension: 170, damping: 26 } as never),
     ).toThrow("Invalid config for 'tension'")
   })
 
-  test('throws on config keys matching neither the shape nor spring options', () => {
+  test('throws on config keys that are not channels', () => {
     const system = createSpringSystem()
 
     expect(() => system.createSpringObject({ x: 0 }, { opacityy: config } as never)).toThrow(
-      'Invalid config for the root',
+      "Unknown channel 'opacityy'",
     )
   })
 })

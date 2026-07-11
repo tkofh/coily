@@ -6,13 +6,11 @@
  * `*.spec.ts`, `*.browser.ts`, and `*.bench.ts`). Each `@ts-expect-error`
  * is self-validating: tsc fails if the line stops erroring.
  */
-import type { SpringOptionKeys } from '../src/config.ts'
 import type {
   ReadonlyShape,
   Shape,
   SpringConfig,
   SpringObject,
-  SpringOptions,
   SpringPosition,
   SpringSystem,
 } from '../src/index.ts'
@@ -143,10 +141,9 @@ follower3d.target = leader
 // ── Config shapes ────────────────────────────────────────────────────
 
 system.createSpringObject({ x: 0, y: 0 }, cfg)
-system.createSpringObject({ x: 0, y: 0 }, { tension: 170, damping: 26 })
 system.createSpringObject({ x: 0, y: 0 }, null)
 system.createSpringObject({ x: 0, y: 0 }, { x: cfg })
-system.createSpringObject({ x: 0, y: 0 }, { x: { tension: 170, damping: 26 }, y: null })
+system.createSpringObject({ x: 0, y: 0 }, { x: cfg, y: null })
 system.createSpringObject({ position: { x: 0, y: 0 }, opacity: 1 }, { position: cfg })
 
 obj.config = cfg
@@ -158,20 +155,20 @@ obj.config = { z: cfg }
 // @ts-expect-error a number is not a config
 obj.config = { opacity: 170 }
 
-// Value shapes own their key namespace: where channels share spring option
-// names, a bare options object is ambiguous, so `ConfigShape` only accepts
-// a `SpringConfig` or a per-channel shape there. (This is stricter than the
-// runtime, which accepts an options object whenever at least one of its
-// keys falls outside the shape — the type cannot express "at least one",
-// so it asks for the unambiguous spelling.)
+// Configs are always `SpringConfig` instances, so a bare options object is
+// rejected everywhere a config is expected.
+// @ts-expect-error bare options are not a config
+system.createSpringObject({ x: 0, y: 0 }, { tension: 170, damping: 26 })
+// @ts-expect-error bare options are not a config, even at a leaf
+system.createSpringObject({ x: 0, y: 0 }, { x: { tension: 170, damping: 26 } })
+
+// A channel named like a spring option is unremarkable — there is no
+// ambiguity to resolve, since a config is always a `SpringConfig`.
 const collide = system.createSpringObject({ tension: 0, damping: 0 })
 collide.config = cfg
 collide.config = { tension: cfg, damping: cfg }
-// @ts-expect-error ambiguous: channels are named like spring options
+// @ts-expect-error a number is not a config, even at an option-named channel
 collide.config = { tension: 170, damping: 26 }
-const partialCollide = system.createSpringObject({ tension: 0, other: 0 })
-// @ts-expect-error rejected even though the runtime would read it as options
-partialCollide.config = { tension: 170, damping: 26 }
 
 // ── Why shapes get `createSpringObject`, not a `createSpring` overload ─
 
@@ -188,13 +185,3 @@ void asValueShape
 // The two creation paths stay disjoint:
 // @ts-expect-error a value shape is not a scalar spring position
 system.createSpring({ x: 0, y: 0 })
-
-// ── SpringOptions and the runtime option-key set stay in lockstep ───
-
-type KeysOfUnion<U> = U extends unknown ? keyof U : never
-const optionKeysCovered: [KeysOfUnion<SpringOptions>] extends [SpringOptionKeys]
-  ? [SpringOptionKeys] extends [KeysOfUnion<SpringOptions>]
-    ? true
-    : never
-  : never = true
-void optionKeysCovered

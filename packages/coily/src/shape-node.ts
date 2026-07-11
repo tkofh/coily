@@ -18,18 +18,11 @@ export function describePath(path: string): string {
   return path ? `'${path}'` : 'the root'
 }
 
-/** Where an annotation node sits in the shape, for annotation resolvers. */
-export interface AnnotationContext {
-  position: 'leaf' | 'list' | 'record'
-  /** For record positions: whether every key of the (plain object) input exists in the shape here. */
-  keysMatch: boolean
-}
-
 export type Annotation<V> = { branch: true } | { value: V }
 
 /** An annotation traversal's moving parts, bundled so recursion threads one value. */
 export interface AnnotateOp<L, V> {
-  resolve(input: unknown, context: AnnotationContext, path: string): Annotation<V>
+  resolve(input: unknown, path: string): Annotation<V>
   apply(leaf: L, value: V): void
   /** Names the annotation (`config`, `offset`, …) in error messages. */
   label: string
@@ -158,7 +151,7 @@ export class LeafNode<L> extends ShapeNode<L> {
   }
 
   annotate<V>(input: unknown, path: string, op: AnnotateOp<L, V>): void {
-    const resolved = op.resolve(input, { position: 'leaf', keysMatch: false }, path)
+    const resolved = op.resolve(input, path)
     invariant('value' in resolved, `Cannot descend into channel '${path}'`)
     op.apply(this.leaf, resolved.value)
   }
@@ -224,7 +217,7 @@ export class ListNode<L> extends ShapeNode<L> {
   }
 
   annotate<V>(input: unknown, path: string, op: AnnotateOp<L, V>): void {
-    const resolved = op.resolve(input, { position: 'list', keysMatch: false }, path)
+    const resolved = op.resolve(input, path)
     if ('value' in resolved) {
       this.cover(resolved.value, op.apply)
       return
@@ -298,8 +291,7 @@ export class RecordNode<L> extends ShapeNode<L> {
   }
 
   annotate<V>(input: unknown, path: string, op: AnnotateOp<L, V>): void {
-    const keysMatch = isRecord(input) && Object.keys(input).every((key) => this.children.has(key))
-    const resolved = op.resolve(input, { position: 'record', keysMatch }, path)
+    const resolved = op.resolve(input, path)
     if ('value' in resolved) {
       this.cover(resolved.value, op.apply)
       return

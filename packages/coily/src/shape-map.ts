@@ -1,14 +1,8 @@
-import {
-  type Annotation,
-  type AnnotationContext,
-  ShapeNode,
-  ShapeView,
-  isRecordOrArray,
-} from './shape-node.ts'
+import { type Annotation, ShapeNode, ShapeView, isRecordOrArray } from './shape-node.ts'
 import { invariant } from './util.ts'
 
 export { ShapeView, describePath, isRecord, isRecordOrArray } from './shape-node.ts'
-export type { Annotation, AnnotationContext } from './shape-node.ts'
+export type { Annotation } from './shape-node.ts'
 
 /**
  * A numeric shape — a plain object or array whose leaves are all numbers —
@@ -77,7 +71,7 @@ export class ShapeMap<L> {
    */
   applyAnnotation<V>(
     input: unknown,
-    resolve: (input: unknown, context: AnnotationContext, path: string) => Annotation<V>,
+    resolve: (input: unknown, path: string) => Annotation<V>,
     apply: (leaf: L, value: V) => void,
     label: string,
   ): void {

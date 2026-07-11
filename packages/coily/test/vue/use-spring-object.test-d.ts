@@ -53,6 +53,7 @@ fixed.value = [1, 2, 3]
 // ── Options accept anything ConfigShape does, reactively ────────────
 
 useSpring({ x: 0, y: 0 }, cfg)
+// @ts-expect-error bare options are not a config — wrap in defineSpring
 useSpring({ x: 0, y: 0 }, { tension: 170, damping: 26 })
 useSpring({ x: 0, y: 0 }, { x: cfg })
 useSpring({ x: 0, y: 0 }, ref({ x: cfg }))
@@ -94,7 +95,7 @@ useSpring([0, () => 10])
 // ── Pool creation ───────────────────────────────────────────────────
 
 const pool = useSpringPool()
-const poolSpring = pool.createSpringObject({ x: 0 }, { tension: 170, damping: 26 })
+const poolSpring = pool.createSpringObject({ x: 0 }, cfg)
 const poolValue: number = poolSpring.value.x
 void poolValue
 // @ts-expect-error string channels are not animatable
