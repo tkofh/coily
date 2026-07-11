@@ -141,6 +141,11 @@ export interface SpringSystem {
    */
   readonly reducedMotion: boolean
 
+  /**
+   * Frame-rate ceiling — see `TickerOptions.fps`. `0` (the default) means
+   * uncapped: springs advance once per displayed frame. Assign `0` to
+   * remove a cap at runtime.
+   */
   fps: number
   lagThreshold: number
   adjustedLag: number

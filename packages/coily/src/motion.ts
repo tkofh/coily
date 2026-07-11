@@ -38,6 +38,11 @@ export class Motion {
     return this.#state.position
   }
 
+  /** The exact position — see `State.rawPosition`. */
+  get rawPosition() {
+    return this.#state.rawPosition
+  }
+
   set position(value: number) {
     this.#state.position = value
     this.#needsReset = true
@@ -92,6 +97,16 @@ export class Motion {
 
     this.#currentSolver.tick(dt)
     this.#timeRemaining = Math.max(0, this.#timeRemaining - dt * 1000)
+
+    // Rest is a fixpoint of the trajectory: once a tick lands inside the
+    // resting threshold, zero the exact state before emitting, so raw reads
+    // during the final update (a follower rebasing on its leader) see the
+    // target precisely rather than sub-quantum residue.
+    if (this.#state.isResting) {
+      this.#state.position = 0
+      this.#state.velocity = 0
+      this.#needsReset = true
+    }
 
     if (emit) {
       this.#emitter.emit('update')

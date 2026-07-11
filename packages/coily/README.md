@@ -164,7 +164,7 @@ The module provides a spring system for the whole app (started on the client), a
 
 ## Timing
 
-The built-in ticker targets 60fps by default (`fps` option/property) and clamps large frame gaps — e.g. returning from a backgrounded tab — via `lagThreshold` (default 500ms) and `adjustedLag` (default 33ms), so springs don't teleport. For manual stepping, skip `system.start()` and call `system.advance(dtMs)` yourself.
+The built-in ticker advances springs once per displayed frame, so motion is as smooth as the screen it runs on — 60Hz, 120Hz, or adaptive sync. The loop sleeps while every spring is at rest (an idle system schedules no frames) and wakes on the next write. Set `fps` (option/property) to cap the rate; caps are paced to whole display frames, and each tick still receives the true elapsed time. Large frame gaps — e.g. returning from a backgrounded tab — are clamped via `lagThreshold` (default 500ms) and `adjustedLag` (default 33ms), so springs don't teleport. For manual stepping, skip `system.start()` and call `system.advance(dtMs)` yourself.
 
 ## License
 

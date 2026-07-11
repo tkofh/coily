@@ -133,9 +133,9 @@ describe('SpringSystem: transport controls', () => {
 })
 
 describe('SpringSystem: ticker options', () => {
-  test('defaults fps to 60', () => {
+  test('defaults fps to 0 (uncapped)', () => {
     const system = createSpringSystem()
-    expect(system.fps).toBe(60)
+    expect(system.fps).toBe(0)
   })
 
   test('accepts fps via constructor options', () => {
@@ -147,6 +147,12 @@ describe('SpringSystem: ticker options', () => {
     const system = createSpringSystem()
     system.fps = 120
     expect(system.fps).toBe(120)
+  })
+
+  test('assigning 0 to fps removes the cap', () => {
+    const system = createSpringSystem({ fps: 30 })
+    system.fps = 0
+    expect(system.fps).toBe(0)
   })
 
   test('lagThreshold defaults to 500', () => {

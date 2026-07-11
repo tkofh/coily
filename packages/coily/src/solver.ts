@@ -20,9 +20,9 @@ export class UnderdampedSolver {
       this.#dampedFrequency = config.naturalFrequency * Math.sqrt(1 - config.dampingRatio ** 2)
     }
     this.#t = 0
-    this.#c1 = this.#state.position
+    this.#c1 = this.#state.rawPosition
     this.#c2 =
-      (this.#state.velocity + this.#decayRate * this.#state.position) / this.#dampedFrequency
+      (this.#state.rawVelocity + this.#decayRate * this.#state.rawPosition) / this.#dampedFrequency
   }
 
   tick(dt: number) {
@@ -60,8 +60,8 @@ export class CriticallyDampedSolver {
       this.#naturalFrequency = config.naturalFrequency
     }
     this.#t = 0
-    this.#c1 = this.#state.position
-    this.#c2 = this.#state.velocity + this.#naturalFrequency * this.#state.position
+    this.#c1 = this.#state.rawPosition
+    this.#c2 = this.#state.rawVelocity + this.#naturalFrequency * this.#state.rawPosition
   }
 
   tick(dt: number) {
@@ -97,8 +97,8 @@ export class OverdampedSolver {
       this.#dampedFrequency = config.naturalFrequency * Math.sqrt(config.dampingRatio ** 2 - 1)
     }
     this.#t = 0
-    this.#c1 = this.#state.velocity + this.#decayRate * this.#state.position
-    this.#c2 = this.#state.position * this.#dampedFrequency
+    this.#c1 = this.#state.rawVelocity + this.#decayRate * this.#state.rawPosition
+    this.#c2 = this.#state.rawPosition * this.#dampedFrequency
   }
 
   tick(dt: number) {

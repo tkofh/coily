@@ -3,6 +3,15 @@ import type { NuxtModule } from '@nuxt/schema'
 
 export interface CoilyModuleOptions {
   debug?: boolean
+  /**
+   * Frame-rate ceiling for the shared system — see `TickerOptions.fps`.
+   * When unset or 0, springs advance once per displayed frame.
+   */
+  fps?: number
+  /** See `TickerOptions.lagThreshold`. @default 500 */
+  lagThreshold?: number
+  /** See `TickerOptions.adjustedLag`. @default 33 */
+  adjustedLag?: number
   /** How the spring system responds to `prefers-reduced-motion`. @default 'user' */
   reducedMotion?: 'user' | 'always' | 'never'
 }
@@ -10,6 +19,9 @@ export interface CoilyModuleOptions {
 function getPluginTemplate(options: CoilyModuleOptions) {
   const systemOptions: Record<string, unknown> = {}
   if (options.debug) systemOptions.debug = true
+  if (options.fps !== undefined) systemOptions.fps = options.fps
+  if (options.lagThreshold !== undefined) systemOptions.lagThreshold = options.lagThreshold
+  if (options.adjustedLag !== undefined) systemOptions.adjustedLag = options.adjustedLag
   if (options.reducedMotion) systemOptions.reducedMotion = options.reducedMotion
 
   const args = Object.keys(systemOptions).length > 0 ? JSON.stringify(systemOptions) : ''

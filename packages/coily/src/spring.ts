@@ -65,7 +65,7 @@ export class Spring {
       normalized = normalizeTarget(position.target)
       if (normalized) {
         numericTarget =
-          normalized.spring.#target + normalized.spring.#motion.position + normalized.offset
+          normalized.spring.#target + normalized.spring.#motion.rawPosition + normalized.offset
         value = position.value ?? numericTarget
       } else {
         numericTarget = (position.target as number | undefined) ?? position.value ?? 0
@@ -94,7 +94,7 @@ export class Spring {
       this.#offset = normalized.offset
       normalized.spring.#followers.add(this)
       this.#unsubLeader = normalized.spring.onUpdate(() => {
-        this.#setTarget(this.#leader!.#target + this.#leader!.#motion.position + this.#offset)
+        this.#setTarget(this.#leader!.#target + this.#leader!.#motion.rawPosition + this.#offset)
       })
     }
   }
@@ -265,7 +265,10 @@ export class Spring {
       }
 
       this.#motions.add(this.#motion)
-      const rawValue = this.#target + this.#motion.position
+      // Rebase through the exact position: reading the rounded getter here
+      // would bake up to half a precision quantum into state on every
+      // retarget, drifting the value under per-pointermove retargeting.
+      const rawValue = this.#target + this.#motion.rawPosition
       this.#target = value
       this.#motion.position = rawValue - this.#target
       // Re-baseline without emitting `update`: a retarget preserves the
@@ -289,10 +292,10 @@ export class Spring {
     }
 
     this.#unsubLeader = leader.onUpdate(() => {
-      this.#setTarget(this.#leader!.#target + this.#leader!.#motion.position + this.#offset)
+      this.#setTarget(this.#leader!.#target + this.#leader!.#motion.rawPosition + this.#offset)
     })
 
-    this.#setTarget(leader.#target + leader.#motion.position + offset)
+    this.#setTarget(leader.#target + leader.#motion.rawPosition + offset)
   }
 
   #unfollow() {

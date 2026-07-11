@@ -5,6 +5,12 @@ export class MotionSet {
   /** When true, springs snap to their targets instead of animating. */
   reduced = false
 
+  /**
+   * Fired on the empty→non-empty transition, after the motion is in the set.
+   * The ticker assigns this so a loop sleeping on an empty set can reschedule.
+   */
+  onWake: (() => void) | null = null
+
   /** End-of-pass scheduling for composite springs' coalesced events. */
   readonly flushes = new FlushQueue()
 
@@ -17,8 +23,16 @@ export class MotionSet {
     this.#debug = debug
   }
 
+  get size() {
+    return this.#motions.size
+  }
+
   add(motion: Motion) {
+    const wasEmpty = this.#motions.size === 0
     this.#motions.add(motion)
+    if (wasEmpty) {
+      this.onWake?.()
+    }
   }
 
   remove(motion: Motion) {

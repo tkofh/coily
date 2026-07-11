@@ -722,3 +722,24 @@ describe('Spring: dispose', () => {
     expect(onDispose).toHaveBeenCalledOnce()
   })
 })
+
+describe('Spring: retargeting preserves value', () => {
+  test('repeated retarget round trips restore the value exactly', () => {
+    const system = createSpringSystem({ reducedMotion: 'never' })
+    const spring = system.createSpring(0)
+    spring.target = 100
+    for (let i = 0; i < 5; i++) {
+      system.advance(1000 / 60) // mid-flight, position off the precision grid
+    }
+
+    // The regression this guards: rebasing through the rounded position fed
+    // up to half a precision quantum into state per retarget, so retargeting
+    // per pointermove (an off-grid target, then onward) drifted the value.
+    const before = spring.value
+    for (let i = 0; i < 8; i++) {
+      spring.target = 77.7731
+      spring.target = 100
+    }
+    expect(spring.value).toBe(before)
+  })
+})
