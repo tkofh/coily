@@ -59,7 +59,7 @@ export class ChannelTree<L> {
     valuesLabel: string,
     fn: (mine: L, theirs: L, value: number | undefined, path: string) => void,
   ): void {
-    this.#root.zip(other.#root, values, { fn, label: valuesLabel })
+    this.#root.zip(other.#root, values, valuesLabel, fn)
   }
 
   /**
@@ -76,6 +76,6 @@ export class ChannelTree<L> {
     label: string,
   ): void {
     if (input === undefined) return
-    this.#root.broadcast(input, { resolve, apply, label })
+    this.#root.broadcast(input, resolve, apply, label)
   }
 }

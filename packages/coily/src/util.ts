@@ -1,8 +1,12 @@
-export function invariant(condition: unknown, message?: string): asserts condition {
+export function invariant(
+  condition: unknown,
+  message?: string | (() => string),
+): asserts condition {
   if (condition) {
     return
   }
-  throw new Error(message ?? 'Invariant Failed')
+  const resolved = typeof message === 'function' ? message() : message
+  throw new Error(resolved ?? 'Invariant Failed')
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
