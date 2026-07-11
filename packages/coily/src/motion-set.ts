@@ -2,18 +2,9 @@ import { FlushQueue } from './flush-queue.ts'
 import type { Motion } from './motion.ts'
 
 export class MotionSet {
-  /** When true, springs snap to their targets instead of animating. */
   reduced = false
-
-  /**
-   * Fired on the empty→non-empty transition, after the motion is in the set.
-   * The ticker assigns this so a loop sleeping on an empty set can reschedule.
-   */
   onWake: (() => void) | null = null
-
-  /** End-of-pass scheduling for composite springs' coalesced events. */
   readonly flushes = new FlushQueue()
-
   readonly #motions = new Set<Motion>()
   readonly #debug: boolean
   #lastSize = 0
