@@ -171,7 +171,7 @@ export class SpringObject<in out T extends object> {
 
     this.#map = new ShapeMap(value, (leafValue) => new Spring(motions, leafValue))
     if (config !== undefined) {
-      this.#map.applyAnnotation(config, resolveConfigNode, assignConfig, 'config')
+      this.#map.broadcast(config, resolveConfigNode, assignConfig, 'config')
     }
 
     this.#targetView = this.#map.createView(readTarget)
@@ -209,7 +209,7 @@ export class SpringObject<in out T extends object> {
       this.#follow(spring, offset)
     } else {
       this.#motions.flushes.batch(() => {
-        this.#map.applyPartial(value, assignTarget)
+        this.#map.scatter(value, assignTarget)
       })
     }
   }
@@ -221,7 +221,7 @@ export class SpringObject<in out T extends object> {
 
   set value(value: PartialShape<T>) {
     this.#motions.flushes.batch(() => {
-      this.#map.applyPartial(value, assignValue)
+      this.#map.scatter(value, assignValue)
     })
   }
 
@@ -232,7 +232,7 @@ export class SpringObject<in out T extends object> {
 
   set velocity(value: PartialShape<T>) {
     this.#motions.flushes.batch(() => {
-      this.#map.applyPartial(value, assignVelocity)
+      this.#map.scatter(value, assignVelocity)
     })
   }
 
@@ -247,7 +247,7 @@ export class SpringObject<in out T extends object> {
 
   set config(value: ConfigShape<T>) {
     this.#motions.flushes.batch(() => {
-      this.#map.applyAnnotation(value ?? null, resolveConfigNode, assignConfig, 'config')
+      this.#map.broadcast(value ?? null, resolveConfigNode, assignConfig, 'config')
     })
   }
 
@@ -285,7 +285,7 @@ export class SpringObject<in out T extends object> {
 
   jumpTo(value: PartialShape<T>) {
     this.#motions.flushes.batch(() => {
-      this.#map.applyPartial(value, applyJump)
+      this.#map.scatter(value, applyJump)
     })
   }
 

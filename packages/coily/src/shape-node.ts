@@ -18,13 +18,14 @@ export function describePath(path: string): string {
   return path ? `'${path}'` : 'the root'
 }
 
-export type Annotation<V> = { branch: true } | { value: V }
+/** A resolver's verdict at a node: cover the whole subtree with a value, or branch deeper. */
+export type Coverage<V> = { branch: true } | { value: V }
 
-/** An annotation traversal's moving parts, bundled so recursion threads one value. */
-export interface AnnotateOp<L, V> {
-  resolve(input: unknown, path: string): Annotation<V>
+/** A broadcast traversal's moving parts, bundled so recursion threads one value. */
+export interface BroadcastOp<L, V> {
+  resolve(input: unknown, path: string): Coverage<V>
   apply(leaf: L, value: V): void
-  /** Names the annotation (`config`, `offset`, …) in error messages. */
+  /** Names the input shape (`config`, …) in error messages. */
   label: string
 }
 
@@ -100,14 +101,14 @@ export abstract class ShapeNode<L> {
     key: string | number,
   ): void
 
-  /** Applies a partial numeric shape: only the channels the input mentions. */
-  abstract applyPartial(input: unknown, path: string, apply: (leaf: L, value: number) => void): void
+  /** Scatters a partial numeric shape into the leaves the input mentions. */
+  abstract scatter(input: unknown, path: string, apply: (leaf: L, value: number) => void): void
 
   /** Pairs this subtree's leaves with a structurally identical one's. */
   abstract zip(theirs: ShapeNode<L>, values: unknown, path: string, op: ZipOp<L>): void
 
-  /** Applies an annotation shape: `op.resolve` decides value-for-subtree vs descend. */
-  abstract annotate<V>(input: unknown, path: string, op: AnnotateOp<L, V>): void
+  /** Broadcasts a covering shape: `op.resolve` decides value-for-subtree vs descend. */
+  abstract broadcast<V>(input: unknown, path: string, op: BroadcastOp<L, V>): void
 
   /** Applies one value to every leaf at or below this node. */
   abstract cover<V>(value: V, apply: (leaf: L, value: V) => void): void
@@ -135,7 +136,7 @@ export class LeafNode<L> extends ShapeNode<L> {
     slots.push({ leaf: this.leaf, key, holder })
   }
 
-  applyPartial(input: unknown, path: string, apply: (leaf: L, value: number) => void): void {
+  scatter(input: unknown, path: string, apply: (leaf: L, value: number) => void): void {
     invariant(typeof input === 'number', `Expected a number for channel '${path}'`)
     apply(this.leaf, input)
   }
@@ -150,7 +151,7 @@ export class LeafNode<L> extends ShapeNode<L> {
     op.fn(this.leaf, theirs.leaf, value, path)
   }
 
-  annotate<V>(input: unknown, path: string, op: AnnotateOp<L, V>): void {
+  broadcast<V>(input: unknown, path: string, op: BroadcastOp<L, V>): void {
     const resolved = op.resolve(input, path)
     invariant('value' in resolved, `Cannot descend into channel '${path}'`)
     op.apply(this.leaf, resolved.value)
@@ -185,7 +186,7 @@ export class ListNode<L> extends ShapeNode<L> {
     }
   }
 
-  applyPartial(input: unknown, path: string, apply: (leaf: L, value: number) => void): void {
+  scatter(input: unknown, path: string, apply: (leaf: L, value: number) => void): void {
     invariant(Array.isArray(input), `Expected an array at ${describePath(path)}`)
     invariant(
       input.length <= this.children.length,
@@ -193,7 +194,7 @@ export class ListNode<L> extends ShapeNode<L> {
     )
     for (let i = 0; i < input.length; i++) {
       if (input[i] === undefined) continue
-      this.children[i]!.applyPartial(input[i], joinPath(path, i), apply)
+      this.children[i]!.scatter(input[i], joinPath(path, i), apply)
     }
   }
 
@@ -216,7 +217,7 @@ export class ListNode<L> extends ShapeNode<L> {
     }
   }
 
-  annotate<V>(input: unknown, path: string, op: AnnotateOp<L, V>): void {
+  broadcast<V>(input: unknown, path: string, op: BroadcastOp<L, V>): void {
     const resolved = op.resolve(input, path)
     if ('value' in resolved) {
       this.cover(resolved.value, op.apply)
@@ -229,7 +230,7 @@ export class ListNode<L> extends ShapeNode<L> {
     )
     for (let i = 0; i < input.length; i++) {
       if (input[i] === undefined) continue
-      this.children[i]!.annotate(input[i], joinPath(path, i), op)
+      this.children[i]!.broadcast(input[i], joinPath(path, i), op)
     }
   }
 
@@ -259,14 +260,14 @@ export class RecordNode<L> extends ShapeNode<L> {
     }
   }
 
-  applyPartial(input: unknown, path: string, apply: (leaf: L, value: number) => void): void {
+  scatter(input: unknown, path: string, apply: (leaf: L, value: number) => void): void {
     invariant(isRecord(input), `Expected an object at ${describePath(path)}`)
     for (const key of Object.keys(input)) {
       const value = input[key]
       if (value === undefined) continue
       const child = this.children.get(key)
       invariant(child !== undefined, `Unknown channel '${joinPath(path, key)}'`)
-      child.applyPartial(value, joinPath(path, key), apply)
+      child.scatter(value, joinPath(path, key), apply)
     }
   }
 
@@ -290,7 +291,7 @@ export class RecordNode<L> extends ShapeNode<L> {
     }
   }
 
-  annotate<V>(input: unknown, path: string, op: AnnotateOp<L, V>): void {
+  broadcast<V>(input: unknown, path: string, op: BroadcastOp<L, V>): void {
     const resolved = op.resolve(input, path)
     if ('value' in resolved) {
       this.cover(resolved.value, op.apply)
@@ -302,7 +303,7 @@ export class RecordNode<L> extends ShapeNode<L> {
       if (value === undefined) continue
       const child = this.children.get(key)
       invariant(child !== undefined, `Unknown channel '${joinPath(path, key)}' in ${op.label}`)
-      child.annotate(value, joinPath(path, key), op)
+      child.broadcast(value, joinPath(path, key), op)
     }
   }
 
