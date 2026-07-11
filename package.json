@@ -14,7 +14,7 @@
     "check": "oxlint --fix && oxfmt --write .",
     "check:report": "oxlint && oxfmt --check .",
     "test": "turbo run test",
-    "version-packages": "changeset version && pnpm run format"
+    "version-packages": "changeset version && pnpm install --lockfile-only && pnpm run format"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
