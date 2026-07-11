@@ -31,11 +31,11 @@ function normalizeTarget(
   return null
 }
 
+const RESOLVED = Promise.resolve()
+
 export class Spring {
   #target: number
-  /** Explicitly assigned config, or `null` to inherit from the leader (or the default). */
   #override: SpringConfig | null
-  /** Cached effective config — always what the motion is currently using. */
   #resolved: SpringConfig
   readonly #motion: Motion
   readonly #motions: MotionSet
@@ -44,6 +44,10 @@ export class Spring {
   #leader: Spring | null = null
   #offset = 0
   #unsubLeader: (() => void) | null = null
+
+  #settled: Promise<void> | null = null
+  #resolveSettled: (() => void) | null = null
+  #disposed = false
 
   constructor(motions: MotionSet, position: SpringPosition, config?: SpringConfig) {
     this.#motions = motions
@@ -58,13 +62,16 @@ export class Spring {
     } else {
       normalized = normalizeTarget(position.target)
       if (normalized) {
-        numericTarget =
-          normalized.spring.#target + normalized.spring.#motion.position + normalized.offset
+        numericTarget = normalized.spring.value + normalized.offset
         value = position.value ?? numericTarget
       } else {
         numericTarget = (position.target as number | undefined) ?? position.value ?? 0
         value = position.value ?? numericTarget
       }
+    }
+
+    if (motions.reduced) {
+      value = numericTarget
     }
 
     this.#override = config ?? null
@@ -82,7 +89,7 @@ export class Spring {
       this.#offset = normalized.offset
       normalized.spring.#followers.add(this)
       this.#unsubLeader = normalized.spring.onUpdate(() => {
-        this.#setTarget(this.#leader!.#target + this.#leader!.#motion.position + this.#offset)
+        this.#setTarget(this.#leader!.value + this.#offset)
       })
     }
   }
@@ -106,6 +113,13 @@ export class Spring {
   }
 
   set value(value: number) {
+    if (this.#motions.reduced) {
+      if (value !== this.value) {
+        this.jumpTo(value)
+      }
+      return
+    }
+
     const position = value - this.#target
     if (position !== this.#motion.position) {
       this.#motions.add(this.#motion)
@@ -119,6 +133,8 @@ export class Spring {
   }
 
   set velocity(value: number) {
+    if (this.#motions.reduced) return
+
     this.#motions.add(this.#motion)
     this.#motion.velocity = value
   }
@@ -160,14 +176,37 @@ export class Spring {
     return this.#motion.isResting
   }
 
+  get settled(): Promise<void> {
+    if (this.#disposed || this.#motion.isResting) return RESOLVED
+
+    this.#settled ??= new Promise((resolve) => {
+      this.#resolveSettled = resolve
+      const unsubscribe = this.onStop(() => {
+        unsubscribe()
+        this.#settled = null
+        this.#resolveSettled = null
+        resolve()
+      })
+    })
+
+    return this.#settled
+  }
+
   jumpTo(value: number) {
     this.#target = value
-    this.#motion.position = 0
-    this.#motion.velocity = 0
-    this.#motion.tick(0)
+    this.#motion.finish()
   }
 
   dispose() {
+    if (this.#disposed) return
+    this.#disposed = true
+
+    if (this.#resolveSettled) {
+      this.#resolveSettled()
+      this.#settled = null
+      this.#resolveSettled = null
+    }
+
     if (this.#unsubLeader) {
       this.#unsubLeader()
       this.#unsubLeader = null
@@ -177,9 +216,6 @@ export class Spring {
       this.#leader = null
     }
 
-    // Detach followers so they don't reference a disposed spring. Each keeps
-    // its current config and target, and can be retargeted normally.
-    // Set iteration tolerates each follower removing itself as it detaches.
     for (const follower of this.#followers) {
       follower.#unfollow()
     }
@@ -200,14 +236,21 @@ export class Spring {
     return this.#motion.onStop(callback)
   }
 
+  onDispose(callback: () => void) {
+    return this.#motion.onDispose(callback)
+  }
+
   #setTarget(value: number) {
     if (value !== this.#target) {
+      if (this.#motions.reduced) {
+        this.jumpTo(value)
+        return
+      }
+
       this.#motions.add(this.#motion)
-      const rawValue = this.#target + this.#motion.position
+      const current = this.value
       this.#target = value
-      this.#motion.position = rawValue - this.#target
-      // Re-baseline without emitting `update`: a retarget preserves the
-      // current value, so consumers hear about it on the next real tick.
+      this.#motion.position = current - this.#target
       this.#motion.tick(0, false)
     }
   }
@@ -227,10 +270,10 @@ export class Spring {
     }
 
     this.#unsubLeader = leader.onUpdate(() => {
-      this.#setTarget(this.#leader!.#target + this.#leader!.#motion.position + this.#offset)
+      this.#setTarget(this.#leader!.value + this.#offset)
     })
 
-    this.#setTarget(leader.#target + leader.#motion.position + offset)
+    this.#setTarget(leader.value + offset)
   }
 
   #unfollow() {
@@ -243,8 +286,6 @@ export class Spring {
     this.#offset = 0
 
     if (this.#override === null) {
-      // Snapshot the inherited config so the spring keeps behaving the same,
-      // decoupled from the ex-leader's future config changes.
       this.#override = this.#resolved
     }
   }
@@ -254,7 +295,9 @@ export class Spring {
 
     this.#resolved = next
     this.#motion.configure(next)
-    this.#motions.add(this.#motion)
+    if (!this.#motion.isResting) {
+      this.#motions.add(this.#motion)
+    }
 
     for (const follower of this.#followers) {
       if (follower.#override === null) {

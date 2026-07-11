@@ -1,5 +1,5 @@
 ---
-"coily": patch
+'coily': patch
 ---
 
 Fix a config aliasing bug and make `SpringConfig` a true immutable value.

@@ -6,17 +6,17 @@
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare"
+    "postinstall": "node postinstall.mjs"
   },
   "dependencies": {
-    "@vueuse/core": "^14.2.1",
-    "@vueuse/nuxt": "^14.2.1",
-    "coily": "workspace:*",
-    "nuxt": "^4.4.2",
-    "vue": "^3.5.30",
-    "vue-router": "^5.0.3"
+    "@vueuse/core": "^14.3.0",
+    "@vueuse/nuxt": "^14.3.0",
+    "coily": "workspace:^0.12.2",
+    "nuxt": "^4.4.8",
+    "vue": "^3.5.39",
+    "vue-router": "^5.1.0"
   },
   "devDependencies": {
-    "vite": "^7.3.1"
+    "vite": "catalog:"
   }
 }

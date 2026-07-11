@@ -33,7 +33,14 @@ export default defineConfig({
           include: ['test/**/*.browser.ts'],
           browser: {
             enabled: true,
-            provider: playwright(),
+            provider: playwright({
+              // Chromium's sandbox can't run as root, which is how CI runs the
+              // Playwright container; disable it (and the small /dev/shm that
+              // trips it) in CI only. Local runs keep the sandbox.
+              launchOptions: {
+                args: process.env.CI ? ['--no-sandbox', '--disable-dev-shm-usage'] : [],
+              },
+            }),
             headless: true,
             instances: [{ browser: 'chromium' }],
           },

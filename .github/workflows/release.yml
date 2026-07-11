@@ -1,0 +1,105 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  TURBO_TELEMETRY_DISABLED: '1'
+
+jobs:
+  changesets:
+    name: Version PR / publish gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the changeset-release/main branch
+      pull-requests: write # open/update the Version Packages PR
+    outputs:
+      has-changesets: ${{ steps.changesets.outputs.hasChangesets }}
+      needs-publish: ${{ steps.gate.outputs.needs-publish }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # Full history so Changesets attributes changelog entries to the right commits.
+          fetch-depth: 0
+
+      - name: Check whether the version on main is already published
+        id: gate
+        run: |
+          version="$(jq -r .version packages/coily/package.json)"
+          if npm view "coily@${version}" version >/dev/null 2>&1; then
+            echo "coily@${version} is already on npm; no publish needed"
+            echo "needs-publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "coily@${version} is not on npm yet"
+            echo "needs-publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Maintain Version Packages PR
+        id: changesets
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
+        with:
+          version: pnpm run version-packages
+          commitMode: github-api
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    name: Publish to npm
+    needs: changesets
+    if: needs.changesets.outputs.has-changesets == 'false' && needs.changesets.outputs.needs-publish == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: release
+      url: https://www.npmjs.com/package/coily
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.1-noble
+    permissions:
+      contents: write # changesets/action pushes git tags and creates the GitHub Release
+      id-token: write # OIDC token exchange for npm trusted publishing
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Require npm with trusted-publishing support
+        run: |
+          required=11.5.1
+          current="$(npm --version)"
+          if [ "$(printf '%s\n' "$required" "$current" | sort -V | head -n1)" != "$required" ]; then
+            echo "npm ${current} predates trusted publishing support (need >= ${required})" >&2
+            exit 1
+          fi
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run check
+      - run: pnpm turbo run check build test
+      - uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
+        with:
+          publish: pnpm exec changeset publish
+          commitMode: github-api
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_PROVENANCE: 'true'

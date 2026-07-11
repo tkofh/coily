@@ -1,11 +1,12 @@
 import type { SpringConfig } from './config.ts'
 import { MotionSet } from './motion-set.ts'
 import { Spring, type SpringPosition } from './spring.ts'
-import { Spring2D, type Spring2DPosition } from './spring2d.ts'
+import { type ConfigShape, type Shape, SpringObject } from './spring-object.ts'
 import { Ticker, type TickerOptions } from './ticker.ts'
 
 export interface SpringSystemOptions extends TickerOptions {
   debug?: boolean | undefined
+  reducedMotion?: 'user' | 'always' | 'never' | undefined
 }
 
 class SpringSystemImpl implements SpringSystem {
@@ -15,14 +16,43 @@ class SpringSystemImpl implements SpringSystem {
   constructor(options?: SpringSystemOptions) {
     this.#motion = new MotionSet(options?.debug)
     this.#ticker = new Ticker(this.#motion, options)
+
+    const mode = options?.reducedMotion ?? 'user'
+    if (mode === 'always') {
+      this.#motion.reduced = true
+    } else if (
+      mode === 'user' &&
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function'
+    ) {
+      const query = window.matchMedia('(prefers-reduced-motion: reduce)')
+      this.#applyReducedMotion(query.matches)
+      query.addEventListener('change', (event) => {
+        this.#applyReducedMotion(event.matches)
+      })
+    }
+  }
+
+  #applyReducedMotion(reduced: boolean) {
+    this.#motion.reduced = reduced
+    if (reduced) {
+      this.#motion.finishAll()
+    }
+  }
+
+  get reducedMotion() {
+    return this.#motion.reduced
   }
 
   createSpring(position: SpringPosition, config?: SpringConfig): Spring {
     return new Spring(this.#motion, position, config)
   }
 
-  createSpring2D(position: Spring2DPosition, config?: SpringConfig): Spring2D {
-    return new Spring2D(this.#motion, position, config)
+  createSpringObject<T extends object>(
+    value: T & Shape<T>,
+    config?: ConfigShape<T>,
+  ): SpringObject<T> {
+    return new SpringObject(this.#motion, value, config)
   }
 
   advance(dt: number) {
@@ -68,17 +98,16 @@ class SpringSystemImpl implements SpringSystem {
 
 export interface SpringSystem {
   createSpring(position: SpringPosition, config?: SpringConfig): Spring
-  createSpring2D(position: Spring2DPosition, config?: SpringConfig): Spring2D
-  /** Advance all springs by `dt` milliseconds, without affecting internal timing. */
+  createSpringObject<T extends object>(
+    value: T & Shape<T>,
+    config?: ConfigShape<T>,
+  ): SpringObject<T>
   advance(dt: number): void
 
-  /** Start the animation loop. */
   start(): void
-  /** Stop the animation loop. */
   stop(): void
-  /** Whether the animation loop is currently running. */
   readonly running: boolean
-
+  readonly reducedMotion: boolean
   fps: number
   lagThreshold: number
   adjustedLag: number

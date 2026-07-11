@@ -3,15 +3,28 @@ import type { NuxtModule } from '@nuxt/schema'
 
 export interface CoilyModuleOptions {
   debug?: boolean
+  fps?: number
+  lagThreshold?: number
+  adjustedLag?: number
+  reducedMotion?: 'user' | 'always' | 'never'
 }
 
 function getPluginTemplate(options: CoilyModuleOptions) {
+  const systemOptions: Record<string, unknown> = {}
+  if (options.debug) systemOptions.debug = true
+  if (options.fps !== undefined) systemOptions.fps = options.fps
+  if (options.lagThreshold !== undefined) systemOptions.lagThreshold = options.lagThreshold
+  if (options.adjustedLag !== undefined) systemOptions.adjustedLag = options.adjustedLag
+  if (options.reducedMotion) systemOptions.reducedMotion = options.reducedMotion
+
+  const args = Object.keys(systemOptions).length > 0 ? JSON.stringify(systemOptions) : ''
+
   return `import { createSpringSystem } from 'coily'
 import { provideSpringSystem } from 'coily/vue'
 
 export default defineNuxtPlugin((nuxtApp) => {
   nuxtApp.hook('app:created', (vueApp) => {
-    const system = createSpringSystem(${options.debug ? '{ debug: true }' : ''})
+    const system = createSpringSystem(${args})
     provideSpringSystem(system, vueApp)
 
     if(import.meta.client) {
@@ -39,9 +52,11 @@ const coilyModule: NuxtModule = defineNuxtModule<CoilyModuleOptions>({
 
     addImports([
       { from: 'coily/vue', name: 'useSpring' },
-      { from: 'coily/vue', name: 'useSpring2D' },
+      { from: 'coily/vue', name: 'useSpringSystem' },
+      { from: 'coily/vue', name: 'useSpringPool' },
       { from: 'coily/vue', name: 'SpringRef', type: true },
-      { from: 'coily/vue', name: 'SpringRef2D', type: true },
+      { from: 'coily/vue', name: 'SpringObjectRef', type: true },
+      { from: 'coily/vue', name: 'SpringPool', type: true },
       { from: 'coily', name: 'defineSpring' },
       { from: 'coily', name: 'SpringConfig', type: true },
     ])

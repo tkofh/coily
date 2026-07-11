@@ -1,5 +1,5 @@
 ---
-"coily": minor
+'coily': minor
 ---
 
 `defineSpring` input shapes are now enforced by the type system.

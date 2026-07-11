@@ -186,6 +186,78 @@ describe('linked spring chains', () => {
   })
 })
 
+describe('spring objects', () => {
+  // Four channels per object — comparable to four scalar springs.
+  const shape = { position: { x: 0, y: 0 }, scale: 1, opacity: 1 }
+  const fullTarget = { position: { x: 100, y: 100 }, scale: 2, opacity: 0 }
+
+  bench('create 1,000 spring objects (4 channels)', () => {
+    const system = createSpringSystem()
+    for (let i = 0; i < 1_000; i++) {
+      system.createSpringObject(shape, defaultConfig)
+    }
+  })
+
+  bench('advance 250 spring objects × 4 channels (1 frame)', () => {
+    // Same motion count as "advance 1,000 active springs".
+    const system = createSpringSystem()
+    for (let i = 0; i < 250; i++) {
+      const spring = system.createSpringObject(shape, defaultConfig)
+      spring.target = fullTarget
+    }
+    system.advance(FRAME)
+  })
+
+  bench('settle 100 spring objects to rest (with onUpdate)', () => {
+    const system = createSpringSystem()
+    let sum = 0
+    const springs = Array.from({ length: 100 }, () => {
+      const spring = system.createSpringObject(shape, defaultConfig)
+      spring.onUpdate(() => {
+        sum += spring.value.position.x
+      })
+      spring.target = fullTarget
+      return spring
+    })
+    while (springs.some((s) => !s.isResting)) {
+      system.advance(FRAME)
+    }
+  })
+
+  bench('settle 100 spring objects to rest (no listeners)', () => {
+    const system = createSpringSystem()
+    const springs = Array.from({ length: 100 }, () => {
+      const spring = system.createSpringObject(shape, defaultConfig)
+      spring.target = fullTarget
+      return spring
+    })
+    while (springs.some((s) => !s.isResting)) {
+      system.advance(FRAME)
+    }
+  })
+
+  bench('partial retargets on 1,000 spring objects', () => {
+    const system = createSpringSystem()
+    const springs = Array.from({ length: 1_000 }, () =>
+      system.createSpringObject(shape, defaultConfig),
+    )
+    for (const spring of springs) {
+      spring.target = { position: { x: 100 } }
+    }
+  })
+
+  bench('read composite value 10,000 times (4 channels)', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpringObject(shape, defaultConfig)
+    spring.target = fullTarget
+    system.advance(FRAME)
+    let sum = 0
+    for (let i = 0; i < 10_000; i++) {
+      sum += spring.value.position.x
+    }
+  })
+})
+
 describe('mixed operations', () => {
   bench('create, animate, dispose cycle (100 springs)', () => {
     const system = createSpringSystem()

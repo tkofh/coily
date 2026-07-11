@@ -5,8 +5,8 @@ function onMouseMove(event: MouseEvent) {
   mouse.value = { x: event.clientX, y: event.clientY }
 }
 
-const bouncy = useSpring2D(mouse, { dampingRatio: 1, duration: 500 })
-const stiff = useSpring2D(mouse, { dampingRatio: 1.5, duration: 500 })
+const bouncy = useSpring(mouse, { dampingRatio: 1, duration: 500 })
+const stiff = useSpring(mouse, { dampingRatio: 1.5, duration: 500 })
 </script>
 
 <template>

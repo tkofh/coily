@@ -37,7 +37,7 @@ describe('Spring: input validation', () => {
     ).not.toThrow()
   })
 
-  test('allows precision 0 (integer rounding)', () => {
+  test('allows precision 0 (resting threshold of 0.5)', () => {
     const system = createSpringSystem()
     expect(() =>
       system.createSpring(0, defineSpring({ mass: 1, tension: 1, damping: 1, precision: 0 })),
@@ -611,5 +611,177 @@ describe('Spring: config value semantics', () => {
     spring.config = null
 
     expect(spring.tension).toBe(tensionBefore)
+  })
+})
+
+describe('Spring: settled promise', () => {
+  const flush = () => new Promise((resolve) => setTimeout(resolve))
+
+  test('resolves immediately when already resting', async () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
+
+    await expect(spring.settled).resolves.toBeUndefined()
+  })
+
+  test('returns the same promise instance while moving', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
+
+    spring.target = 100
+    expect(spring.settled).toBe(spring.settled)
+  })
+
+  test('stays pending across retargets and resolves at true rest', async () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
+
+    spring.target = 100
+    let resolved = false
+    spring.settled.then(() => {
+      resolved = true
+    })
+
+    for (let i = 0; i < 10; i++) system.advance(1000 / 60)
+    spring.target = 200
+    for (let i = 0; i < 10; i++) system.advance(1000 / 60)
+    await flush()
+    expect(resolved).toBe(false)
+
+    for (let i = 0; i < 600; i++) {
+      system.advance(1000 / 60)
+      if (spring.isResting) break
+    }
+    await flush()
+    expect(resolved).toBe(true)
+  })
+
+  test('a new motion cycle gets a new promise', async () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
+
+    spring.target = 100
+    const first = spring.settled
+    for (let i = 0; i < 600; i++) {
+      system.advance(1000 / 60)
+      if (spring.isResting) break
+    }
+    await flush()
+
+    spring.target = 200
+    expect(spring.settled).not.toBe(first)
+  })
+
+  test('jumpTo resolves a pending promise', async () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
+
+    spring.target = 100
+    const settled = spring.settled
+
+    spring.jumpTo(100)
+    await expect(settled).resolves.toBeUndefined()
+  })
+
+  test('dispose resolves a pending promise', async () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
+
+    spring.target = 100
+    const settled = spring.settled
+
+    spring.dispose()
+    await expect(settled).resolves.toBeUndefined()
+  })
+})
+
+describe('Spring: dispose', () => {
+  test('onDispose fires when the spring is disposed', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
+
+    const onDispose = vi.fn()
+    spring.onDispose(onDispose)
+
+    spring.dispose()
+    expect(onDispose).toHaveBeenCalledOnce()
+  })
+
+  test('double dispose is a no-op', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(
+      { target: 100, value: 0 },
+      defineSpring({ mass: 1, tension: 170, damping: 26 }),
+    )
+
+    const onDispose = vi.fn()
+    spring.onDispose(onDispose)
+
+    spring.dispose()
+    expect(() => spring.dispose()).not.toThrow()
+    expect(onDispose).toHaveBeenCalledOnce()
+  })
+})
+
+describe('Spring: retargeting preserves value', () => {
+  test('repeated retarget round trips restore the value exactly', () => {
+    const system = createSpringSystem({ reducedMotion: 'never' })
+    const spring = system.createSpring(0)
+    spring.target = 100
+    for (let i = 0; i < 5; i++) {
+      system.advance(1000 / 60) // mid-flight, position off the precision grid
+    }
+
+    // The regression this guards: rebasing through the rounded position fed
+    // up to half a precision quantum into state per retarget, so retargeting
+    // per pointermove (an off-grid target, then onward) drifted the value.
+    const before = spring.value
+    for (let i = 0; i < 8; i++) {
+      spring.target = 77.7731
+      spring.target = 100
+    }
+    expect(spring.value).toBe(before)
+  })
+
+  test('value lands exactly on a non-dyadic target at rest', () => {
+    const system = createSpringSystem({ reducedMotion: 'never' })
+    const spring = system.createSpring(0)
+    spring.target = 77.7731
+
+    for (let i = 0; i < 600 && !spring.isResting; i++) {
+      system.advance(1000 / 60)
+    }
+
+    expect(spring.isResting).toBe(true)
+    expect(spring.value).toBe(77.7731)
+    expect(spring.velocity).toBe(0)
+  })
+
+  test('a soft spring is not declared resting while it can still move visibly', () => {
+    const system = createSpringSystem({ reducedMotion: 'never' })
+    // ωₙ = 0.1: near a zero crossing this spring satisfies the naive box
+    // check (|x| and |v| both under the threshold) while its velocity can
+    // still carry it ~10× the threshold away. The envelope must keep it
+    // ticking through the crossing instead of snapping it to rest there.
+    const spring = system.createSpring(
+      { target: 0, value: 1 },
+      defineSpring({ mass: 1, tension: 0.01, dampingRatio: 0.2, precision: 2 }),
+    )
+
+    let crossedInsideBox = false
+    let movedAfterward = false
+    for (let i = 0; i < 50_000 && !spring.isResting; i++) {
+      system.advance(1000 / 60)
+      if (crossedInsideBox && Math.abs(spring.value) > 0.005) {
+        movedAfterward = true
+      }
+      if (Math.abs(spring.value) < 0.005 && Math.abs(spring.velocity) < 0.005) {
+        crossedInsideBox = true
+      }
+    }
+
+    expect(spring.isResting).toBe(true)
+    expect(crossedInsideBox).toBe(true)
+    expect(movedAfterward).toBe(true)
   })
 })

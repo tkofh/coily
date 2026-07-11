@@ -148,13 +148,13 @@ describe('useSpring', () => {
     expect(spring.value).toBe(0)
   })
 
-  test('an array of targets returns one SpringRef each', () => {
+  test('several independent scalar springs compose via map', () => {
     const system = createSpringSystem()
     let springs!: readonly SpringRef[]
     mount(
       defineComponent({
         setup() {
-          springs = useSpring([0, () => 10, ref(20)])
+          springs = [0, () => 10, ref(20)].map((target) => useSpring(target))
           return {}
         },
         render: () => h('div'),
@@ -195,6 +195,25 @@ describe('useSpring', () => {
       if (leader.isResting.value && follower.isResting.value) break
     }
     expect(follower.value).toBe(100)
+  })
+
+  test('settled resolves when the spring settles', async () => {
+    const target = ref(0)
+    const { spring, system } = mountSpring(target)
+
+    target.value = 100
+    await nextTick()
+
+    let resolved = false
+    spring.settled.then(() => {
+      resolved = true
+    })
+
+    for (let i = 0; i < 500; i++) system.advance(16)
+    await new Promise((resolve) => setTimeout(resolve))
+
+    expect(resolved).toBe(true)
+    expect(spring.value).toBe(100)
   })
 
   test('disposing the component disposes the spring', async () => {

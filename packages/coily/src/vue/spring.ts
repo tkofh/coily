@@ -1,4 +1,5 @@
-import { type MaybeRefOrGetter, toValue, watchSyncEffect } from 'vue'
+import { type MaybeRefOrGetter, type Ref, toValue, watchSyncEffect } from 'vue'
+import type { Shape } from '../spring-object.ts'
 import type { Spring } from '../spring.ts'
 import {
   type ReactiveSpringRef,
@@ -7,14 +8,20 @@ import {
   injectSpringSystem,
   resolveSpringConfig,
 } from './reactive-spring.ts'
+import {
+  type AnyShape,
+  type SpringObjectRef,
+  type UseSpringObjectOptions,
+  createLinkedSpringObjectRef,
+  createSpringObjectRef,
+  hasSpringObjectInstance,
+} from './spring-object.ts'
 
 export type { UseSpringOptions } from './reactive-spring.ts'
 
-// ── SpringRef ───────────────────────────────────────────────────────
-
 export interface SpringRef extends ReactiveSpringRef<number> {}
 
-/** @internal Symbol to access the underlying Spring from a SpringRef */
+/** @internal */
 const SpringInstanceKey = Symbol('spring')
 
 type SpringRefWithInstance = SpringRef & { [SpringInstanceKey]: Spring }
@@ -23,25 +30,41 @@ function hasSpringInstance(value: unknown): value is SpringRefWithInstance {
   return typeof value === 'object' && value !== null && SpringInstanceKey in value
 }
 
-// ── useSpring ───────────────────────────────────────────────────────
-
 export function useSpring(target: MaybeRefOrGetter<number>, options?: UseSpringOptions): SpringRef
 export function useSpring(target: SpringRef, options?: UseSpringOptions): SpringRef
-export function useSpring<const T extends readonly MaybeRefOrGetter<number>[]>(
-  targets: T,
-  options?: UseSpringOptions,
-): { [K in keyof T]: SpringRef }
+export function useSpring<T extends object>(
+  target: SpringObjectRef<T>,
+  options?: UseSpringObjectOptions<T>,
+): SpringObjectRef<T>
+export function useSpring<T extends object>(
+  target: T & Shape<T>,
+  options?: UseSpringObjectOptions<T>,
+): SpringObjectRef<T>
+export function useSpring<T extends object>(
+  target: Ref<T & Shape<T>>,
+  options?: UseSpringObjectOptions<T>,
+): SpringObjectRef<T>
+export function useSpring<T extends object>(
+  target: () => T & Shape<T>,
+  options?: UseSpringObjectOptions<T>,
+): SpringObjectRef<T>
 export function useSpring(
-  target: MaybeRefOrGetter<number> | SpringRef | readonly MaybeRefOrGetter<number>[],
-  options?: UseSpringOptions,
-): SpringRef | SpringRef[] {
-  if (Array.isArray(target)) {
-    return Array.from(target as MaybeRefOrGetter<number>[], (t) => createSpringRef(t, options))
-  }
+  target: unknown,
+  options?: unknown,
+): SpringRef | SpringObjectRef<AnyShape> {
   if (hasSpringInstance(target)) {
-    return createLinkedSpringRef(target, options)
+    return createLinkedSpringRef(target, options as UseSpringOptions)
   }
-  return createSpringRef(target as MaybeRefOrGetter<number>, options)
+  if (hasSpringObjectInstance(target)) {
+    return createLinkedSpringObjectRef(target, options as UseSpringObjectOptions<AnyShape>)
+  }
+  if (typeof toValue(target as MaybeRefOrGetter<unknown>) === 'number') {
+    return createSpringRef(target as MaybeRefOrGetter<number>, options as UseSpringOptions)
+  }
+  return createSpringObjectRef(
+    target as MaybeRefOrGetter<AnyShape>,
+    options as UseSpringObjectOptions<AnyShape>,
+  )
 }
 
 function createSpringRef(

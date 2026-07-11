@@ -37,23 +37,24 @@
     "bench:compare": "vitest bench --run --compare bench-baseline.json"
   },
   "devDependencies": {
-    "@nuxt/kit": "^4.4.2",
-    "@nuxt/schema": "^4.4.2",
-    "@vitejs/plugin-vue": "^6.0.5",
-    "@vitest/browser-playwright": "^4.1.0",
-    "@vitest/coverage-v8": "^4.1.0",
-    "@vue/test-utils": "^2.4.6",
-    "fast-check": "^4.6.0",
-    "happy-dom": "^20.8.4",
-    "tsdown": "^0.21.3",
-    "typescript": "^5.9.3",
-    "vitest": "^4.1.0",
+    "@nuxt/kit": "^4.4.8",
+    "@nuxt/schema": "^4.4.8",
+    "@vitejs/plugin-vue": "^6.0.7",
+    "@vitest/browser-playwright": "^4.1.10",
+    "@vitest/coverage-v8": "^4.1.10",
+    "@vue/test-utils": "^2.4.11",
+    "fast-check": "^4.9.0",
+    "happy-dom": "^20.10.6",
+    "playwright": "1.61.1",
+    "tsdown": "^0.22.4",
+    "typescript": "catalog:",
+    "vitest": "^4.1.10",
     "vitest-browser-vue": "^2.1.0",
-    "vue": "^3.5.30"
+    "vue": "^3.5.39"
   },
   "peerDependencies": {
     "@nuxt/kit": "^4.0.0",
-    "vue": "^3.4.0"
+    "vue": "^3.5.0"
   },
   "peerDependenciesMeta": {
     "vue": {
