@@ -132,6 +132,17 @@ multiplied. Fix it in core with an end-of-pass flush:
    or require built `SpringConfig`s? (Lean: accept both, mirroring
    `UseSpringOptions`.)
    - my initial response was going to be "accept only `SpringConfig`" because i wasn't sure how we'd differentiate, but given the valid paths come from the input object not the config object, i think we would be safe to accept the `SpringOptions` leaves as well.
+   - **Update (2026-07-11, release prep):** reversed — `ConfigShape` accepts
+     only `SpringConfig` (via `defineSpring`) and `null`. Accepting bare
+     `SpringOptions` leaves forced a keys-vs-namespace disambiguation
+     heuristic (a spring-option key set, plus an `AnnotationContext`
+     threaded through the whole shape traversal to tell "config for this
+     subtree" from "descend into it"). Requiring `SpringConfig` deletes all
+     of it: a plain object is unambiguously a config shape. The scalar
+     `useSpring`/`SpringValue` paths keep the bare-options convenience by
+     normalizing at the Vue boundary (`resolveSpringConfig`), which the
+     nested object case can't reuse cheaply. Easy to add back later if the
+     ergonomics are missed (see the drop-bare-options changeset).
 
 ## Suggested implementation order
 

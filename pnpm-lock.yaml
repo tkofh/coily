@@ -90,7 +90,7 @@ importers:
         specifier: ^14.3.0
         version: 14.3.0(magicast@0.5.3)(nuxt@4.4.8(@babel/plugin-syntax-jsx@7.29.7(@babel/core@7.29.7))(@babel/plugin-syntax-typescript@7.29.7(@babel/core@7.29.7))(@parcel/watcher@2.5.6)(@types/node@26.1.1)(@vue/compiler-sfc@3.5.39)(cac@6.7.14)(db0@0.3.4)(esbuild@0.28.1)(ioredis@5.11.1)(magicast@0.5.3)(oxlint@1.73.0)(rolldown@1.1.5)(rollup-plugin-visualizer@7.0.1(rolldown@1.1.5)(rollup@4.62.2))(rollup@4.62.2)(srvx@0.11.21)(terser@5.49.0)(typescript@6.0.3)(vite@7.3.6(@types/node@26.1.1)(jiti@2.7.0)(terser@5.49.0)(yaml@2.9.0))(yaml@2.9.0))(vue@3.5.39(typescript@6.0.3))
       coily:
-        specifier: workspace:^0.12.2
+        specifier: workspace:^0.13.0
         version: link:../coily
       nuxt:
         specifier: ^4.4.8
@@ -109,7 +109,7 @@ importers:
   packages/playground-vanilla:
     devDependencies:
       coily:
-        specifier: workspace:^0.12.2
+        specifier: workspace:^0.13.0
         version: link:../coily
       typescript:
         specifier: 'catalog:'

@@ -92,13 +92,13 @@ The shape is fixed at creation, and unknown channels throw with their path (`pos
 
 Shapes are validated at compile time too (the `Shape` type — interfaces like your own `Vector2` work without index signatures): non-numeric, optional, or `undefined`-typed channels are rejected where they're declared.
 
-Configs apply per channel. Pass a single config for every channel, or a shape mirroring the value with configs (or plain option objects, or `null` to revert) at any level — a config at a subtree covers every channel below it:
+Configs apply per channel. Pass a single `SpringConfig` for every channel, or a shape mirroring the value with configs (or `null` to revert) at any level — a config at a subtree covers every channel below it:
 
 ```ts
-spring.config = { position: stiff, opacity: { duration: 300, dampingRatio: 1 } }
+spring.config = { position: stiff, opacity: defineSpring({ duration: 300, dampingRatio: 1 }) }
 ```
 
-One rule where the two vocabularies meet: value shapes own their key namespace. If a channel is named like a spring option (`{ tension: 0 }` as a value shape), a bare options object would be ambiguous there — pass a `SpringConfig` or a per-channel shape instead.
+Configs are `SpringConfig` instances — build them with `defineSpring`. Unlike the scalar `useSpring` above, config positions here don't accept bare option objects: a plain object is always a per-channel shape, so any non-config leaf it reaches throws with its path.
 
 Spring objects chain channel-wise. Assign another spring object of the exact same shape (optionally with a partial offset shape), and a partial numeric target detaches only the channels it names:
 

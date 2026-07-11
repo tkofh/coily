@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { ShapeMap } from '../src/shape-map.ts'
+import { BRANCH, ChannelTree, type Coverage } from '../src/channel-tree.ts'
 
 interface Leaf {
   path: string
@@ -7,10 +7,10 @@ interface Leaf {
 }
 
 function createMap(shape: object) {
-  return new ShapeMap<Leaf>(shape, (value, path) => ({ path, value }))
+  return new ChannelTree<Leaf>(shape, (value, path) => ({ path, value }))
 }
 
-describe('ShapeMap: construction', () => {
+describe('ChannelTree: construction', () => {
   test('collects leaves in depth-first shape order with dot paths', () => {
     const map = createMap({ position: { x: 1, y: 2 }, color: [3, 4], opacity: 5 })
 
@@ -32,7 +32,7 @@ describe('ShapeMap: construction', () => {
   })
 })
 
-describe('ShapeMap: views', () => {
+describe('ChannelTree: views', () => {
   test('mirrors the shape and refreshes leaf values in place', () => {
     const map = createMap({ position: { x: 1, y: 2 }, color: [3, 4] })
     const view = map.createView((leaf) => leaf.value * 10)
@@ -48,12 +48,12 @@ describe('ShapeMap: views', () => {
   })
 })
 
-describe('ShapeMap: applyPartial', () => {
+describe('ChannelTree: scatter', () => {
   test('applies only the mentioned channels, skipping undefined and holes', () => {
     const map = createMap({ position: { x: 0, y: 0 }, color: [0, 0, 0] })
     const seen: [string, number][] = []
 
-    map.applyPartial({ position: { x: 5, y: undefined }, color: [undefined, 6] }, (leaf, value) =>
+    map.scatter({ position: { x: 5, y: undefined }, color: [undefined, 6] }, (leaf, value) =>
       seen.push([leaf.path, value]),
     )
 
@@ -67,21 +67,17 @@ describe('ShapeMap: applyPartial', () => {
     const map = createMap({ position: { x: 0 }, color: [0] })
     const apply = vi.fn()
 
-    expect(() => map.applyPartial({ z: 1 }, apply)).toThrow("Unknown channel 'z'")
-    expect(() => map.applyPartial({ color: [1, 2] }, apply)).toThrow("Unknown channel 'color.1'")
-    expect(() => map.applyPartial({ position: 1 }, apply)).toThrow(
-      "Expected an object at 'position'",
-    )
-    expect(() => map.applyPartial({ position: { x: {} } }, apply)).toThrow(
+    expect(() => map.scatter({ z: 1 }, apply)).toThrow("Unknown channel 'z'")
+    expect(() => map.scatter({ color: [1, 2] }, apply)).toThrow("Unknown channel 'color.1'")
+    expect(() => map.scatter({ position: 1 }, apply)).toThrow("Expected an object at 'position'")
+    expect(() => map.scatter({ position: { x: {} } }, apply)).toThrow(
       "Expected a number for channel 'position.x'",
     )
-    expect(() => map.applyPartial({ color: { 0: 1 } }, apply)).toThrow(
-      "Expected an array at 'color'",
-    )
+    expect(() => map.scatter({ color: { 0: 1 } }, apply)).toThrow("Expected an array at 'color'")
   })
 })
 
-describe('ShapeMap: zip', () => {
+describe('ChannelTree: zip', () => {
   test('pairs leaves by position with optional values alongside', () => {
     const a = createMap({ position: { x: 1, y: 2 }, opacity: 3 })
     const b = createMap({ position: { x: 4, y: 5 }, opacity: 6 })
@@ -118,15 +114,15 @@ describe('ShapeMap: zip', () => {
   })
 })
 
-describe('ShapeMap: applyAnnotation', () => {
-  const resolveNumbers = (input: unknown) =>
-    typeof input === 'number' ? { value: input } : { branch: true as const }
+describe('ChannelTree: broadcast', () => {
+  const resolveNumbers = (input: unknown): Coverage<number> =>
+    typeof input === 'number' ? input : BRANCH
 
   test('a value at a subtree covers every leaf below it', () => {
     const map = createMap({ position: { x: 0, y: 0 }, opacity: 0 })
     const seen: [string, number][] = []
 
-    map.applyAnnotation(
+    map.broadcast(
       { position: 9 },
       resolveNumbers,
       (leaf, value) => seen.push([leaf.path, value]),
@@ -143,7 +139,7 @@ describe('ShapeMap: applyAnnotation', () => {
     const map = createMap({ position: { x: 0, y: 0 }, color: [0, 0] })
     const seen: [string, number][] = []
 
-    map.applyAnnotation(
+    map.broadcast(
       { position: { y: 1 }, color: [undefined, 2] },
       resolveNumbers,
       (leaf, value) => seen.push([leaf.path, value]),
@@ -159,7 +155,7 @@ describe('ShapeMap: applyAnnotation', () => {
   test('reports unknown channels with the given label', () => {
     const map = createMap({ x: 0 })
 
-    expect(() => map.applyAnnotation({ z: 1 }, resolveNumbers, vi.fn(), 'config')).toThrow(
+    expect(() => map.broadcast({ z: 1 }, resolveNumbers, vi.fn(), 'config')).toThrow(
       "Unknown channel 'z' in config",
     )
   })
@@ -168,11 +164,11 @@ describe('ShapeMap: applyAnnotation', () => {
     const map = createMap({ position: { x: 0 }, color: [0] })
     const paths: string[] = []
 
-    map.applyAnnotation(
+    map.broadcast(
       { position: { x: 1 }, color: [2] },
-      (input, path) => {
+      (input, path): Coverage<number> => {
         paths.push(path)
-        return typeof input === 'number' ? { value: input } : { branch: true as const }
+        return typeof input === 'number' ? input : BRANCH
       },
       vi.fn(),
       'annotation',

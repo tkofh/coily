@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import type { SpringOptions } from 'coily'
-
 const count = 512
 const playgroundRef = ref<HTMLElement | null>(null)
 const { width: winW, height: winH } = useElementSize(playgroundRef)
@@ -69,7 +67,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => clearTimeout(autoTimer))
 
-const chainConfig = { bounce: -1, duration: 1000, precision: 3 } satisfies SpringOptions
+const chainConfig = defineSpring({ bounce: -1, duration: 1000, precision: 3 })
 
 // Build chain: first spring follows mouse, each subsequent spring follows the previous
 const springs: SpringObjectRef<{ x: number; y: number }>[] = []
