@@ -251,7 +251,6 @@ describe('spring objects', () => {
     const spring = system.createSpringObject(shape, defaultConfig)
     spring.target = fullTarget
     system.advance(FRAME)
-    // oxlint-disable-next-line no-unused-vars
     let sum = 0
     for (let i = 0; i < 10_000; i++) {
       sum += spring.value.position.x
