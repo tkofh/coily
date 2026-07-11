@@ -39,7 +39,6 @@ export class MotionSet {
     this.#motions.delete(motion)
   }
 
-  /** Snap every active motion to rest at its target. */
   finishAll() {
     this.flushes.batch(() => {
       for (const motion of this.#motions) {
@@ -55,9 +54,6 @@ export class MotionSet {
 
     try {
       for (const motion of this.#motions) {
-        // A motion that rested, was removed, and got re-added by a leader's
-        // update callback in this same pass has already advanced by dt —
-        // ticking it again would double its time this frame.
         if (motion._pass === this.#pass) continue
         motion._pass = this.#pass
 

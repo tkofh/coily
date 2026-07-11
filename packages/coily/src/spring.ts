@@ -35,9 +35,7 @@ const RESOLVED = Promise.resolve()
 
 export class Spring {
   #target: number
-  /** Explicitly assigned config, or `null` to inherit from the leader (or the default). */
   #override: SpringConfig | null
-  /** Cached effective config — always what the motion is currently using. */
   #resolved: SpringConfig
   readonly #motion: Motion
   readonly #motions: MotionSet
@@ -72,8 +70,6 @@ export class Spring {
       }
     }
 
-    // Reduced motion: the suppressed animation would end at the target, so
-    // the spring is simply created there.
     if (motions.reduced) {
       value = numericTarget
     }
@@ -118,8 +114,6 @@ export class Spring {
 
   set value(value: number) {
     if (this.#motions.reduced) {
-      // Honoring the written position is not motion — what gets skipped is
-      // the spring-back animation, so the value becomes the new resting point.
       if (value !== this.value) {
         this.jumpTo(value)
       }
@@ -139,7 +133,6 @@ export class Spring {
   }
 
   set velocity(value: number) {
-    // A velocity impulse is pure motion — ignored under reduced motion.
     if (this.#motions.reduced) return
 
     this.#motions.add(this.#motion)
@@ -183,12 +176,6 @@ export class Spring {
     return this.#motion.isResting
   }
 
-  /**
-   * Resolves when the spring next comes to rest — immediately if it is
-   * already resting. The same promise is returned for the duration of a
-   * motion cycle, and retargeting mid-flight extends the wait: it resolves
-   * only at true rest. Disposing the spring resolves a pending promise.
-   */
   get settled(): Promise<void> {
     if (this.#disposed || this.#motion.isResting) return RESOLVED
 
@@ -229,9 +216,6 @@ export class Spring {
       this.#leader = null
     }
 
-    // Detach followers so they don't reference a disposed spring. Each keeps
-    // its current config and target, and can be retargeted normally.
-    // Set iteration tolerates each follower removing itself as it detaches.
     for (const follower of this.#followers) {
       follower.#unfollow()
     }
@@ -267,8 +251,6 @@ export class Spring {
       const current = this.value
       this.#target = value
       this.#motion.position = current - this.#target
-      // Re-baseline without emitting `update`: a retarget preserves the
-      // current value, so consumers hear about it on the next real tick.
       this.#motion.tick(0, false)
     }
   }
@@ -304,8 +286,6 @@ export class Spring {
     this.#offset = 0
 
     if (this.#override === null) {
-      // Snapshot the inherited config so the spring keeps behaving the same,
-      // decoupled from the ex-leader's future config changes.
       this.#override = this.#resolved
     }
   }
@@ -315,11 +295,6 @@ export class Spring {
 
     this.#resolved = next
     this.#motion.configure(next)
-    // A resting motion stays out of the set: nothing about it observably
-    // changed (configure wakes it first if the new precision lifts it above
-    // the resting threshold). Parking it in the set would also burn its
-    // once-per-pass tick ahead of a leader's wake-up, adding a frame of lag
-    // to follows wired after creation.
     if (!this.#motion.isResting) {
       this.#motions.add(this.#motion)
     }

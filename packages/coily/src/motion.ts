@@ -5,7 +5,6 @@ import { CriticallyDampedSolver, OverdampedSolver, UnderdampedSolver } from './s
 import { invariant } from './util.ts'
 
 export class Motion {
-  /** Tick-pass stamp owned by MotionSet — prevents double-ticking a motion re-added mid-pass. */
   _pass = 0
 
   #config: SpringConfig
@@ -19,7 +18,6 @@ export class Motion {
   #needsUpdate = false
   #needsReset = false
   #timeRemaining = 0
-  /** Logical animation state — `start` fires only on the false→true edge, `stop` on true→false. */
   #running: boolean
 
   readonly #emitter: Emitter
@@ -66,7 +64,6 @@ export class Motion {
     this.#config = config
     this.#state.configure(config)
     this.#needsUpdate = true
-    // A precision change can lift sub-threshold state above the resting threshold
     this.#syncStart()
   }
 
@@ -93,10 +90,6 @@ export class Motion {
     this.#currentSolver.tick(dt)
     this.#timeRemaining = Math.max(0, this.#timeRemaining - dt * 1000)
 
-    // Rest is a fixpoint of the trajectory: once a tick lands inside the
-    // resting threshold, zero the state before emitting, so reads during
-    // the final update (a follower rebasing on its leader) see the target
-    // precisely rather than sub-threshold residue.
     if (this.#state.isResting) {
       this.#state.position = 0
       this.#state.velocity = 0
@@ -107,8 +100,6 @@ export class Motion {
       this.#emitter.emit('update')
     }
 
-    // `emit` gates only `update` — start/stop transitions always fire,
-    // otherwise a non-emitting tick could swallow one and break alternation.
     if (this.#state.isResting) {
       if (this.#running) {
         this.#running = false
@@ -116,13 +107,11 @@ export class Motion {
         this.#emitter.emit('stop')
       }
     } else if (!this.#running) {
-      // A sub-threshold nudge can grow past the resting threshold mid-tick
       this.#running = true
       this.#emitter.emit('start')
     }
   }
 
-  /** Snap to rest at the target (zero displacement and velocity). */
   finish() {
     this.position = 0
     this.velocity = 0
@@ -159,8 +148,6 @@ export class Motion {
       this.#running = true
       this.#emitter.emit('start')
     }
-    // The inverse transition (a mutation that parks the spring) is left to the
-    // next tick, so `stop` always arrives after that tick's `update`.
   }
 
   #updateSolver() {

@@ -16,12 +16,6 @@ import { SpringSystemKey } from './system.ts'
 
 export type UseSpringOptions = MaybeRefOrGetter<SpringOptions | SpringConfig | undefined>
 
-/**
- * The subset of Spring / SpringObject the reactive bridge relies on.
- * Springs read `V` but may accept a wider write type `W` (spring objects
- * take partial shapes), and configure with `C` (spring objects take config
- * shapes).
- */
 interface SpringLike<V, W, C> {
   get value(): V
   set value(next: W)
@@ -42,16 +36,10 @@ export interface ReactiveSpringRef<V, W = V> extends Ref<V, W> {
   readonly velocity: Ref<V, W>
   readonly timeRemaining: Ref<number>
   readonly isResting: Ref<boolean>
-  /** Resolves when the spring next comes to rest — see `Spring#settled`. */
   readonly settled: Promise<void>
   readonly jumpTo: (value: W) => void
 }
 
-/**
- * `customRef` is invariant in its single type parameter, but springs read
- * `V` while accepting the wider `W` — the same divergence `Ref<V, W>`
- * models. This alias re-types it; the factories behave identically.
- */
 const divergentRef = customRef as unknown as <G, S>(
   factory: (track: () => void, trigger: () => void) => { get(): G; set(value: S): void },
 ) => Ref<G, S>
@@ -78,13 +66,6 @@ export function resolveSpringConfig(
   })
 }
 
-/**
- * Wraps a spring in a writable ref of its value, with `velocity`,
- * `timeRemaining`, and `isResting` refs plus `jumpTo()` attached. Keeps the
- * spring's config in sync with `config`, disposes the spring with the current
- * scope, and stores the spring instance on the ref under `instanceKey` so
- * sibling composables can link to it.
- */
 export function createReactiveSpringRef<V, W, C>(
   spring: SpringLike<V, W, C>,
   config: ComputedRef<C | undefined>,
@@ -161,8 +142,6 @@ export function createReactiveSpringRef<V, W, C>(
     jumpTo: (next: W) => spring.jumpTo(next),
   }) as ReactiveSpringRef<V, W>
 
-  // A getter so each access reflects the spring's current motion cycle —
-  // Object.assign would snapshot a single promise instance.
   Object.defineProperty(ref, 'settled', {
     get: () => spring.settled,
   })

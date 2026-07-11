@@ -2,37 +2,11 @@ import type { MotionSet } from './motion-set.ts'
 import { invariant } from './util.ts'
 
 export interface TickerOptions {
-  /**
-   * Frame-rate ceiling for the simulation loop, or 0 for no ceiling. When
-   * set, ticks are paced to whole display frames — the loop can never tick
-   * more often than the display refreshes — and each tick's `delta` is the
-   * true elapsed time across the frames it spans. When 0, springs advance
-   * once per displayed frame, so physics resolution matches the display's
-   * refresh rate on 60, 120, 144, and adaptive-sync panels alike.
-   *
-   * must be greater than or equal to 0, defaults to 0 (no ceiling)
-   */
   readonly fps?: number | undefined
-  /**
-   * The maximum elapsed time (in ms) before a frame is considered a lag spike
-   * (e.g. from a backgrounded tab). When exceeded, `adjustedLag` is used instead
-   * of the real elapsed time. Set to 0 to disable lag detection.
-   *
-   * must be greater than or equal to 0, defaults to 500
-   */
   readonly lagThreshold?: number | undefined
-  /**
-   * The substitute elapsed time (in ms) used when a lag spike is detected.
-   * Clamped to be at most `lagThreshold`.
-   *
-   * must be greater than or equal to 0, defaults to 33
-   */
   readonly adjustedLag?: number | undefined
 }
 
-// Resolved per call so tests can stub `window.requestAnimationFrame`. The
-// non-browser fallback forwards a timestamp because `setTimeout` provides
-// none — the frame callback derives every delta from its timestamp argument.
 const request = (callback: FrameRequestCallback): number =>
   typeof window !== 'undefined'
     ? window.requestAnimationFrame(callback)
@@ -47,11 +21,8 @@ const cancel = (id: number): void => {
 }
 
 export class Ticker {
-  /** The frame-rate ceiling, 0 meaning uncapped — mirroring `lagThreshold`'s 0 = disabled. */
   #fps: number
-  /** Reference duration: the manual `tick()` step and the `deltaRatio` denominator. */
   #gap: number
-  /** Pacing threshold — `1000 / fps` when capped, 0 (tick every frame) when not. */
   #capGap: number
   #lagThreshold: number
   #adjustedLag: number
@@ -61,15 +32,12 @@ export class Ticker {
   #frame = 0
   #time = 0
   #delta = 0
-  /** Frame time accumulated toward the next tick while a cap is pacing. */
   #acc = 0
   #lastWallTime = 0
-  /** False until the first callback after (re)scheduling anchors the clock. */
   #primed = false
 
   #id = 0
   #stopped = true
-  /** Running but unscheduled: the motion set drained, so no callback is pending. */
   #sleeping = false
 
   constructor(motions: MotionSet, options?: TickerOptions) {
@@ -161,12 +129,10 @@ export class Ticker {
     }
   }
 
-  /** Manually advance one frame (one reference gap: `1000 / fps`, or 1000/60 uncapped). */
   tick() {
     this.#step(this.#gap)
   }
 
-  /** Request the next frame, or sleep when there is nothing to animate. */
   #schedule() {
     if (this.#motion.size === 0) {
       this.#sleeping = true
@@ -177,10 +143,6 @@ export class Ticker {
     }
   }
 
-  /**
-   * Wake hook, fired by the motion set on its empty→non-empty transition.
-   * Re-anchors the clock, so time spent asleep never reaches the simulation.
-   */
   #wake() {
     if (!this.#stopped && this.#sleeping) {
       this.#primed = false
@@ -193,27 +155,16 @@ export class Ticker {
 
     if (this.#primed) {
       const wallElapsed = timestamp - this.#lastWallTime
-
-      // If the browser tab was backgrounded or the system lagged,
-      // clamp the elapsed time so the simulation doesn't jump.
       const elapsed = wallElapsed > this.#lagThreshold ? this.#adjustedLag : wallElapsed
 
       this.#acc += elapsed
 
-      // Frame-paced cap: tick once the accumulated time reaches the cap gap,
-      // with half of the current frame as tolerance so a cap near a multiple
-      // of the display cadence can't alias against vsync (a knife-edge
-      // crossing would let timestamp jitter flip between an N- and an
-      // (N+1)-frame gap). Uncapped, the gap is 0 and every frame ticks.
       if (this.#acc + elapsed / 2 >= this.#capGap) {
         const delta = this.#acc
         this.#acc = 0
         this.#step(delta)
       }
     } else {
-      // The first callback after (re)scheduling only anchors the clock: rAF
-      // timestamps sit on the frame grid, not on performance.now()'s, so a
-      // delta bridging the two clocks could be tiny or even negative.
       this.#primed = true
     }
     this.#lastWallTime = timestamp

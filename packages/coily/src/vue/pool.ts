@@ -17,13 +17,6 @@ interface PoolSpring {
   onDispose(callback: () => void): () => void
 }
 
-/**
- * Imperative spring creation tied to the current effect scope: springs made
- * through the pool are created on the provided spring system and disposed
- * automatically when the scope is torn down, so a dynamic set of springs
- * (particles, per-item effects) cannot leak motions. Disposing a spring
- * early is fine — it unregisters itself from the pool.
- */
 export function useSpringPool(): SpringPool {
   const system = injectSpringSystem()
   const live = new Set<PoolSpring>()

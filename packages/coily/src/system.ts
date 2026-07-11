@@ -6,19 +6,6 @@ import { Ticker, type TickerOptions } from './ticker.ts'
 
 export interface SpringSystemOptions extends TickerOptions {
   debug?: boolean | undefined
-  /**
-   * How the system responds to the user's reduced-motion preference. When
-   * active, springs snap to their targets instead of animating: retargets and
-   * value writes apply instantly, velocity impulses are ignored, and springs
-   * created displaced start at their target.
-   *
-   * - `'user'` — follow `prefers-reduced-motion` and react to live changes
-   *   (inactive where `matchMedia` is unavailable, e.g. during SSR)
-   * - `'always'` — reduced motion is always active
-   * - `'never'` — reduced motion is never active
-   *
-   * @default 'user'
-   */
   reducedMotion?: 'user' | 'always' | 'never' | undefined
 }
 
@@ -49,7 +36,6 @@ class SpringSystemImpl implements SpringSystem {
   #applyReducedMotion(reduced: boolean) {
     this.#motion.reduced = reduced
     if (reduced) {
-      // Complete in-flight animations instantly rather than letting them play out
       this.#motion.finishAll()
     }
   }
@@ -112,40 +98,16 @@ class SpringSystemImpl implements SpringSystem {
 
 export interface SpringSystem {
   createSpring(position: SpringPosition, config?: SpringConfig): Spring
-  /**
-   * Creates a spring over an arbitrary numeric shape — a plain object or
-   * array whose leaves are all numbers, resting at `value`. Each leaf
-   * becomes an independent scalar spring channel; `config` is a single
-   * config for every channel or a shape mirroring `value` with configs at
-   * any level (a subtree value applies to every channel below it). The
-   * `Shape` constraint validates the value at compile time; the runtime
-   * repeats the validation for untyped callers.
-   */
   createSpringObject<T extends object>(
     value: T & Shape<T>,
     config?: ConfigShape<T>,
   ): SpringObject<T>
-  /** Advance all springs by `dt` milliseconds, without affecting internal timing. */
   advance(dt: number): void
 
-  /** Start the animation loop. */
   start(): void
-  /** Stop the animation loop. */
   stop(): void
-  /** Whether the animation loop is currently running. */
   readonly running: boolean
-  /**
-   * Whether reduced motion is currently active — see
-   * `SpringSystemOptions.reducedMotion`. Useful for gating purely decorative
-   * effects (particles, flourishes) in application code.
-   */
   readonly reducedMotion: boolean
-
-  /**
-   * Frame-rate ceiling — see `TickerOptions.fps`. `0` (the default) means
-   * uncapped: springs advance once per displayed frame. Assign `0` to
-   * remove a cap at runtime.
-   */
   fps: number
   lagThreshold: number
   adjustedLag: number

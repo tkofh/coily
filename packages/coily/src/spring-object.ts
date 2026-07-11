@@ -163,19 +163,6 @@ const followChannel = (mine: Spring, theirs: Spring, offset: number | undefined)
 
 const RESOLVED = Promise.resolve()
 
-/**
- * A spring over an arbitrary numeric shape: a plain object or array whose
- * leaves are all numbers. The shape is fixed at creation — each numeric leaf
- * becomes an independent scalar spring channel, so per-channel configs,
- * channel-wise following, `settled`, and reduced motion all compose from the
- * scalar machinery. Composite events are coalesced: `update` fires at most
- * once per frame with every channel in its final per-frame state, and `stop`
- * lands after the frame's final `update`.
- *
- * Invariant in `T` (`in out`): following and offsets require exactly
- * matching shapes, so a spring object is never substitutable for one of a
- * wider or narrower shape.
- */
 export class SpringObject<in out T extends object> {
   readonly #motions: MotionSet
   readonly #map: ShapeMap<Spring>
@@ -184,21 +171,13 @@ export class SpringObject<in out T extends object> {
   readonly #velocityView: ShapeView<Spring>
 
   readonly #emitter = new Emitter()
-  /** Composite animation state — `start`/`stop` fire only on its edges. */
   #running = false
-  /** Set when a channel emits `update` — cleared by the flush. */
   #dirty = false
 
   #settled: Promise<void> | null = null
   #resolveSettled: (() => void) | null = null
   #disposed = false
 
-  /**
-   * Emits the coalesced composite events. Runs at most once per tick pass
-   * (channel events schedule it through the motion set's `FlushQueue`), so
-   * every channel is in its final per-frame state: `update` fires once with
-   * no torn reads, and `stop` lands after the frame's final `update`.
-   */
   readonly #flush = () => {
     if (this.#disposed) return
 
@@ -228,8 +207,6 @@ export class SpringObject<in out T extends object> {
 
     this.#map = new ShapeMap(value, (leafValue) => new Spring(motions, leafValue))
     if (config !== undefined) {
-      // Assigning configs after creation is unobservable here — channels are
-      // resting, and configuring a resting spring emits nothing.
       this.#map.applyAnnotation(config, resolveConfigNode, assignConfig, 'config')
     }
 
@@ -256,12 +233,6 @@ export class SpringObject<in out T extends object> {
     return this.#targetView.root as ReadonlyShape<T>
   }
 
-  /**
-   * Retargets the given channels and leaves the rest alone; unknown channels
-   * throw. Assigning another spring object (optionally with an offset shape)
-   * follows it channel-wise — the shapes must match exactly. While following,
-   * a partial numeric target detaches only the channels it names.
-   */
   set target(value: SpringObjectTarget<T>) {
     if (value instanceof SpringObject) {
       this.#follow(value, undefined)
@@ -301,10 +272,6 @@ export class SpringObject<in out T extends object> {
     })
   }
 
-  /**
-   * The config shared by every channel, or `null` when channels currently
-   * have different configs.
-   */
   get config(): SpringConfig | null {
     const channels = this.#map.leaves
     const first = channels[0]!.config
@@ -314,18 +281,11 @@ export class SpringObject<in out T extends object> {
     return first
   }
 
-  /**
-   * Applies a config to the channels it covers and leaves the rest alone:
-   * a single config (or `null`) applies to every channel, a config shape
-   * only to the channels it mentions.
-   */
   set config(value: ConfigShape<T>) {
     this.#motions.flushes.batch(() => {
       this.#map.applyAnnotation(value ?? null, resolveConfigNode, assignConfig, 'config')
     })
   }
-
-  // ── State ───────────────────────────────────────────────────────
 
   get timeRemaining(): number {
     let max = 0
@@ -343,12 +303,6 @@ export class SpringObject<in out T extends object> {
     return true
   }
 
-  /**
-   * Resolves when every channel next comes to rest — immediately if already
-   * resting. The same promise is returned for the duration of a motion
-   * cycle, and retargeting mid-flight extends the wait: it resolves only
-   * at true rest. Disposing the spring resolves a pending promise.
-   */
   get settled(): Promise<void> {
     if (this.#disposed || this.isResting) return RESOLVED
 
@@ -365,9 +319,6 @@ export class SpringObject<in out T extends object> {
     return this.#settled
   }
 
-  // ── Lifecycle ───────────────────────────────────────────────────
-
-  /** Snaps the given channels to rest at the given values; the rest are left alone. */
   jumpTo(value: PartialShape<T>) {
     this.#motions.flushes.batch(() => {
       this.#map.applyPartial(value, applyJump)
@@ -390,8 +341,6 @@ export class SpringObject<in out T extends object> {
     this.#emitter.clear()
   }
 
-  // ── Events ──────────────────────────────────────────────────────
-
   onUpdate(callback: () => void) {
     return this.#emitter.on('update', callback)
   }
@@ -405,8 +354,6 @@ export class SpringObject<in out T extends object> {
   }
 
   onDispose(callback: () => void) {
-    // Channels dispose together and only through this class, so the first
-    // channel is a sufficient signal.
     return this.#map.leaves[0]!.onDispose(callback)
   }
 

@@ -19,11 +19,9 @@ import {
 
 export type { UseSpringOptions } from './reactive-spring.ts'
 
-// ── SpringRef ───────────────────────────────────────────────────────
-
 export interface SpringRef extends ReactiveSpringRef<number> {}
 
-/** @internal Symbol to access the underlying Spring from a SpringRef */
+/** @internal */
 const SpringInstanceKey = Symbol('spring')
 
 type SpringRefWithInstance = SpringRef & { [SpringInstanceKey]: Spring }
@@ -32,19 +30,6 @@ function hasSpringInstance(value: unknown): value is SpringRefWithInstance {
   return typeof value === 'object' && value !== null && SpringInstanceKey in value
 }
 
-// ── useSpring ───────────────────────────────────────────────────────
-
-/**
- * A spring as a writable ref. Numbers (plain, ref, or getter) create scalar
- * springs; numeric shapes — records and arrays alike, equally wrapped —
- * create spring objects with one channel per numeric leaf. Passing another
- * spring ref links to it as a follower. For several independent scalar
- * springs, map: `targets.map((t) => useSpring(t))`.
- *
- * Plain shapes, refs, and getters are separate overloads (not one
- * `MaybeRefOrGetter`): the union defeats inference of `T` through the
- * `T & Shape<T>` validation intersection, per-kind signatures do not.
- */
 export function useSpring(target: MaybeRefOrGetter<number>, options?: UseSpringOptions): SpringRef
 export function useSpring(target: SpringRef, options?: UseSpringOptions): SpringRef
 export function useSpring<T extends object>(
@@ -67,15 +52,12 @@ export function useSpring(
   target: unknown,
   options?: unknown,
 ): SpringRef | SpringObjectRef<AnyShape> {
-  // The overloads bind the real types; the implementation only dispatches.
   if (hasSpringInstance(target)) {
     return createLinkedSpringRef(target, options as UseSpringOptions)
   }
   if (hasSpringObjectInstance(target)) {
     return createLinkedSpringObjectRef(target, options as UseSpringObjectOptions<AnyShape>)
   }
-  // Refs and getters of numbers vs. shapes only differ in what they hold —
-  // resolve once to pick the path (creation resolves again for the initial).
   if (typeof toValue(target as MaybeRefOrGetter<unknown>) === 'number') {
     return createSpringRef(target as MaybeRefOrGetter<number>, options as UseSpringOptions)
   }
