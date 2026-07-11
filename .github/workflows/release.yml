@@ -1,17 +1,9 @@
-# Release automation via Changesets + npm trusted publishing (OIDC).
-# See RELEASING.md for the one-time GitHub/npm setup and the day-to-day flow.
-#
-# Job 1 (changesets) runs on every push to main: it maintains the
-# "Version Packages" PR and decides whether a publish is due.
-# Job 2 (publish) only runs when the version on main is absent from npm,
-# and is gated behind the `release` environment (required reviewer).
 name: Release
 
 on:
   push:
     branches: [main]
 
-# Least privilege: jobs declare exactly what they need.
 permissions: {}
 
 concurrency:
@@ -19,7 +11,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  TURBO_TELEMETRY_DISABLED: '1'
+  TURBO_TELEMETRY_DISABLED: "1"
 
 jobs:
   changesets:
@@ -38,8 +30,6 @@ jobs:
           # Full history so Changesets attributes changelog entries to the right commits.
           fetch-depth: 0
 
-      # Runs before changesets/action, which leaves the work tree on the
-      # version branch with a bumped package.json.
       - name: Check whether the version on main is already published
         id: gate
         run: |
@@ -68,11 +58,7 @@ jobs:
         id: changesets
         uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
         with:
-          # The action execs this as a single command (no shell operators), so
-          # the version+format compound lives in a package.json script.
-          # Formatting after versioning keeps CHANGELOG.md passing oxfmt.
           version: pnpm run version-packages
-          # Create commits via the GitHub API so they are GPG-signed by GitHub.
           commitMode: github-api
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -80,33 +66,24 @@ jobs:
   publish:
     name: Publish to npm
     needs: changesets
-    # Publish only when the Version Packages PR has been merged: no unconsumed
-    # changesets remain AND the version on main is missing from the registry.
     if: needs.changesets.outputs.has-changesets == 'false' && needs.changesets.outputs.needs-publish == 'true'
     runs-on: ubuntu-latest
     environment:
       name: release
       url: https://www.npmjs.com/package/coily
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.1-noble
     permissions:
       contents: write # changesets/action pushes git tags and creates the GitHub Release
       id-token: write # OIDC token exchange for npm trusted publishing
     steps:
-      - name: Checkout
-        # Credentials stay persisted (the default): changesets/action pushes
-        # the release tag over git after a successful publish.
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
-
-      - name: Set up Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: 24
           cache: pnpm
 
-      # Trusted publishing needs npm >= 11.5.1. Fail loudly instead of pulling
-      # a newer npm from the registry; bump node-version above if this trips.
       - name: Require npm with trusted-publishing support
         run: |
           required=11.5.1
@@ -116,30 +93,13 @@ jobs:
             exit 1
           fi
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      # The vitest "browser" project runs against real Chromium via Playwright.
-      - name: Install Playwright Chromium
-        run: pnpm --dir packages/coily exec playwright install chromium --with-deps
-
-      # The Version Packages PR is opened by GITHUB_TOKEN, so CI never runs on
-      # it; this is the verification gate for the exact tree being published.
-      - name: Lint and check formatting
-        run: pnpm run check
-
-      - name: Typecheck, build, test
-        run: pnpm turbo run check build test
-
-      - name: Publish to npm
-        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run check
+      - run: pnpm turbo run check build test
+      - uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
         with:
           publish: pnpm exec changeset publish
-          # Push release tags via the GitHub API so they are GPG-signed too.
           commitMode: github-api
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Redundant under trusted publishing (provenance is on by default),
-          # but forces a hard failure if publishing ever falls back to a path
-          # that cannot attest provenance.
-          NPM_CONFIG_PROVENANCE: 'true'
+          NPM_CONFIG_PROVENANCE: "true"

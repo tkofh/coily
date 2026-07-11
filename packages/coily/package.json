@@ -45,6 +45,7 @@
     "@vue/test-utils": "^2.4.11",
     "fast-check": "^4.9.0",
     "happy-dom": "^20.10.6",
+    "playwright": "1.61.1",
     "tsdown": "^0.22.4",
     "typescript": "catalog:",
     "vitest": "^4.1.10",

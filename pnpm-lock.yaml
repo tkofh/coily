@@ -62,6 +62,9 @@ importers:
       happy-dom:
         specifier: ^20.10.6
         version: 20.10.6
+      playwright:
+        specifier: 1.61.1
+        version: 1.61.1
       tsdown:
         specifier: ^0.22.4
         version: 0.22.4(typescript@6.0.3)
