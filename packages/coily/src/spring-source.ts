@@ -10,21 +10,23 @@ import { invariant, isArray, isRecordOrArray } from './util.ts'
 export const SpringSourceSymbol: unique symbol = Symbol.for('coily/spring-source')
 
 /**
- * A live numeric value a spring can animate toward: assign one to
- * `Spring.target` and the spring tracks it, momentum intact. Every
- * `Spring` is a `SpringSource`; `mapSpring` derives new sources from
- * existing ones.
+ * A live value springs can animate toward or derive from. `T` is the
+ * value's type: scalar sources (`T = number`, the default) can be
+ * assigned to `Spring.target`, which tracks them momentum intact.
+ * Every `Spring` is a `SpringSource`, every `CompositeSpring` is a
+ * `SpringSource` of its value shape, and `mapSpring` derives new
+ * scalar sources from existing sources of any value.
  *
  * The contract is open — an object with these members can bridge any
- * live value (a pointer position, a scroll offset) into a followable
- * source. Followers read `value` on every update, adopt `config` when
- * they have none of their own (`null` means the default), and detach
- * on dispose.
+ * live value (a pointer position, a scroll offset) into a source.
+ * Followers read `value` on every update, adopt `config` when they
+ * have none of their own (`null` means the default), and detach on
+ * dispose.
  */
-export interface SpringSource {
+export interface SpringSource<T = number> {
   readonly [SpringSourceSymbol]: true
   /** The current value, in value units. */
-  readonly value: number
+  readonly value: T
   /** The config followers without their own adopt. `null` means the default. */
   readonly config: SpringDefinition | null
   /** Subscribes to value changes. Returns an unsubscribe function. */
@@ -35,7 +37,7 @@ export interface SpringSource {
   onDispose(callback: () => void): () => void
 }
 
-export function isSpringSource(value: unknown): value is SpringSource {
+export function isSpringSource(value: unknown): value is SpringSource<unknown> {
   return typeof value === 'object' && value !== null && SpringSourceSymbol in value
 }
 
@@ -49,8 +51,8 @@ export function isSpringSource(value: unknown): value is SpringSource {
  */
 export type SourceShape<T> = 0 extends 1 & T
   ? T // any defers wholly to the runtime checks
-  : T extends SpringSource
-    ? SpringSource
+  : T extends SpringSource<unknown>
+    ? SpringSource<unknown>
     : T extends ((...args: never) => unknown) | (abstract new (...args: never) => unknown)
       ? never
       : T extends readonly never[]
@@ -68,13 +70,13 @@ export type SourceShape<T> = 0 extends 1 & T
           : never
 
 /**
- * The numeric shape a shape of sources produces: the same nesting with
- * every `SpringSource` leaf replaced by its `number` value. What `map`
+ * The value shape a shape of sources produces: the same nesting with
+ * every `SpringSource` leaf replaced by its value — `number` for a
+ * scalar spring, the read-only value shape for a composite. What `map`
  * receives when `mapSpring` is given a shape.
  */
-export type SourceValues<T> = T extends SpringSource
-  ? number
-  : { readonly [K in keyof T]: SourceValues<T[K]> }
+export type SourceValues<T> =
+  T extends SpringSource<infer V> ? V : { readonly [K in keyof T]: SourceValues<T[K]> }
 
 const noop = () => {}
 // A pinned config never changes, so configure subscriptions never fire.
@@ -91,7 +93,7 @@ function emptyShape(path: string): string {
  * collecting the leaves along the way. Structure is fixed at creation,
  * so reads walk precompiled readers instead of re-validating.
  */
-function compileNode(node: unknown, path: string, leaves: SpringSource[]): () => unknown {
+function compileNode(node: unknown, path: string, leaves: SpringSource<unknown>[]): () => unknown {
   if (isSpringSource(node)) {
     leaves.push(node)
     return () => node.value
@@ -152,28 +154,32 @@ export function mapSpring(
   config?: SpringDefinition | null,
 ): SpringSource
 /**
- * Derives a source from several others by a pure function of their
- * values. `sources` is a shape — a plain object or array with
- * `SpringSource` leaves, nested arbitrarily — and `map` receives the
- * same shape with each leaf's current number:
- * `mapSpring({ x, y }, ({ x, y }) => Math.hypot(x, y), null)` derives
- * the springs' distance from the origin. Invalid leaves throw with
- * their path (`position.z`).
+ * Derives a scalar source from several channels by a pure function of
+ * their values. `sources` is a shape — a plain object or array with
+ * `SpringSource` leaves, nested arbitrarily — or a single non-scalar
+ * source such as a `CompositeSpring`. `map` receives the matching
+ * values: each leaf's current number for a shape
+ * (`mapSpring({ x, y }, ({ x, y }) => Math.hypot(x, y), null)`), the
+ * live value shape for a composite
+ * (`mapSpring(point, ({ x, y }) => Math.hypot(x, y), null)`). Invalid
+ * leaves throw with their path (`position.z`).
  *
- * Several sources leave no single config to pass through, so `config`
- * is required: the config the mapped source offers followers, or `null`
- * to offer none (followers fall back to their default). Either way it
- * is fixed — the mapped source never fires configure events.
+ * More than one channel leaves no single config to pass through, so
+ * `config` is required: the config the mapped source offers followers,
+ * or `null` to offer none (followers fall back to their default).
+ * Either way it is fixed — the mapped source never fires configure
+ * events.
  *
  * The result is a stateless view, not a spring: it holds no
  * subscriptions and needs no disposal, and reads compute `map` over the
  * sources' values on the fly. `map` must be pure — it runs on every
- * read and every leaf update, and nothing re-evaluates it when anything
- * other than the sources changes. The mapped source is released with
- * the first of its sources: followers detach then, keeping their
- * current target, as they would from a disposed spring.
+ * read and every source update — and must not retain what it receives:
+ * a composite hands it the same live mirror its `value` returns. The
+ * mapped source is released with the first of its sources: followers
+ * detach then, keeping their current target, as they would from a
+ * disposed spring.
  */
-export function mapSpring<T extends object>(
+export function mapSpring<const T extends object>(
   sources: T & SourceShape<T>,
   map: (values: SourceValues<T>) => number,
   config: SpringDefinition | null,
@@ -202,7 +208,7 @@ export function mapSpring(
     })
   }
 
-  const leaves: SpringSource[] = []
+  const leaves: SpringSource<unknown>[] = []
   const readValues = compileNode(source, '', leaves)
   // The same source can sit at several leaves; subscribe to it once.
   const sources = [...new Set(leaves)]

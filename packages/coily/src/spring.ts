@@ -72,6 +72,10 @@ export class Spring implements SpringSource {
       this.#setTarget(value)
     } else {
       invariant(isSpringSource(value), 'Spring target must be a number or a SpringSource')
+      invariant(
+        typeof value.value === 'number',
+        'A spring can only follow a scalar SpringSource; derive one from a composite with mapSpring',
+      )
       this.#follow(value)
     }
   }

@@ -1,5 +1,5 @@
 /**
- * Type-level tests for the spring object Vue bridge: `useSpring` shape
+ * Type-level tests for the composite spring Vue bridge: `useSpring` shape
  * overload dispatch and pool creation.
  *
  * This file is compiled by `tsc` but never executed (vitest only picks up
@@ -9,7 +9,7 @@
 import { type Ref, ref } from 'vue'
 import type { SpringDefinition } from '../../src/index.ts'
 import { type SpringRef, useSpring } from '../../src/vue/spring.ts'
-import type { SpringObjectRef } from '../../src/vue/spring-object.ts'
+import type { CompositeSpringRef } from '../../src/vue/composite-spring.ts'
 import { useSpringPool } from '../../src/vue/pool.ts'
 
 declare const cfg: SpringDefinition
@@ -17,7 +17,7 @@ declare const cfg: SpringDefinition
 // ── Record shapes create object springs ─────────────────────────────
 
 const obj = useSpring({ position: { x: 0, y: 0 }, opacity: 1 })
-const typed: SpringObjectRef<{ position: { x: number; y: number }; opacity: number }> = obj
+const typed: CompositeSpringRef<{ position: { x: number; y: number }; opacity: number }> = obj
 void typed
 
 const px: number = obj.value.position.x
@@ -40,7 +40,7 @@ useSpring(() => ({ x: 0, y: 0 }))
 
 const tuple = useSpring([0, 0])
 // Array literals infer as tuples — the arity is part of the shape
-const tupleTyped: SpringObjectRef<[number, number]> = tuple
+const tupleTyped: CompositeSpringRef<[number, number]> = tuple
 void tupleTyped
 useSpring(ref([0, 0]))
 useSpring(() => [0, 0])
@@ -73,11 +73,13 @@ useSpring(() => 10)
 
 // Chain-building unions (ref-or-leader, as in a follower loop) collapse
 // into the Ref overload; runtime dispatch still links via the instance.
-declare const chainTarget: Ref<{ x: number; y: number }> | SpringObjectRef<{ x: number; y: number }>
+declare const chainTarget:
+  | Ref<{ x: number; y: number }>
+  | CompositeSpringRef<{ x: number; y: number }>
 useSpring(chainTarget)
 
 const follower = useSpring(obj)
-const followerTyped: SpringObjectRef<{ position: { x: number; y: number }; opacity: number }> =
+const followerTyped: CompositeSpringRef<{ position: { x: number; y: number }; opacity: number }> =
   follower
 void followerTyped
 

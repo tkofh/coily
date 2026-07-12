@@ -4,8 +4,8 @@ import type {
   PartialShape,
   ReadonlyShape,
   Shape,
-  SpringObject,
-} from '../spring-object.ts'
+  CompositeSpring,
+} from '../composite-spring.ts'
 import {
   type ReactiveSpringRef,
   createReactiveSpringRef,
@@ -21,7 +21,9 @@ import {
  * instances only (build them with `defineSpring`): a plain object is
  * always read as a per-channel shape.
  */
-export type UseSpringObjectOptions<T extends object> = MaybeRefOrGetter<ConfigShape<T> | undefined>
+export type UseCompositeSpringOptions<T extends object> = MaybeRefOrGetter<
+  ConfigShape<T> | undefined
+>
 
 /**
  * The reactive handle for a composite spring: a ref reading the
@@ -30,45 +32,45 @@ export type UseSpringObjectOptions<T extends object> = MaybeRefOrGetter<ConfigSh
  * and `jumpTo` attached. Writing the main ref displaces the named
  * channels; drive the `useSpring` target to move them.
  */
-export interface SpringObjectRef<T extends object> extends ReactiveSpringRef<
+export interface CompositeSpringRef<T extends object> extends ReactiveSpringRef<
   ReadonlyShape<T>,
   PartialShape<T>
 > {}
 
-// Brands a SpringObjectRef with its backing SpringObject so
+// Brands a CompositeSpringRef with its backing CompositeSpring so
 // useSpring(ref) can chain from it without exposing the instance on the
 // public type.
-const SpringObjectInstanceKey = Symbol('spring-object')
+const CompositeSpringInstanceKey = Symbol('composite-spring')
 
 export type AnyShape = Record<string, number>
 
-type SpringObjectRefWithInstance<T extends object> = SpringObjectRef<T> & {
-  [SpringObjectInstanceKey]: SpringObject<T>
+type CompositeSpringRefWithInstance<T extends object> = CompositeSpringRef<T> & {
+  [CompositeSpringInstanceKey]: CompositeSpring<T>
 }
 
-export function hasSpringObjectInstance(
+export function hasCompositeSpringInstance(
   value: unknown,
-): value is SpringObjectRefWithInstance<AnyShape> {
-  return typeof value === 'object' && value !== null && SpringObjectInstanceKey in value
+): value is CompositeSpringRefWithInstance<AnyShape> {
+  return typeof value === 'object' && value !== null && CompositeSpringInstanceKey in value
 }
 
 function resolveConfigShape<T extends object>(
-  options: UseSpringObjectOptions<T> | undefined,
+  options: UseCompositeSpringOptions<T> | undefined,
 ): ComputedRef<ConfigShape<T> | undefined> {
   return computed(() => toValue(options))
 }
 
-export function createSpringObjectRef<T extends object>(
+export function createCompositeSpringRef<T extends object>(
   value: MaybeRefOrGetter<T & Shape<T>>,
-  options: UseSpringObjectOptions<T> | undefined,
-): SpringObjectRef<T> {
+  options: UseCompositeSpringOptions<T> | undefined,
+): CompositeSpringRef<T> {
   const system = injectSpringSystem()
   const config = resolveConfigShape(options)
   const spring = system.createSpring<T>(toValue(value), config.value)
   const ref = createReactiveSpringRef<ReadonlyShape<T>, PartialShape<T>, ConfigShape<T>>(
     spring,
     config,
-    SpringObjectInstanceKey,
+    CompositeSpringInstanceKey,
   )
 
   watchSyncEffect(() => {
@@ -78,18 +80,18 @@ export function createSpringObjectRef<T extends object>(
   return ref
 }
 
-export function createLinkedSpringObjectRef<T extends object>(
-  leaderRef: SpringObjectRefWithInstance<T>,
-  options: UseSpringObjectOptions<T> | undefined,
-): SpringObjectRef<T> {
+export function createLinkedCompositeSpringRef<T extends object>(
+  leaderRef: CompositeSpringRefWithInstance<T>,
+  options: UseCompositeSpringOptions<T> | undefined,
+): CompositeSpringRef<T> {
   const system = injectSpringSystem()
-  const leader = leaderRef[SpringObjectInstanceKey]
+  const leader = leaderRef[CompositeSpringInstanceKey]
   const config = resolveConfigShape(options)
   const spring = system.createSpring<T>(leader.value as unknown as T & Shape<T>, config.value)
   spring.target = leader
   return createReactiveSpringRef<ReadonlyShape<T>, PartialShape<T>, ConfigShape<T>>(
     spring,
     config,
-    SpringObjectInstanceKey,
+    CompositeSpringInstanceKey,
   )
 }

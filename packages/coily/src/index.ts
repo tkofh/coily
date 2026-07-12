@@ -12,9 +12,9 @@ export type {
   PartialShape,
   ReadonlyShape,
   Shape,
-  SpringObject,
-  SpringObjectTarget,
-} from './spring-object.ts'
+  CompositeSpring,
+  CompositeSpringTarget,
+} from './composite-spring.ts'
 export {
   type SpringDefinition,
   type SpringState,

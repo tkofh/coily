@@ -24,7 +24,7 @@ export type UseSpringOptions = MaybeRefOrGetter<
   SpringDefinitionOptions | SpringDefinition | undefined
 >
 
-/** The spring surface the reactive wrapper needs — satisfied by both `Spring` and `SpringObject`. */
+/** The spring surface the reactive wrapper needs — satisfied by both `Spring` and `CompositeSpring`. */
 interface SpringLike<V, W, C> {
   get value(): V
   set value(next: W)

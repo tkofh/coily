@@ -649,4 +649,123 @@ describe('Spring: following', () => {
       }).toThrow('Invalid value at the root: a shape must contain at least one source')
     })
   })
+
+  describe('composite sources', () => {
+    test('a follower tracks a value derived from a composite spring', () => {
+      const system = createSpringSystem()
+      const lead = system.createSpring({ x: 3, y: 4 }, config)
+      const follower = system.createSpring(mapSpring(lead, ({ x, y }) => Math.hypot(x, y), null))
+
+      expect(follower.value).toBe(5)
+
+      lead.target = { x: 6, y: 8 }
+      advanceUntilResting(system, follower)
+
+      expect(follower.value).toBeCloseTo(10, 0)
+    })
+
+    test('composites work as leaves: the slope between two points', () => {
+      const system = createSpringSystem()
+      const p1 = system.createSpring({ x: 0, y: 0 }, config)
+      const p2 = system.createSpring({ x: 10, y: 10 }, config)
+      const slope = system.createSpring(
+        mapSpring([p1, p2], ([from, to]) => (to.y - from.y) / (to.x - from.x), null),
+      )
+
+      expect(slope.value).toBe(1)
+
+      p2.target = { y: 30 }
+      advanceUntilResting(system, slope)
+
+      expect(slope.value).toBeCloseTo(3, 0)
+    })
+
+    test('a composite map offers its given config', () => {
+      const system = createSpringSystem()
+      const lead = system.createSpring({ x: 0, y: 0 })
+      const follower = system.createSpring(mapSpring(lead, ({ x, y }) => x + y, config))
+
+      expect(follower.config).toBe(config)
+    })
+
+    test('disposing the composite detaches followers through a map', () => {
+      const system = createSpringSystem()
+      const lead = system.createSpring({ x: 5, y: 5 }, config)
+      const follower = system.createSpring(mapSpring(lead, ({ x, y }) => x + y, null))
+      expect(follower.value).toBe(10)
+
+      lead.dispose()
+      follower.target = 42
+      advanceUntilResting(system, follower)
+
+      expect(follower.value).toBeCloseTo(42, 0)
+    })
+
+    test('a spring cannot follow a composite directly', () => {
+      const system = createSpringSystem()
+      const lead = system.createSpring({ x: 0, y: 0 })
+      const spring = system.createSpring(0)
+
+      expect(() => {
+        spring.target = lead as never
+      }).toThrow(
+        'A spring can only follow a scalar SpringSource; derive one from a composite with mapSpring',
+      )
+    })
+  })
+
+  describe('creation from a source', () => {
+    test('starts at the source value and follows', () => {
+      const system = createSpringSystem()
+      const leader = system.createSpring(50, config)
+      const follower = system.createSpring(leader)
+
+      expect(follower.value).toBe(50)
+      expect(follower.isResting).toBe(true)
+
+      leader.target = 100
+      advanceUntilResting(system, follower)
+
+      expect(follower.value).toBeCloseTo(100, 0)
+    })
+
+    test('adopts the source config without one of its own', () => {
+      const system = createSpringSystem()
+      const leader = system.createSpring(0, config)
+      const follower = system.createSpring(leader)
+
+      expect(follower.config).toBe(config)
+    })
+
+    test('keeps its own config when given one', () => {
+      const stiff = defineSpring({ mass: 1, tension: 300, damping: 30 })
+      const system = createSpringSystem()
+      const leader = system.createSpring(0, config)
+      const follower = system.createSpring(leader, stiff)
+
+      expect(follower.config).toBe(stiff)
+    })
+
+    test('accepts a mapped source', () => {
+      const system = createSpringSystem()
+      const leader = system.createSpring(10, config)
+      const follower = system.createSpring(mapSpring(leader, (value) => value * 2))
+
+      expect(follower.value).toBe(20)
+
+      leader.target = 50
+      advanceUntilResting(system, follower)
+
+      expect(follower.value).toBeCloseTo(100, 0)
+    })
+
+    test('rejects a composite spring', () => {
+      const system = createSpringSystem()
+      const lead = system.createSpring({ x: 0, y: 0 })
+
+      expect(() => {
+        system.createSpring(lead as never)
+      }).toThrow('A spring can only follow a scalar SpringSource')
+    })
+  })
 })

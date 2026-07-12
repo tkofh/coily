@@ -3,8 +3,8 @@
 ---
 
 `createSpring` now creates both scalar and composite springs, and
-`createSpringObject` is gone: pass a number for a `Spring`, a numeric
-shape for a `SpringObject` — on `SpringSystem` and `useSpringPool()`
+`createCompositeSpring` is gone: pass a number for a `Spring`, a numeric
+shape for a `CompositeSpring` — on `SpringSystem` and `useSpringPool()`
 alike.
 
 To make the two forms unambiguous, `createSpring` no longer takes a

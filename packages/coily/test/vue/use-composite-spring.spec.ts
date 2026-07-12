@@ -144,7 +144,7 @@ describe('useSpring: object shapes', () => {
     expect(spring.value.fast).toBeGreaterThan(spring.value.slow)
   })
 
-  test('a SpringObjectRef target links the springs channel-wise', async () => {
+  test('a CompositeSpringRef target links the springs channel-wise', async () => {
     const target = ref({ x: 0, y: 0 })
     const { system, result } = mountWith(() => {
       const leader = useSpring(target)
@@ -267,7 +267,7 @@ describe('useSpring shape dispatch', () => {
 })
 
 describe('useSpringPool createSpring', () => {
-  test('pool spring objects dispose with the scope', () => {
+  test('pool composite springs dispose with the scope', () => {
     let pool!: SpringPool
     const {
       wrapper,

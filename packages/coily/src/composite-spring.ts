@@ -9,6 +9,7 @@ import {
   describePath,
 } from './channel-tree.ts'
 import { Spring } from './spring.ts'
+import { type SpringSource, SpringSourceSymbol } from './spring-source.ts'
 import { invariant, isRecordOrArray } from './util.ts'
 
 /**
@@ -59,7 +60,7 @@ export type ReadonlyShape<T> = T extends number
   : { readonly [K in keyof T]: ReadonlyShape<T[K]> }
 
 /**
- * Configuration for a spring object: a single `SpringDefinition` applied to every
+ * Configuration for a composite spring: a single `SpringDefinition` applied to every
  * channel, or an object mirroring the value shape with configs at any level.
  * A config at a subtree applies to every channel below it.
  * `null` reverts to the default config (or the leader's while following).
@@ -73,11 +74,11 @@ export type ConfigShape<T> =
   | (T extends number ? never : { readonly [K in keyof T]?: ConfigShape<T[K]> | undefined })
 
 /**
- * What a spring object can animate toward: a partial shape of numbers,
- * or another spring object of the same shape to follow channel by
+ * What a composite spring can animate toward: a partial shape of numbers,
+ * or another composite spring of the same shape to follow channel by
  * channel.
  */
-export type SpringObjectTarget<T extends object> = PartialShape<T> | SpringObject<T>
+export type CompositeSpringTarget<T extends object> = PartialShape<T> | CompositeSpring<T>
 
 // ── Config resolution ───────────────────────────────────────────────
 
@@ -123,7 +124,7 @@ const followChannel = (mine: Spring, theirs: Spring) => {
   mine.target = theirs
 }
 
-// Shared so resting and disposed spring objects don't allocate a promise per read.
+// Shared so resting and disposed composite springs don't allocate a promise per read.
 const RESOLVED = Promise.resolve()
 
 /**
@@ -131,13 +132,21 @@ const RESOLVED = Promise.resolve()
  * or array whose leaves are all numbers. Each leaf runs an independent
  * spring, called a channel, behind one API: targets, values, velocities,
  * and configs read and write as (partial) shapes, and events are
- * coalesced across channels. Create spring objects with
+ * coalesced across channels. Create composite springs with
  * `SpringSystem.createSpring`.
+ *
+ * A composite spring is a `SpringSource` of its value shape: `mapSpring`
+ * derives scalar sources from it — alone or at the leaves of a shape —
+ * which springs can then follow. Only scalar sources are followable
+ * directly.
  *
  * The shape is fixed at construction. Writes naming unknown channels
  * throw with the channel's path (`position.z`).
  */
-export class SpringObject<in out T extends object> {
+export class CompositeSpring<in out T extends object> implements SpringSource<ReadonlyShape<T>> {
+  /** Brands the composite as a `SpringSource`, so `mapSpring` can read it. */
+  readonly [SpringSourceSymbol] = true as const
+
   readonly #motions: MotionSet
   readonly #map: ChannelTree<Spring>
   readonly #targetView: ChannelView<Spring>
@@ -147,15 +156,22 @@ export class SpringObject<in out T extends object> {
   readonly #emitter = new Emitter()
   #running = false
   #dirty = false
+  #configured = false
 
   #settled: Promise<void> | null = null
   #resolveSettled: (() => void) | null = null
   #disposed = false
 
-  // One flush per write batch or tick: the coalesced update is emitted
-  // first, so a stop always lands after the frame's final update.
+  // One flush per write batch or tick: configure lands first so update
+  // listeners read settled configs, and the coalesced update is emitted
+  // before stop, so a stop always lands after the frame's final update.
   readonly #flush = () => {
     if (this.#disposed) return
+
+    if (this.#configured) {
+      this.#configured = false
+      this.#emitter.emit('configure')
+    }
 
     if (this.#dirty) {
       this.#dirty = false
@@ -178,7 +194,7 @@ export class SpringObject<in out T extends object> {
 
     invariant(
       isRecordOrArray(value),
-      'Spring object value must be a plain object or an array of numeric channels',
+      'Composite spring value must be a plain object or an array of numeric channels',
     )
 
     this.#map = new ChannelTree(value, (leafValue) => new Spring(motions, leafValue))
@@ -194,11 +210,16 @@ export class SpringObject<in out T extends object> {
       this.#dirty = true
       this.#motions.flushes.request(this.#flush)
     }
+    const markConfigured = () => {
+      this.#configured = true
+      this.#motions.flushes.request(this.#flush)
+    }
     const schedule = () => {
       this.#motions.flushes.request(this.#flush)
     }
     for (const channel of this.#map.leaves) {
       channel.onUpdate(markDirty)
+      channel.onConfigure(markConfigured)
       channel.onStart(schedule)
       channel.onStop(schedule)
     }
@@ -210,11 +231,11 @@ export class SpringObject<in out T extends object> {
    * numbers in place, so read it fresh rather than holding it across
    * frames.
    *
-   * Assignment accepts a `SpringObjectTarget`:
+   * Assignment accepts a `CompositeSpringTarget`:
    * - A partial shape of numbers retargets the channels it names and
    *   leaves the others alone. While following, it also detaches the
    *   named channels from the leader.
-   * - A `SpringObject` of the same shape follows the leader channel by
+   * - A `CompositeSpring` of the same shape follows the leader channel by
    *   channel. Channels without a config of their own adopt the leader
    *   channel's.
    *
@@ -225,8 +246,8 @@ export class SpringObject<in out T extends object> {
     return this.#targetView.root as ReadonlyShape<T>
   }
 
-  set target(value: SpringObjectTarget<T>) {
-    if (value instanceof SpringObject) {
+  set target(value: CompositeSpringTarget<T>) {
+    if (value instanceof CompositeSpring) {
       this.#follow(value)
     } else {
       this.#motions.flushes.batch(() => {
@@ -355,7 +376,7 @@ export class SpringObject<in out T extends object> {
    * Releases every channel permanently: resolves `settled` and notifies
    * dispose listeners. Calling it again is a no-op.
    *
-   * A disposed spring object keeps its final values readable; writes
+   * A disposed composite spring keeps its final values readable; writes
    * throw.
    */
   dispose() {
@@ -401,6 +422,16 @@ export class SpringObject<in out T extends object> {
     return this.#emitter.on('stop', callback)
   }
 
+  /**
+   * Subscribes to any channel's resolved config changing — an assignment
+   * to `config`, or a cascade from a leader — coalesced to at most one
+   * event per write batch or tick, fired before that batch's `update`.
+   * Returns an unsubscribe function.
+   */
+  onConfigure(callback: () => void) {
+    return this.#emitter.on('configure', callback)
+  }
+
   /** Subscribes to `dispose`, which fires once. Returns an unsubscribe function. */
   onDispose(callback: () => void) {
     // Channels dispose together, so the first channel's dispose event
@@ -408,7 +439,7 @@ export class SpringObject<in out T extends object> {
     return this.#map.leaves[0]!.onDispose(callback)
   }
 
-  #follow(leader: SpringObject<T>) {
+  #follow(leader: CompositeSpring<T>) {
     this.#motions.flushes.batch(() => {
       this.#map.zip(leader.#map, followChannel)
     })

@@ -81,7 +81,7 @@ describe('reduced motion: always', () => {
     expect(tail.isResting).toBe(true)
   })
 
-  test('spring objects jump on every channel', () => {
+  test('composite springs jump on every channel', () => {
     const system = createSpringSystem({ reducedMotion: 'always' })
     const spring = system.createSpring({ x: 0, y: 0 }, config)
 
@@ -91,7 +91,7 @@ describe('reduced motion: always', () => {
     expect(spring.isResting).toBe(true)
   })
 
-  test('spring object retargets emit one update and no start/stop', () => {
+  test('composite spring retargets emit one update and no start/stop', () => {
     const system = createSpringSystem({ reducedMotion: 'always' })
     const spring = system.createSpring({ x: 0, y: 0 }, config)
 
@@ -186,7 +186,7 @@ describe("reduced motion: 'user' media query", () => {
     expect(spring.isResting).toBe(true)
   })
 
-  test('finishes spring objects with one coalesced update and stop', () => {
+  test('finishes composite springs with one coalesced update and stop', () => {
     const media = stubMatchMedia(false)
     const system = createSpringSystem()
     const spring = system.createSpring({ x: 0, y: 0 }, config)

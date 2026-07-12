@@ -1,8 +1,10 @@
 import type { SpringDefinition } from './config.ts'
 import { MotionSet } from './motion-set.ts'
 import { Spring } from './spring.ts'
-import { type ConfigShape, type Shape, SpringObject } from './spring-object.ts'
+import { type SpringSource, isSpringSource } from './spring-source.ts'
+import { type ConfigShape, type Shape, CompositeSpring } from './composite-spring.ts'
 import { Ticker, type TickerOptions } from './ticker.ts'
+import { invariant } from './util.ts'
 
 export interface SpringSystemOptions extends TickerOptions {
   /**
@@ -56,15 +58,25 @@ class SpringSystemImpl implements SpringSystem {
   }
 
   createSpring(value: number, config?: SpringDefinition): Spring
-  createSpring<T extends object>(value: T & Shape<T>, config?: ConfigShape<T>): SpringObject<T>
+  createSpring(source: SpringSource, config?: SpringDefinition): Spring
+  createSpring<T extends object>(value: T & Shape<T>, config?: ConfigShape<T>): CompositeSpring<T>
   createSpring(
-    value: number | Record<string, number>,
+    value: number | SpringSource | Record<string, number>,
     config?: SpringDefinition | ConfigShape<Record<string, number>>,
-  ): Spring | SpringObject<Record<string, number>> {
+  ): Spring | CompositeSpring<Record<string, number>> {
     if (typeof value === 'number') {
       return new Spring(this.#motion, value, config as SpringDefinition | undefined)
     }
-    return new SpringObject(
+    if (isSpringSource(value)) {
+      invariant(
+        typeof value.value === 'number',
+        'A spring can only follow a scalar SpringSource; derive one from a composite with mapSpring',
+      )
+      const spring = new Spring(this.#motion, value.value, config as SpringDefinition | undefined)
+      spring.target = value as SpringSource
+      return spring
+    }
+    return new CompositeSpring(
       this.#motion,
       value,
       config as ConfigShape<Record<string, number>> | undefined,
@@ -121,9 +133,17 @@ export interface SpringSystem {
   /**
    * Creates a spring at rest at `value`. Without `config`, springs use
    * the default: critically damped, settling in about 500ms. To follow
-   * another spring, assign it to the new spring's `target`.
+   * another spring from birth, pass it in place of `value`.
    */
   createSpring(value: number, config?: SpringDefinition): Spring
+  /**
+   * Creates a spring already following `source` — a `Spring`, or a value
+   * derived with `mapSpring`. It starts at the source's current value,
+   * so nothing moves until the source does; equivalent to creating a
+   * spring at `source.value` and assigning `source` to its `target`.
+   * Without a `config` of its own it adopts the source's.
+   */
+  createSpring(source: SpringSource, config?: SpringDefinition): Spring
   /**
    * Creates a composite spring over a numeric shape: a plain object or
    * array, nested arbitrarily, whose leaves are all numbers. Each leaf
@@ -132,7 +152,7 @@ export interface SpringSystem {
    * `config` applies per channel: a single `SpringDefinition` for every
    * channel, or a shape mirroring the value with configs at any level.
    */
-  createSpring<T extends object>(value: T & Shape<T>, config?: ConfigShape<T>): SpringObject<T>
+  createSpring<T extends object>(value: T & Shape<T>, config?: ConfigShape<T>): CompositeSpring<T>
   /**
    * Advances every moving spring by `dt` milliseconds. For manual
    * stepping in place of `start()` — tests, custom loops, offline

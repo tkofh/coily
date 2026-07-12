@@ -8,7 +8,7 @@ const gentle = defineSpring({ tension: 10, dampingRatio: 1 })
 
 const FRAME = 1000 / 60
 
-describe('SpringObject: creation', () => {
+describe('CompositeSpring: creation', () => {
   test('creates resting at the given value', () => {
     const system = createSpringSystem()
     const spring = system.createSpring({ position: { x: 10, y: 20 }, opacity: 1 }, config)
@@ -80,7 +80,7 @@ describe('SpringObject: creation', () => {
   })
 })
 
-describe('SpringObject: simulation', () => {
+describe('CompositeSpring: simulation', () => {
   test('animates every channel toward its target', () => {
     const system = createSpringSystem()
     const spring = system.createSpring({ position: { x: 0, y: 0 }, opacity: 0 }, config)
@@ -131,7 +131,7 @@ describe('SpringObject: simulation', () => {
   })
 })
 
-describe('SpringObject: partial targets', () => {
+describe('CompositeSpring: partial targets', () => {
   test('retargets only the given channels', () => {
     const system = createSpringSystem()
     const spring = system.createSpring({ position: { x: 0, y: 0 }, opacity: 1 }, config)
@@ -184,7 +184,7 @@ describe('SpringObject: partial targets', () => {
   })
 })
 
-describe('SpringObject: config shapes', () => {
+describe('CompositeSpring: config shapes', () => {
   test('a single config applies to every channel', () => {
     const system = createSpringSystem()
     const spring = system.createSpring({ x: 0, y: 0 }, config)
@@ -268,7 +268,7 @@ describe('SpringObject: config shapes', () => {
   })
 })
 
-describe('SpringObject: coalesced events', () => {
+describe('CompositeSpring: coalesced events', () => {
   test('onUpdate fires exactly once per frame while several channels move', () => {
     const system = createSpringSystem()
     const spring = system.createSpring({ position: { x: 0, y: 0 }, opacity: 0 }, config)
@@ -358,9 +358,32 @@ describe('SpringObject: coalesced events', () => {
     system.advance(FRAME)
     expect(onUpdate).toHaveBeenCalledTimes(1)
   })
+
+  test('onConfigure fires once per batch of channel config changes', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring({ x: 0, y: 0 })
+    const onConfigure = vi.fn()
+    spring.onConfigure(onConfigure)
+
+    spring.config = config
+    expect(onConfigure).toHaveBeenCalledTimes(1)
+
+    spring.config = { x: defineSpring({ mass: 1, tension: 300, damping: 30 }) }
+    expect(onConfigure).toHaveBeenCalledTimes(2)
+  })
+
+  test('onConfigure does not fire on no-op config writes', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring({ x: 0, y: 0 }, config)
+    const onConfigure = vi.fn()
+    spring.onConfigure(onConfigure)
+
+    spring.config = config
+    expect(onConfigure).not.toHaveBeenCalled()
+  })
 })
 
-describe('SpringObject: partial jumps and writes', () => {
+describe('CompositeSpring: partial jumps and writes', () => {
   test('jumpTo affects only the given channels', () => {
     const system = createSpringSystem()
     const spring = system.createSpring({ position: { x: 0, y: 0 }, opacity: 1 }, config)
@@ -395,7 +418,7 @@ describe('SpringObject: partial jumps and writes', () => {
   })
 })
 
-describe('SpringObject: following', () => {
+describe('CompositeSpring: following', () => {
   test('follows another object channel-wise', () => {
     const system = createSpringSystem()
     const leader = system.createSpring({ position: { x: 0, y: 0 }, opacity: 0 }, config)
@@ -471,7 +494,7 @@ describe('SpringObject: following', () => {
   })
 })
 
-describe('SpringObject: settled promise', () => {
+describe('CompositeSpring: settled promise', () => {
   const flush = () => new Promise((resolve) => setTimeout(resolve))
 
   test('resolves immediately when already resting', async () => {
@@ -516,7 +539,7 @@ describe('SpringObject: settled promise', () => {
   })
 })
 
-describe('SpringObject: reduced motion', () => {
+describe('CompositeSpring: reduced motion', () => {
   test('partial retargets jump instantly with a single update', () => {
     const system = createSpringSystem({ reducedMotion: 'always' })
     const spring = system.createSpring({ position: { x: 0, y: 0 }, opacity: 1 }, config)
@@ -535,7 +558,7 @@ describe('SpringObject: reduced motion', () => {
   })
 })
 
-describe('SpringObject: dispose', () => {
+describe('CompositeSpring: dispose', () => {
   test('dispose stops the spring and its events', () => {
     const system = createSpringSystem()
     const spring = system.createSpring({ x: 0, y: 0 }, config)

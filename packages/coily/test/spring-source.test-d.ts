@@ -10,7 +10,8 @@ import {
   mapSpring,
   type Spring,
   type SpringDefinition,
-  type SpringObject,
+  type SpringSystem,
+  type CompositeSpring,
   type SpringSource,
 } from '../src/index.ts'
 
@@ -18,6 +19,7 @@ declare const a: Spring
 declare const b: Spring
 declare const custom: SpringSource
 declare const cfg: SpringDefinition
+declare const system: SpringSystem
 
 // ── Single source: config is optional ────────────────────────────────
 
@@ -51,6 +53,42 @@ mapSpring({ doubled: mapSpring(a, (value) => value * 2), b }, ({ doubled, b }) =
 declare const follower: Spring
 follower.target = mapSpring({ x: a, y: b }, ({ x, y }) => Math.max(x, y), null)
 
+// ── Composite springs are sources of their value shape ──────────────
+
+declare const composite: CompositeSpring<{ x: number; y: number }>
+
+// Bare: `map` receives the read-only value shape
+mapSpring(composite, ({ x, y }) => Math.hypot(x, y), null)
+mapSpring(
+  composite,
+  (point) => {
+    const px: number = point.x
+    return px
+  },
+  cfg,
+)
+
+// As a leaf, alone or mixed with scalars
+mapSpring({ pos: composite, t: a }, ({ pos, t }) => pos.x * t, null)
+
+declare const p1: CompositeSpring<{ x: number; y: number }>
+declare const p2: CompositeSpring<{ x: number; y: number }>
+mapSpring([p1, p2] as const, ([from, to]) => (to.y - from.y) / (to.x - from.x), null)
+
+// @ts-expect-error a composite map must state the config it offers
+mapSpring(composite, ({ x, y }) => x + y)
+// @ts-expect-error a composite is not a scalar source, so it cannot be followed
+follower.target = composite
+
+// ── createSpring accepts a source: follow at creation ───────────────
+
+system.createSpring(a) satisfies Spring
+system.createSpring(a, cfg)
+system.createSpring(mapSpring(a, (value) => value * 2))
+system.createSpring(mapSpring(composite, ({ x, y }) => Math.hypot(x, y), null))
+// @ts-expect-error a composite cannot be followed at creation; map it first
+system.createSpring(composite, cfg)
+
 // ── Shape maps must state the config they offer ─────────────────────
 
 // @ts-expect-error several sources have no shared config to pass through
@@ -62,9 +100,6 @@ mapSpring({ x: a, y: b }, ({ x, y }) => x + y)
 mapSpring({ x: a, y: 5 }, () => 0, null)
 // @ts-expect-error nested leaves are validated too
 mapSpring({ point: { x: a, y: 'nope' } }, () => 0, null)
-declare const composite: SpringObject<{ x: number; y: number }>
-// @ts-expect-error a SpringObject is not a source — its channels are not public
-mapSpring({ pos: composite }, () => 0, null)
 declare const optional: { x: Spring; y?: Spring }
 // @ts-expect-error optional leaves are rejected
 mapSpring(optional, () => 0, null)

@@ -67,19 +67,14 @@ Without a config, springs are critically damped with a ~500ms settle time.
 
 ### Chaining
 
-A spring can follow another spring's live value instead of a fixed number, and `mapSpring` derives new followable values from existing ones — offsets, mirrors, clamps, any pure function of the value:
+A spring can follow another spring's live value instead of a fixed number: assign a spring to `target`, or pass one straight to `createSpring` to follow from birth. `mapSpring` derives new followable values from existing ones — offsets, mirrors, clamps, any pure function of the value:
 
 ```ts
 const leader = system.createSpring(0)
 
-const follower = system.createSpring(leader.value)
-follower.target = leader
-
-const trailing = system.createSpring(leader.value + 20)
-trailing.target = mapSpring(leader, (v) => v + 20)
-
-const mirrored = system.createSpring(-leader.value)
-mirrored.target = mapSpring(leader, (v) => -v)
+const follower = system.createSpring(leader)
+const trailing = system.createSpring(mapSpring(leader, (v) => v + 20))
+const mirrored = system.createSpring(mapSpring(leader, (v) => -v))
 ```
 
 Followers inherit the leader's config unless given their own. Assigning a number to `target` unfollows.
@@ -90,15 +85,22 @@ Followers inherit the leader's config unless given their own. Assigning a number
 const x = system.createSpring(0)
 const y = system.createSpring(0)
 
-const distance = system.createSpring(0)
-distance.target = mapSpring({ x, y }, ({ x, y }) => Math.hypot(x, y), null)
+const distance = system.createSpring(mapSpring({ x, y }, ({ x, y }) => Math.hypot(x, y), null))
 ```
 
-A mapped value is a `SpringSource` — the interface every `Spring` implements and the contract `target` accepts. It's an open contract: any object honoring it (a pointer position, a scroll offset) can be followed directly, and can sit at the leaves of a `mapSpring` shape.
+Composite springs (below) are sources of their whole value shape, so one map can derive a scalar from every channel at once:
 
-### Objects
+```ts
+const point = system.createSpring({ x: 3, y: 4 })
 
-`createSpring` also takes any numeric shape — a plain object or array whose leaves are all numbers, nested arbitrarily. Each leaf becomes an independent channel behind one composite API:
+const magnitude = system.createSpring(mapSpring(point, ({ x, y }) => Math.hypot(x, y), null))
+```
+
+A mapped value is a `SpringSource` — the contract `target` accepts and every `Spring` implements. A `CompositeSpring` is a source _of its shape_: `mapSpring` reads it, alone or at the leaves of a shape, but only scalar sources can be followed directly. The contract is open: any object honoring it (a pointer position, a scroll offset) can be followed or mapped.
+
+### Composites
+
+`createSpring` also takes any numeric shape — a plain object or array whose leaves are all numbers, nested arbitrarily. Each leaf becomes an independent channel behind one composite API — a `CompositeSpring`:
 
 ```ts
 const spring = system.createSpring({ position: { x: 0, y: 0 }, opacity: 1 })
@@ -119,7 +121,7 @@ spring.config = { position: stiff, opacity: defineSpring({ duration: 300, dampin
 
 Configs are `SpringDefinition` instances — build them with `defineSpring`. Unlike the scalar `useSpring` above, config positions here don't accept bare option objects: a plain object is always a per-channel shape, so any non-config leaf it reaches throws with its path.
 
-Spring objects chain channel-wise. Assign another spring object of the exact same shape, and a partial numeric target detaches only the channels it names:
+Composite springs chain channel-wise. Assign another composite spring of the exact same shape, and a partial numeric target detaches only the channels it names:
 
 ```ts
 follower.target = leader
@@ -160,7 +162,7 @@ const x = useSpring(target, { duration: 500, bounce: 0.3 })
 
 `useSpring` returns a `SpringRef`: a writable ref of the animated value with `velocity`, `isResting`, and `timeRemaining` refs plus `jumpTo()` attached. The target can be a ref, a getter, or another `SpringRef` (which chains the springs). Options are also reactive — swap configs and the spring reconfigures in place.
 
-Numeric shapes work the same way: pass a record or array (plain, ref, or getter) and get a `SpringObjectRef`. Reads are the deep-readonly composite value, writes take partial shapes, options accept reactive per-channel config shapes, and passing another `SpringObjectRef` follows it channel-wise. Deeply reactive targets retarget on nested mutation. For several _independent_ scalar springs, map over the targets — composables are loop-safe: `targets.map((t) => useSpring(t))`.
+Numeric shapes work the same way: pass a record or array (plain, ref, or getter) and get a `CompositeSpringRef`. Reads are the deep-readonly composite value, writes take partial shapes, options accept reactive per-channel config shapes, and passing another `CompositeSpringRef` follows it channel-wise. Deeply reactive targets retarget on nested mutation. For several _independent_ scalar springs, map over the targets — composables are loop-safe: `targets.map((t) => useSpring(t))`.
 
 There's also a renderless `<SpringValue :target="n">` component exposing `{ value, velocity, isResting, timeRemaining, jumpTo }` through its default slot.
 

@@ -1,5 +1,5 @@
 /**
- * Type-level tests for spring object value shapes, partial shapes, and
+ * Type-level tests for composite spring value shapes, partial shapes, and
  * config shapes.
  *
  * This file is compiled by `tsc` but never executed (vitest only picks up
@@ -10,7 +10,7 @@ import type {
   ReadonlyShape,
   Spring,
   SpringDefinition,
-  SpringObject,
+  CompositeSpring,
   SpringSystem,
 } from '../src/index.ts'
 
@@ -113,24 +113,24 @@ declare const deepReadonly: ReadonlyShape<{ color: [number, number] }>
 // @ts-expect-error readonly applies through arrays as well
 deepReadonly.color[0] = 5
 
-// ── Following: shapes must match exactly (SpringObject is invariant) ─
+// ── Following: shapes must match exactly (CompositeSpring is invariant) ─
 
-declare const leader: SpringObject<Vector2>
-declare const follower: SpringObject<Vector2>
+declare const leader: CompositeSpring<Vector2>
+declare const follower: CompositeSpring<Vector2>
 
 follower.target = leader
 
 // Structurally identical shapes are the same shape
-declare const twin: SpringObject<{ x: number; y: number }>
+declare const twin: CompositeSpring<{ x: number; y: number }>
 follower.target = twin
 
 // @ts-expect-error a leader is passed bare, not wrapped in an object
 follower.target = { spring: leader }
 
-declare const leader3d: SpringObject<{ x: number; y: number; z: number }>
+declare const leader3d: CompositeSpring<{ x: number; y: number; z: number }>
 // @ts-expect-error a wider shape cannot lead this spring
 follower.target = leader3d
-declare const follower3d: SpringObject<{ x: number; y: number; z: number }>
+declare const follower3d: CompositeSpring<{ x: number; y: number; z: number }>
 // @ts-expect-error a narrower shape cannot lead this spring
 follower3d.target = leader
 
@@ -172,7 +172,7 @@ collide.config = { tension: 170, damping: 26 }
 // Channels named `target` or `value` are unremarkable — the displaced
 // scalar creation form that once claimed such literals no longer exists.
 const scalar: Spring = system.createSpring(5)
-const composite: SpringObject<{ target: number; value: number }> = system.createSpring({
+const composite: CompositeSpring<{ target: number; value: number }> = system.createSpring({
   target: 100,
   value: 0,
 })
