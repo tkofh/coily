@@ -171,7 +171,7 @@ describe('pathological graphs: cycles', () => {
 
     spring.target = { y: 100 }
     // x follows y through the composite itself — a legal self-reference.
-    spring.target = { x: mapSpring(spring, ({ y }) => y, null) }
+    spring.target = { x: mapSpring(spring, ({ y }) => y) }
 
     for (let i = 0; i < 600; i++) {
       system.advance(FRAME)
@@ -182,11 +182,34 @@ describe('pathological graphs: cycles', () => {
     expect(spring.value.y).toBeCloseTo(100, 0)
   })
 
+  test('config passthrough through a self-referential map converges', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring({ x: 0, y: 0 })
+
+    // x adopts the composite's shared config through the map, and its
+    // adoption feeds back into the resolution it adopted from.
+    spring.target = { x: mapSpring(spring, ({ y }) => y) }
+
+    // Reconfiguring y breaks the agreement mid-follow: the configure
+    // event re-enters the composite through the map, and x must settle
+    // on its default instead of oscillating.
+    spring.config = { y: stiff }
+    spring.target = { y: 50 }
+
+    for (let i = 0; i < 600; i++) {
+      system.advance(FRAME)
+      if (spring.isResting) break
+    }
+
+    expect(spring.value.x).toBeCloseTo(50, 0)
+    expect(spring.value.y).toBeCloseTo(50, 0)
+  })
+
   test('a channel chasing an expanding map of itself stays contained', () => {
     const system = createSpringSystem()
     const spring = system.createSpring({ x: 0, y: 0 }, config)
 
-    spring.target = { x: mapSpring(spring, ({ x }) => x + 10, null) }
+    spring.target = { x: mapSpring(spring, ({ x }) => x + 10) }
 
     for (let i = 0; i < 120; i++) system.advance(FRAME)
 

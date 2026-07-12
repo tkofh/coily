@@ -486,7 +486,7 @@ describe('Spring: following', () => {
       const x = system.createSpring(3, config)
       const y = system.createSpring(4, config)
       const follower = system.createSpring(0)
-      follower.target = mapSpring({ x, y }, ({ x, y }) => Math.hypot(x, y), null)
+      follower.target = mapSpring({ x, y }, ({ x, y }) => Math.hypot(x, y))
 
       expect(follower.target).toBe(5)
 
@@ -502,7 +502,7 @@ describe('Spring: following', () => {
       const a = system.createSpring(0, config)
       const b = system.createSpring(0, config)
       const follower = system.createSpring(0)
-      follower.target = mapSpring({ a, b }, ({ a, b }) => a + b, null)
+      follower.target = mapSpring({ a, b }, ({ a, b }) => a + b)
 
       a.target = 100
       advanceUntilResting(system, follower)
@@ -522,7 +522,6 @@ describe('Spring: following', () => {
       follower.target = mapSpring(
         { point: { x, y }, scale },
         ({ point, scale }) => (point.x + point.y) * scale,
-        null,
       )
 
       expect(follower.target).toBe(30)
@@ -533,7 +532,7 @@ describe('Spring: following', () => {
       const a = system.createSpring(1, config)
       const b = system.createSpring(2, config)
       const follower = system.createSpring(0)
-      follower.target = mapSpring([a, b] as const, ([first, second]) => first + second, null)
+      follower.target = mapSpring([a, b] as const, ([first, second]) => first + second)
 
       expect(follower.target).toBe(3)
     })
@@ -558,6 +557,55 @@ describe('Spring: following', () => {
       expect(follower.config).toBe(config)
     })
 
+    test('omitted config passes through the config the sources share', () => {
+      const system = createSpringSystem()
+      const a = system.createSpring(0, config)
+      const b = system.createSpring(0, config)
+      const follower = system.createSpring(0)
+      follower.target = mapSpring({ a, b }, ({ a, b }) => a + b)
+
+      expect(follower.config).toBe(config)
+    })
+
+    test('omitted config offers none while the sources disagree', () => {
+      const stiff = defineSpring({ mass: 1, tension: 300, damping: 30 })
+      const system = createSpringSystem()
+      const a = system.createSpring(0, config)
+      const b = system.createSpring(0, stiff)
+      const follower = system.createSpring(0)
+      follower.target = mapSpring({ a, b }, ({ a, b }) => a + b)
+
+      expect(follower.config).toBe(SpringDefinition.default)
+    })
+
+    test('the shared config tracks source reconfiguration', () => {
+      const stiff = defineSpring({ mass: 1, tension: 300, damping: 30 })
+      const system = createSpringSystem()
+      const a = system.createSpring(0, config)
+      const b = system.createSpring(0, config)
+      const follower = system.createSpring(0)
+      follower.target = mapSpring({ a, b }, ({ a, b }) => a + b)
+      expect(follower.config).toBe(config)
+
+      b.config = stiff
+      expect(follower.config).toBe(SpringDefinition.default)
+
+      a.config = stiff
+      expect(follower.config).toBe(stiff)
+    })
+
+    test('a pinned map participates as a leaf with the config it offers', () => {
+      const stiff = defineSpring({ mass: 1, tension: 300, damping: 30 })
+      const system = createSpringSystem()
+      const x = system.createSpring(0, config)
+      const inverted = mapSpring(x, (value) => -value, stiff)
+      const y = system.createSpring(0, stiff)
+      const follower = system.createSpring(0)
+      follower.target = mapSpring({ inverted, y }, ({ inverted, y }) => inverted + y)
+
+      expect(follower.config).toBe(stiff)
+    })
+
     test("a single-source map offers its given config instead of the leader's", () => {
       const stiff = defineSpring({ mass: 1, tension: 300, damping: 30 })
       const system = createSpringSystem()
@@ -576,7 +624,7 @@ describe('Spring: following', () => {
       const a = system.createSpring(10, config)
       const b = system.createSpring(20, config)
       const follower = system.createSpring(30)
-      follower.target = mapSpring({ a, b }, ({ a, b }) => a + b, null)
+      follower.target = mapSpring({ a, b }, ({ a, b }) => a + b)
 
       b.dispose()
       a.target = 100
@@ -609,7 +657,7 @@ describe('Spring: following', () => {
       }
 
       const follower = system.createSpring(0)
-      follower.target = mapSpring({ a: source, b: source }, ({ a, b }) => a + b, null)
+      follower.target = mapSpring({ a: source, b: source }, ({ a, b }) => a + b)
 
       expect(subscriptions).toBe(1)
       expect(follower.target).toBe(10)
@@ -627,7 +675,7 @@ describe('Spring: following', () => {
       const doubled = mapSpring(leader, (value) => value * 2)
       const other = system.createSpring(1, config)
       const follower = system.createSpring(0)
-      follower.target = mapSpring({ doubled, other }, ({ doubled, other }) => doubled + other, null)
+      follower.target = mapSpring({ doubled, other }, ({ doubled, other }) => doubled + other)
 
       expect(follower.target).toBe(21)
     })
@@ -637,7 +685,7 @@ describe('Spring: following', () => {
       const spring = system.createSpring(0)
 
       expect(() => {
-        mapSpring({ position: { x: spring, z: 5 } } as never, () => 0, null)
+        mapSpring({ position: { x: spring, z: 5 } } as never, () => 0)
       }).toThrow(
         "Invalid value at 'position.z': expected a SpringSource or a nested shape of SpringSources",
       )
@@ -645,7 +693,7 @@ describe('Spring: following', () => {
 
     test('throws on an empty shape', () => {
       expect(() => {
-        mapSpring({} as never, () => 0, null)
+        mapSpring({} as never, () => 0)
       }).toThrow('Invalid value at the root: a shape must contain at least one source')
     })
   })
@@ -654,7 +702,7 @@ describe('Spring: following', () => {
     test('a follower tracks a value derived from a composite spring', () => {
       const system = createSpringSystem()
       const lead = system.createSpring({ x: 3, y: 4 }, config)
-      const follower = system.createSpring(mapSpring(lead, ({ x, y }) => Math.hypot(x, y), null))
+      const follower = system.createSpring(mapSpring(lead, ({ x, y }) => Math.hypot(x, y)))
 
       expect(follower.value).toBe(5)
 
@@ -669,7 +717,7 @@ describe('Spring: following', () => {
       const p1 = system.createSpring({ x: 0, y: 0 }, config)
       const p2 = system.createSpring({ x: 10, y: 10 }, config)
       const slope = system.createSpring(
-        mapSpring([p1, p2], ([from, to]) => (to.y - from.y) / (to.x - from.x), null),
+        mapSpring([p1, p2], ([from, to]) => (to.y - from.y) / (to.x - from.x)),
       )
 
       expect(slope.value).toBe(1)
@@ -688,10 +736,21 @@ describe('Spring: following', () => {
       expect(follower.config).toBe(config)
     })
 
+    test("omitted config passes the channels' shared config through", () => {
+      const system = createSpringSystem()
+      const lead = system.createSpring({ x: 0, y: 0 }, config)
+      const follower = system.createSpring(mapSpring(lead, ({ x, y }) => x + y))
+
+      expect(follower.config).toBe(config)
+
+      lead.config = { x: defineSpring({ mass: 1, tension: 300, damping: 30 }) }
+      expect(follower.config).toBe(SpringDefinition.default)
+    })
+
     test('disposing the composite detaches followers through a map', () => {
       const system = createSpringSystem()
       const lead = system.createSpring({ x: 5, y: 5 }, config)
-      const follower = system.createSpring(mapSpring(lead, ({ x, y }) => x + y, null))
+      const follower = system.createSpring(mapSpring(lead, ({ x, y }) => x + y))
       expect(follower.value).toBe(10)
 
       lead.dispose()

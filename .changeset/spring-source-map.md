@@ -18,17 +18,18 @@ config changes (coalesced per write batch or tick on composites).
 follower.target = mapSpring(leader, (v) => v + 20)
 
 // a shape of sources combines several springs
-distance.target = mapSpring({ x, y }, ({ x, y }) => Math.hypot(x, y), null)
+distance.target = mapSpring({ x, y }, ({ x, y }) => Math.hypot(x, y))
 
 // a composite spring maps as a whole
-magnitude.target = mapSpring(point, ({ x, y }) => Math.hypot(x, y), null)
+magnitude.target = mapSpring(point, ({ x, y }) => Math.hypot(x, y))
 ```
 
-A single-source map passes the source's config through, or pins the one
-given as the optional third argument. Aggregates — shapes and
-composites — leave no single config to inherit, so there the argument
-is required: the config the derived source offers followers, or `null`
-to offer none. Followers inherit config and detach on dispose through a
+An optional third argument pins the config the derived source offers
+followers — a `SpringDefinition`, or `null` to offer none. Omitted, the
+config the sources share passes through, changes included: a single
+source's own, a composite's channel-shared config, and for shapes the
+config every leaf offers when they all agree (none while any differ).
+Followers inherit config and detach on dispose through a
 map exactly as if following the spring directly; a derived value is
 released with the first of its sources. Composition is flat — mapping a
 mapped source extends its pipeline instead of nesting it — so chains of

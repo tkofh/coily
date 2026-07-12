@@ -188,7 +188,7 @@ declare const scalarLeader: Spring
 nested.target = { opacity: scalarLeader }
 nested.target = { position: { x: 5, y: scalarLeader } }
 nested.target = { opacity: mapSpring(scalarLeader, (v) => -v) }
-nested.target = { opacity: mapSpring(nested, ({ position }) => position.x, null) }
+nested.target = { opacity: mapSpring(nested, ({ position }) => position.x) }
 
 declare const point: CompositeSpring<Vector2>
 // @ts-expect-error a composite is not a scalar source; map it first

@@ -536,7 +536,7 @@ describe('CompositeSpring: following', () => {
     const point = system.createSpring({ x: 3, y: 4 }, config)
     const follower = system.createSpring({ magnitude: 0, tag: 1 }, config)
 
-    follower.target = { magnitude: mapSpring(point, ({ x, y }) => Math.hypot(x, y), null) }
+    follower.target = { magnitude: mapSpring(point, ({ x, y }) => Math.hypot(x, y)) }
 
     for (let i = 0; i < 600 && !follower.isResting; i++) system.advance(FRAME)
 

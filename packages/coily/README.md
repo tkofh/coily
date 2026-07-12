@@ -79,13 +79,13 @@ const mirrored = system.createSpring(mapSpring(leader, (v) => -v))
 
 Followers inherit the leader's config unless given their own. Assigning a number to `target` unfollows.
 
-`mapSpring` also combines several springs: pass a shape (a plain object or array with springs at the leaves, nested arbitrarily) and a function of their values. Several springs leave no single config to inherit, so a third argument states what the derived value offers followers: a `SpringDefinition`, or `null` to offer none (followers fall back to their default). The same argument is optional on single-spring maps, replacing the pass-through:
+`mapSpring` also combines several springs: pass a shape (a plain object or array with springs at the leaves, nested arbitrarily) and a function of their values. An optional third argument pins what the derived value offers followers: a `SpringDefinition`, or `null` to offer none (followers fall back to their default). Omitted, the config the springs share passes through — the one they all use when they agree, none while they differ:
 
 ```ts
 const x = system.createSpring(0)
 const y = system.createSpring(0)
 
-const distance = system.createSpring(mapSpring({ x, y }, ({ x, y }) => Math.hypot(x, y), null))
+const distance = system.createSpring(mapSpring({ x, y }, ({ x, y }) => Math.hypot(x, y)))
 ```
 
 Composite springs (below) are sources of their whole value shape, so one map can derive a scalar from every channel at once:
@@ -93,7 +93,7 @@ Composite springs (below) are sources of their whole value shape, so one map can
 ```ts
 const point = system.createSpring({ x: 3, y: 4 })
 
-const magnitude = system.createSpring(mapSpring(point, ({ x, y }) => Math.hypot(x, y), null))
+const magnitude = system.createSpring(mapSpring(point, ({ x, y }) => Math.hypot(x, y)))
 ```
 
 A mapped value is a `SpringSource`, the contract `target` accepts and every `Spring` implements. A `CompositeSpring` is a source _of its shape_: `mapSpring` reads it, alone or at the leaves of a shape, but only scalar sources can be followed directly.
@@ -131,7 +131,7 @@ follower.target = leader
 // or mix numbers and live sources per channel
 follower.target = {
   opacity: 0.5,
-  position: { x: mapSpring(leader, ({ position }) => -position.x, null) },
+  position: { x: mapSpring(leader, ({ position }) => -position.x) },
 }
 ```
 

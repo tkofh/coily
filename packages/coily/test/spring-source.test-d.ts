@@ -1,6 +1,6 @@
 /**
- * Type-level tests for `mapSpring` source shapes and the config
- * parameter's overload split.
+ * Type-level tests for `mapSpring` source shapes and the optional
+ * config parameter.
  *
  * This file is compiled by `tsc` but never executed (vitest only picks up
  * `*.spec.ts`, `*.browser.ts`, and `*.bench.ts`). Each `@ts-expect-error`
@@ -76,7 +76,7 @@ declare const p2: CompositeSpring<{ x: number; y: number }>
 // `const T` infers bare array literals as tuples — no `as const` needed
 mapSpring([p1, p2], ([from, to]) => (to.y - from.y) / (to.x - from.x), null)
 
-// @ts-expect-error a composite map must state the config it offers
+// Config is optional: the channels' shared config passes through
 mapSpring(composite, ({ x, y }) => x + y)
 // @ts-expect-error a composite is not a scalar source, so it cannot be followed
 follower.target = composite
@@ -90,9 +90,8 @@ system.createSpring(mapSpring(composite, ({ x, y }) => Math.hypot(x, y), null))
 // @ts-expect-error a composite cannot be followed at creation; map it first
 system.createSpring(composite, cfg)
 
-// ── Shape maps must state the config they offer ─────────────────────
+// ── Config is optional on shapes: the shared config passes through ──
 
-// @ts-expect-error several sources have no shared config to pass through
 mapSpring({ x: a, y: b }, ({ x, y }) => x + y)
 
 // ── Invalid leaves are rejected where they are declared ─────────────
