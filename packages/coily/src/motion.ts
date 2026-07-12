@@ -4,7 +4,14 @@ import { State } from './state.ts'
 import { CriticallyDampedSolver, OverdampedSolver, UnderdampedSolver } from './solver.ts'
 import { invariant } from './util.ts'
 
+/**
+ * One spring simulation in displacement space: position is measured from
+ * the target (0 means settled), so retargeting is a rebase performed by
+ * the owning `Spring`. Picks the closed-form solver for the config's
+ * damping regime and emits update/start/stop/dispose events.
+ */
 export class Motion {
+  /** Tick-pass marker written by `MotionSet` so a motion re-added mid-pass isn't ticked twice. */
   _pass = 0
 
   #config: SpringConfig
@@ -15,6 +22,9 @@ export class Motion {
   #overdampedSolver: OverdampedSolver | null = null
   #currentSolver: UnderdampedSolver | CriticallyDampedSolver | OverdampedSolver | null = null
 
+  // Solver work is deferred to the next tick: #needsUpdate swaps solvers
+  // after a reconfigure, #needsReset re-anchors after a position or
+  // velocity write.
   #needsUpdate = false
   #needsReset = false
   #timeRemaining = 0
@@ -91,6 +101,8 @@ export class Motion {
     this.#timeRemaining = Math.max(0, this.#timeRemaining - dt * 1000)
 
     if (this.#state.isResting) {
+      // Snap exactly to the target at rest; the deferred reset re-anchors
+      // the solver if the spring is disturbed again.
       this.#state.position = 0
       this.#state.velocity = 0
       this.#needsReset = true

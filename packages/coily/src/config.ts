@@ -1,15 +1,26 @@
 import { invariant } from './util.ts'
 
+/**
+ * A spring's instantaneous motion, measured relative to its target.
+ * `SpringConfig.computeTimeRemaining` takes one; build it from a live
+ * spring as `{ position: spring.value - spring.target, velocity: spring.velocity }`.
+ */
 export interface SpringState {
+  /** Displacement from the target in value units. 0 means at the target. */
   readonly position: number
+  /** Rate of change of the displacement, in value units per second. */
   readonly velocity: number
 }
 
 interface BaseOptions {
   /**
-   * Decimal places of the resting threshold: a spring rests once its
-   * remaining motion cannot reach half a unit in the last place,
-   * 0.5 × 10⁻ᵖ. Values are never rounded — precision only decides rest.
+   * Decimal places of the resting threshold. A spring rests once its
+   * remaining motion cannot reach half a unit in the last place —
+   * `0.5 * 10^-precision`, or 0.005 at the default.
+   *
+   * Values are never rounded; precision only decides rest. See
+   * https://github.com/tkofh/coily/blob/main/PRECISION.md.
+   *
    * @default 2
    */
   readonly precision?: number | undefined
@@ -17,7 +28,8 @@ interface BaseOptions {
 
 interface WithMass {
   /**
-   * Mass of the spring system.
+   * Mass of the moving value. Heavier springs accelerate more slowly and
+   * carry more momentum through the target. Must be greater than 0.
    * @default 1
    */
   readonly mass?: number | undefined
@@ -33,47 +45,59 @@ interface WithoutMass {
 
 interface WithTension {
   /**
-   * Spring stiffness coefficient.
-   * Must be greater than 0.
+   * Spring stiffness. Higher tension pulls toward the target harder,
+   * making the whole motion faster. Must be greater than 0.
    */
   readonly tension: number
 }
 
 interface WithDamping {
   /**
-   * Viscous damping coefficient.
-   * Must be greater than or equal to 0.
+   * Friction strength. Higher damping bleeds off velocity faster and
+   * reduces bounce; at 0 the spring oscillates forever. Must be greater
+   * than or equal to 0.
    */
   readonly damping: number
 }
 
 interface WithDampingRatio {
   /**
-   * Ratio of damping to critical damping (0 = undamped, 1 = critically damped).
-   * Must be greater than or equal to 0.
+   * Damping as a fraction of critical damping — the character of the
+   * motion, independent of its speed. Below 1 the spring overshoots and
+   * bounces. At 1 it settles as fast as possible without overshooting.
+   * Above 1 it settles slower, still without overshooting. At 0 it never
+   * settles. Must be greater than or equal to 0.
    */
   readonly dampingRatio: number
 }
 
 interface WithBounce {
   /**
-   * Bounciness of the spring. Converted to dampingRatio as `1 - bounce`.
-   * [-1, 1]
+   * Bounciness, converted to a damping ratio as `1 - bounce`. 0 settles
+   * as fast as possible without overshooting. Positive values overshoot
+   * and bounce; 1, maximum bounce, is clamped just short of undamped so
+   * the spring still settles. Negative values settle without bounce, more
+   * slowly. Must be between -1 and 1.
    */
   readonly bounce: number
 }
 
 interface WithDuration {
   /**
-   * Target settle duration in milliseconds.
-   * Must be greater than 0.
+   * Target settle time in milliseconds. The spring is tuned so its motion
+   * decays into the resting threshold within this time, assuming it
+   * starts `displacement` away from the target. Actual rest lands at or
+   * before the requested duration. Must be greater than 0.
    */
   readonly duration: number
 }
 
 interface WithDisplacement {
   /**
-   * Initial displacement used for duration-based envelope calculation.
+   * The initial displacement the duration tuning assumes. Set it to your
+   * animation's range — 300 when animating 0 to 300 — so the settle
+   * timing holds; timing skews as the real displacement diverges from
+   * this value. Must not be 0.
    * @default 1
    */
   readonly displacement?: number | undefined
@@ -101,6 +125,7 @@ interface DampingDurationOptions
 interface DampingBounceDurationOptions
   extends BaseOptions, WithoutMass, WithDamping, WithBounce, WithDuration, WithDisplacement {}
 
+/** Every option key accepted by at least one `defineSpring` input shape. */
 export type SpringOptionKeys =
   | 'mass'
   | 'tension'
@@ -134,19 +159,34 @@ export type SpringOptions =
   | Exact<DampingBounceDurationOptions>
 
 /**
- * Immutable spring configuration. Instances are frozen — to change a spring's
- * behavior, assign a new config via `spring.config`.
+ * Immutable, resolved spring parameters. Whatever `defineSpring` input
+ * shape produced it, a config carries concrete `mass`, `tension`,
+ * `damping`, and `precision`, plus the quantities derived from them.
+ * Instances are frozen and safe to share between springs; to change a
+ * spring's behavior, assign a new config via `spring.config`.
  */
 export class SpringConfig {
+  /** The config for springs created without one: critically damped, settling in about 500ms. */
   static readonly default = new SpringConfig({ dampingRatio: 1, duration: 500 })
 
+  /** Mass of the moving value, as provided or derived. */
   readonly mass: number
+  /** Spring stiffness, as provided or derived. */
   readonly tension: number
+  /** Friction strength, as provided or derived. */
   readonly damping: number
+  /** Decimal places of the resting threshold — see `restingMagnitude`. */
   readonly precision: number
 
+  /** Oscillation rate with no damping: `sqrt(tension / mass)`, in radians per second. */
   readonly naturalFrequency: number
+  /** The damping at which bounce disappears: `2 * mass * naturalFrequency`. */
   readonly criticalDamping: number
+  /**
+   * `damping / criticalDamping`. Below 1 the spring overshoots and
+   * bounces, at 1 it settles fastest without overshooting, above 1 it
+   * settles slower.
+   */
   readonly dampingRatio: number
 
   /** Resting threshold in value units: half a unit in the last `precision` place. */
@@ -268,31 +308,26 @@ export class SpringConfig {
   }
 
   /**
-   * Analytically estimates the time remaining for a spring to come to rest,
-   * given the current displacement and velocity.
+   * Estimates how long a spring with this config takes to come to rest
+   * from `state`, in milliseconds.
    *
-   * Uses the exponential decay envelope common to all three damping regimes.
-   * The decay rate depends on the regime:
-   * - Underdamped (ζ < 1): σ = ζωₙ
-   * - Critically damped (ζ = 1): σ = ωₙ
-   * - Overdamped (ζ > 1): σ = (ζ - √(ζ²-1))ωₙ  (the slower eigenvalue)
-   *
-   * The effective initial amplitude accounts for both displacement and velocity,
-   * since kinetic energy can convert to additional displacement:
-   *   A₀ = |x₀| + |v₀| / ωₙ
-   *
-   * Settling time: t = ln(A₀ / threshold) / σ, with a 2× safety factor
-   * to account for polynomial terms in the critically damped solution.
-   *
-   * Returns the estimated time in milliseconds.
+   * The estimate follows the motion's decay envelope with a 2x safety
+   * margin, so actual rest usually lands earlier. Returns 0 when `state`
+   * is already inside the resting threshold, and Infinity when the config
+   * never settles (a `dampingRatio` of 0).
    */
   computeTimeRemaining(state: SpringState): number {
     const { position, velocity } = state
 
+    // Effective initial amplitude: kinetic energy can convert into up to
+    // |v| / wn of additional displacement.
     const a0 = Math.abs(position) + Math.abs(velocity) / this.naturalFrequency
 
     if (a0 <= this.restingMagnitude) return 0
 
+    // Envelope decay rate sigma per regime: zeta * wn underdamped, wn
+    // critically damped, and the slower eigenvalue
+    // (zeta - sqrt(zeta^2 - 1)) * wn overdamped.
     let sigma: number
     if (this.dampingRatio < 1) {
       sigma = this.dampingRatio * this.naturalFrequency
@@ -306,96 +341,120 @@ export class SpringConfig {
 
     if (sigma <= 0) return Infinity
 
+    // The envelope exp(-sigma * t) * a0 crosses the threshold at
+    // t = ln(a0 / threshold) / sigma, doubled to cover the polynomial
+    // terms of the critically damped solution.
     return ((2 * Math.log(a0 / this.restingMagnitude)) / sigma) * 1000
   }
 }
 
 /**
- * Direct physical parameters. You control stiffness and friction exactly;
- * mass defaults to 1.
+ * Creates a config from direct physical parameters: you set stiffness
+ * and friction exactly.
  */
 export function defineSpring(input: Exact<DirectOptions>): SpringConfig
 /**
- * Tension sets the stiffness; dampingRatio controls oscillation character
- * (0 = undamped, 1 = critically damped, >1 = overdamped).
- * Damping is derived as `2 * dampingRatio * sqrt(mass * tension)`.
+ * Creates a config from stiffness and motion character. Damping is
+ * derived as `2 * dampingRatio * sqrt(mass * tension)`.
  */
 export function defineSpring(input: Exact<TensionRatioOptions>): SpringConfig
 /**
- * Tension sets the stiffness; bounce controls how oscillatory the spring is,
- * from -1 (overdamped, no oscillation) to 1 (maximum bounce).
- * Damping is derived to match the requested bounciness.
+ * Creates a config from stiffness and bounciness. Damping is derived to
+ * match the requested bounce, from -1 (no bounce, slow settle) to 1
+ * (maximum bounce).
  */
 export function defineSpring(input: Exact<TensionBounceOptions>): SpringConfig
 /**
- * Damping is given directly; dampingRatio is used to derive tension
- * as `damping² / (4 * dampingRatio² * mass)`.
- * dampingRatio must be greater than 0.
+ * Creates a config from friction and motion character. Tension is
+ * derived as `damping^2 / (4 * dampingRatio^2 * mass)`; `dampingRatio`
+ * must be greater than 0.
  */
 export function defineSpring(input: Exact<DampingRatioOptions>): SpringConfig
 /**
- * Damping is given directly; bounce controls how oscillatory the spring is.
- * Tension is derived to match the requested bounciness.
- * bounce must be less than 1.
+ * Creates a config from friction and bounciness. Tension is derived to
+ * match the requested bounce; `bounce` must be less than 1.
  */
 export function defineSpring(input: Exact<DampingBounceOptions>): SpringConfig
 /**
- * All three physical knobs specified — mass is derived
- * as `damping² / (4 * dampingRatio² * tension)`.
- * dampingRatio must be greater than 0.
+ * Creates a config from all three physical knobs. Mass is derived as
+ * `damping^2 / (4 * dampingRatio^2 * tension)` and cannot be provided;
+ * `dampingRatio` must be greater than 0.
  */
 export function defineSpring(input: Exact<TensionDampingRatioOptions>): SpringConfig
 /**
- * All three physical knobs specified — mass is derived
- * from tension, damping, and the requested bounciness.
- * bounce must be less than 1.
+ * Creates a config from all three physical knobs. Mass is derived from
+ * tension, damping, and the requested bounce, and cannot be provided;
+ * `bounce` must be less than 1.
  */
 export function defineSpring(input: Exact<TensionDampingBounceOptions>): SpringConfig
 /**
- * Duration-based configuration. The spring is tuned so that its envelope
- * decays to the resting threshold within the given duration.
- * Duration assumes a displacement of 1 by default — provide `displacement`
- * to match your actual animation range for accurate timing.
- * Tension and damping are both derived from dampingRatio and duration.
+ * Tunes the spring to settle within `duration` milliseconds, with
+ * `dampingRatio` setting the motion's character. Tension and damping are
+ * both derived.
+ *
+ * The timing assumes the motion starts `displacement` (default 1) away
+ * from the target — pass a `displacement` matching your animation range
+ * for accurate timing.
+ *
+ * @example
+ * ```ts
+ * // Tuned for a 300px move; rests within 750ms
+ * defineSpring({ duration: 750, dampingRatio: 1, displacement: 300 })
+ * ```
  */
 export function defineSpring(input: Exact<DurationOptions>): SpringConfig
 /**
- * Duration-based configuration. The spring is tuned so that its envelope
- * decays to the resting threshold within the given duration.
- * Duration assumes a displacement of 1 by default — provide `displacement`
- * to match your actual animation range for accurate timing.
- * Bounce controls how oscillatory the motion is while settling.
- * Tension and damping are both derived.
+ * Tunes the spring to settle within `duration` milliseconds, with
+ * `bounce` setting how oscillatory the settling motion is. Tension and
+ * damping are both derived.
+ *
+ * The timing assumes the motion starts `displacement` (default 1) away
+ * from the target — pass a `displacement` matching your animation range
+ * for accurate timing.
  */
 export function defineSpring(input: Exact<BounceDurationOptions>): SpringConfig
 /**
- * Duration-based with a tension constraint. Mass is derived from tension
- * and the computed natural frequency; damping follows from mass and dampingRatio.
- * Duration assumes a displacement of 1 by default — provide `displacement`
- * to match your actual animation range for accurate timing.
+ * Tunes a spring of the given stiffness to settle within `duration`
+ * milliseconds. Mass is derived from tension and the computed natural
+ * frequency, then damping from mass and `dampingRatio`; mass cannot be
+ * provided.
+ *
+ * The timing assumes the motion starts `displacement` (default 1) away
+ * from the target — pass a `displacement` matching your animation range
+ * for accurate timing.
  */
 export function defineSpring(input: Exact<TensionDurationOptions>): SpringConfig
 /**
- * Duration-based with a tension constraint. Bounce controls how oscillatory
- * the motion is while settling. Mass is derived from tension and the
- * computed natural frequency.
- * Duration assumes a displacement of 1 by default — provide `displacement`
- * to match your actual animation range for accurate timing.
+ * Tunes a spring of the given stiffness to settle within `duration`
+ * milliseconds, with `bounce` setting how oscillatory the settling motion
+ * is. Mass is derived from tension and the computed natural frequency,
+ * and cannot be provided.
+ *
+ * The timing assumes the motion starts `displacement` (default 1) away
+ * from the target — pass a `displacement` matching your animation range
+ * for accurate timing.
  */
 export function defineSpring(input: Exact<TensionBounceDurationOptions>): SpringConfig
 /**
- * Duration-based with a damping constraint. Mass is derived from damping,
- * dampingRatio, and the computed natural frequency; tension follows from mass.
- * Duration assumes a displacement of 1 by default — provide `displacement`
- * to match your actual animation range for accurate timing.
+ * Tunes a spring of the given friction to settle within `duration`
+ * milliseconds. Mass is derived from damping, `dampingRatio`, and the
+ * computed natural frequency, then tension from mass; mass cannot be
+ * provided.
+ *
+ * The timing assumes the motion starts `displacement` (default 1) away
+ * from the target — pass a `displacement` matching your animation range
+ * for accurate timing.
  */
 export function defineSpring(input: Exact<DampingDurationOptions>): SpringConfig
 /**
- * Duration-based with a damping constraint. Bounce controls how oscillatory
- * the motion is while settling. Mass is derived from damping and the
- * computed natural frequency.
- * Duration assumes a displacement of 1 by default — provide `displacement`
- * to match your actual animation range for accurate timing.
+ * Tunes a spring of the given friction to settle within `duration`
+ * milliseconds, with `bounce` setting how oscillatory the settling motion
+ * is. Mass is derived from damping and the computed natural frequency,
+ * and cannot be provided.
+ *
+ * The timing assumes the motion starts `displacement` (default 1) away
+ * from the target — pass a `displacement` matching your animation range
+ * for accurate timing.
  */
 export function defineSpring(input: Exact<DampingBounceDurationOptions>): SpringConfig
 export function defineSpring(input: SpringOptions): SpringConfig {

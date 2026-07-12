@@ -1,5 +1,9 @@
 import type { SpringConfig } from './config.ts'
 
+/**
+ * The mutable position/velocity pair a motion and its solvers share, in
+ * displacement space: position 0 means at the target.
+ */
 export class State {
   #config: SpringConfig
 
@@ -32,6 +36,11 @@ export class State {
     this.#velocity = value
   }
 
+  /**
+   * The rest test: displacement, plus the displacement the current
+   * velocity could still convert into (|x| + |v| / wn), is inside the
+   * config's resting threshold.
+   */
   get isResting() {
     return (
       Math.abs(this.#position) + Math.abs(this.#velocity) / this.#config.naturalFrequency <=

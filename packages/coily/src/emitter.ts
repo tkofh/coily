@@ -2,6 +2,7 @@ type Handler = () => void
 
 type EventType = 'update' | 'start' | 'stop' | 'dispose'
 
+/** Minimal fixed-event emitter behind motions and composite springs. */
 export class Emitter {
   #update: Handler[] = []
   #start: Handler[] = []
@@ -19,6 +20,8 @@ export class Emitter {
   off(type: EventType, handler?: Handler) {
     const list = this.#list(type)
     if (handler) {
+      // An indexOf miss becomes 2^32 - 1 via >>> 0, so splice removes
+      // nothing for handlers that were never subscribed.
       list.splice(list.indexOf(handler) >>> 0, 1)
     } else {
       list.length = 0
@@ -34,6 +37,9 @@ export class Emitter {
 
   emit(type: EventType) {
     const list = this.#list(type)
+    // The multi-handler path iterates a snapshot so handlers that
+    // un/subscribe mid-emit can't shift the iteration; the common
+    // single-handler path skips the per-tick allocation.
     if (list.length === 1) {
       list[0]!()
     } else if (list.length > 1) {

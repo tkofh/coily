@@ -1,12 +1,34 @@
 import type { MotionSet } from './motion-set.ts'
 import { invariant } from './util.ts'
 
+/** Frame timing options for a spring system. */
 export interface TickerOptions {
+  /**
+   * Frame-rate cap. 0 means uncapped: one tick per displayed frame,
+   * whatever rate the screen runs at — 60Hz, 120Hz, or adaptive. Capped
+   * ticks are paced to whole display frames, near the requested rate, and
+   * each still receives the true elapsed time.
+   * @default 0
+   */
   readonly fps?: number | undefined
+  /**
+   * Frame gap in milliseconds above which the gap is treated as lag — a
+   * backgrounded tab, a blocking task — and replaced with `adjustedLag`,
+   * so springs don't teleport when frames resume. 0 disables lag
+   * clamping.
+   * @default 500
+   */
   readonly lagThreshold?: number | undefined
+  /**
+   * The elapsed milliseconds a lagging frame is replaced with. Clamped to
+   * at most `lagThreshold`.
+   * @default 33
+   */
   readonly adjustedLag?: number | undefined
 }
 
+// The setTimeout fallback keeps systems ticking outside the browser:
+// SSR, tests, node scripts.
 const request = (callback: FrameRequestCallback): number =>
   typeof window !== 'undefined'
     ? window.requestAnimationFrame(callback)
@@ -20,6 +42,12 @@ const cancel = (id: number): void => {
   }
 }
 
+/**
+ * Drives a `MotionSet` from animation frames. Schedules frames only
+ * while motions exist — otherwise it sleeps and the set's `onWake`
+ * rearms it — paces fps caps to whole display frames, and clamps lag
+ * gaps.
+ */
 export class Ticker {
   #fps: number
   #gap: number
@@ -54,6 +82,8 @@ export class Ticker {
     this.#fps = fps
     this.#gap = fps === 0 ? 1000 / 60 : 1000 / fps
     this.#capGap = fps === 0 ? 0 : 1000 / fps
+    // 0 disables clamping; a threshold no real frame gap reaches avoids
+    // a separate disabled branch per frame.
     this.#lagThreshold = lagThreshold === 0 ? 1e8 : lagThreshold
     this.#adjustedLag = Math.min(adjustedLag, this.#lagThreshold)
 
@@ -159,12 +189,17 @@ export class Ticker {
 
       this.#acc += elapsed
 
+      // Step once the accumulated time is within half a frame of the cap
+      // gap: capped ticks land on the nearest display frame instead of
+      // always overshooting the requested rate.
       if (this.#acc + elapsed / 2 >= this.#capGap) {
         const delta = this.#acc
         this.#acc = 0
         this.#step(delta)
       }
     } else {
+      // The first frame after start or wake only records a baseline
+      // timestamp; stepping begins on the second.
       this.#primed = true
     }
     this.#lastWallTime = timestamp

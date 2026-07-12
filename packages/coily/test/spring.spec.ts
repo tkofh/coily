@@ -721,6 +721,48 @@ describe('Spring: dispose', () => {
     expect(() => spring.dispose()).not.toThrow()
     expect(onDispose).toHaveBeenCalledOnce()
   })
+
+  test('a disposed spring freezes at its current value: reads work, writes throw', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
+
+    spring.target = 100
+    system.advance(1000 / 60)
+    const frozen = spring.value
+
+    spring.dispose()
+
+    expect(spring.value).toBe(frozen)
+    expect(() => {
+      spring.target = 500
+    }).toThrow('Cannot tick a disposed motion')
+    expect(() => {
+      spring.value = 5
+    }).toThrow('Cannot tick a disposed motion')
+    expect(() => spring.jumpTo(50)).toThrow('Cannot tick a disposed motion')
+  })
+})
+
+describe('Spring: duration-based settle time', () => {
+  test('settles at or before the requested duration when displacement matches the range', () => {
+    for (const dampingRatio of [0.5, 1, 2]) {
+      const system = createSpringSystem()
+      const spring = system.createSpring(
+        0,
+        defineSpring({ duration: 750, dampingRatio, displacement: 300 }),
+      )
+      spring.target = 300
+
+      let elapsed = 0
+      while (!spring.isResting && elapsed < 5000) {
+        system.advance(1000 / 60)
+        elapsed += 1000 / 60
+      }
+
+      expect(spring.isResting).toBe(true)
+      expect(elapsed).toBeLessThanOrEqual(750)
+    }
+  })
 })
 
 describe('Spring: retargeting preserves value', () => {

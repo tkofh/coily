@@ -1,6 +1,15 @@
 import type { SpringConfig } from './config.ts'
 import type { State } from './state.ts'
 
+// Closed-form solutions of the damped spring equation, one class per
+// damping regime. Each solver anchors its constants c1/c2 from the state
+// at configure time and evaluates position and velocity at absolute time
+// t from that anchor — no numerical integration, so error never
+// accumulates. `configure()` with no argument re-anchors at the current
+// state after an external write; with a config it also adopts the
+// config's constants.
+
+/** dampingRatio < 1: decaying oscillation, x(t) = exp(-sigma*t) * (c1*cos(wd*t) + c2*sin(wd*t)). */
 export class UnderdampedSolver {
   #state: State
 
@@ -43,6 +52,7 @@ export class UnderdampedSolver {
   }
 }
 
+/** dampingRatio = 1: fastest non-oscillating decay, x(t) = (c1 + c2*t) * exp(-wn*t). */
 export class CriticallyDampedSolver {
   #state: State
 
@@ -78,6 +88,7 @@ export class CriticallyDampedSolver {
   }
 }
 
+/** dampingRatio > 1: slow non-oscillating decay, x(t) = exp(-sigma*t) * (c1*sinh(wd*t) + c2*cosh(wd*t)) / wd. */
 export class OverdampedSolver {
   #state: State
 
@@ -107,6 +118,10 @@ export class OverdampedSolver {
     const decay = Math.exp(-this.#decayRate * this.#t)
     const decayVelocity = -this.#decayRate * decay
 
+    // sinh/cosh overflow to Infinity near 710, where the decay factor has
+    // underflowed to 0 and their product would be NaN. sigma > wd in the
+    // overdamped regime, so by wd*t = 300 the product is far below any
+    // resting threshold and freezing the hyperbolic term is invisible.
     const clamped = Math.min(this.#dampedFrequency * this.#t, 300)
 
     const sinh = Math.sinh(clamped)
