@@ -67,7 +67,7 @@ Without a config, springs are critically damped with a ~500ms settle time.
 
 ### Chaining
 
-A spring can follow another spring's live value instead of a fixed number:
+A spring can follow another spring's live value instead of a fixed number, and `mapSpring` derives new followable values from existing ones — offsets, mirrors, clamps, any pure function of the value:
 
 ```ts
 const leader = system.createSpring(0)
@@ -76,10 +76,15 @@ const follower = system.createSpring(leader.value)
 follower.target = leader
 
 const trailing = system.createSpring(leader.value + 20)
-trailing.target = { spring: leader, offset: 20 }
+trailing.target = mapSpring(leader, (v) => v + 20)
+
+const mirrored = system.createSpring(-leader.value)
+mirrored.target = mapSpring(leader, (v) => -v)
 ```
 
 Followers inherit the leader's config unless given their own. Assigning a number to `target` unfollows.
+
+A mapped value is a `SpringSource` — the interface every `Spring` implements and the contract `target` accepts. It's an open contract: any object honoring it (a pointer position, a scroll offset) can be followed directly.
 
 ### Objects
 
@@ -104,11 +109,10 @@ spring.config = { position: stiff, opacity: defineSpring({ duration: 300, dampin
 
 Configs are `SpringConfig` instances — build them with `defineSpring`. Unlike the scalar `useSpring` above, config positions here don't accept bare option objects: a plain object is always a per-channel shape, so any non-config leaf it reaches throws with its path.
 
-Spring objects chain channel-wise. Assign another spring object of the exact same shape (optionally with a partial offset shape), and a partial numeric target detaches only the channels it names:
+Spring objects chain channel-wise. Assign another spring object of the exact same shape, and a partial numeric target detaches only the channels it names:
 
 ```ts
 follower.target = leader
-trailing.target = { spring: leader, offset: { position: { x: 20 } } }
 ```
 
 ## Reduced motion

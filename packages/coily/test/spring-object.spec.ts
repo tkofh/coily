@@ -430,23 +430,6 @@ describe('SpringObject: following', () => {
     expect(c.isResting).toBe(false)
   })
 
-  test('follows with an offset shape', () => {
-    const system = createSpringSystem()
-    const leader = system.createSpring({ position: { x: 0, y: 0 }, opacity: 0 }, config)
-    const follower = system.createSpring({ position: { x: 0, y: 0 }, opacity: 0 })
-
-    follower.target = { spring: leader, offset: { position: { x: 10 } } }
-    leader.target = { position: { x: 100, y: 50 } }
-
-    for (let i = 0; i < 600; i++) {
-      system.advance(FRAME)
-      if (follower.isResting) break
-    }
-
-    expect(follower.value.position.x).toBeCloseTo(110, 0)
-    expect(follower.value.position.y).toBeCloseTo(50, 0)
-  })
-
   test('inherits the leader config per channel', () => {
     const system = createSpringSystem()
     const leader = system.createSpring({ x: 0, y: 0 }, config)
@@ -485,16 +468,6 @@ describe('SpringObject: following', () => {
     expect(() => {
       a.target = b as never
     }).toThrow('Shape mismatch')
-  })
-
-  test('throws on unknown offset channels', () => {
-    const system = createSpringSystem()
-    const leader = system.createSpring({ x: 0 }, config)
-    const follower = system.createSpring({ x: 0 })
-
-    expect(() => {
-      follower.target = { spring: leader, offset: { z: 5 } as never }
-    }).toThrow("Unknown channel 'z' in offset")
   })
 })
 

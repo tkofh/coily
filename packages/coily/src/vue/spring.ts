@@ -31,7 +31,9 @@ export interface SpringRef extends ReactiveSpringRef<number> {}
 // from it without exposing the instance on the public type.
 const SpringInstanceKey = Symbol('spring')
 
-type SpringRefWithInstance = SpringRef & { [SpringInstanceKey]: Spring }
+interface SpringRefWithInstance extends SpringRef {
+  readonly [SpringInstanceKey]: Spring
+}
 
 function hasSpringInstance(value: unknown): value is SpringRefWithInstance {
   return typeof value === 'object' && value !== null && SpringInstanceKey in value

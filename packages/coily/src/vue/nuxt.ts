@@ -68,7 +68,8 @@ export default defineNuxtPlugin((nuxtApp) => {
 /**
  * The Nuxt module: creates an app-wide spring system (started on the
  * client), auto-imports `useSpring`, `useSpringSystem`, `useSpringPool`,
- * and `defineSpring`, and registers the `SpringValue` component.
+ * `defineSpring`, and `mapSpring`, and registers the `SpringValue`
+ * component.
  */
 const coilyModule: NuxtModule = defineNuxtModule<CoilyModuleOptions>({
   meta: {
@@ -94,7 +95,9 @@ const coilyModule: NuxtModule = defineNuxtModule<CoilyModuleOptions>({
       { from: 'coily/vue', name: 'SpringObjectRef', type: true },
       { from: 'coily/vue', name: 'SpringPool', type: true },
       { from: 'coily', name: 'defineSpring' },
+      { from: 'coily', name: 'mapSpring' },
       { from: 'coily', name: 'SpringConfig', type: true },
+      { from: 'coily', name: 'SpringSource', type: true },
     ])
 
     addComponent({

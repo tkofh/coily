@@ -236,6 +236,24 @@ describe('Spring: events', () => {
     expect(onStart).toHaveBeenCalledOnce()
   })
 
+  test('onConfigure fires on resolved config changes and not on no-ops', () => {
+    const system = createSpringSystem()
+    const config = defineSpring({ mass: 1, tension: 170, damping: 26 })
+    const spring = system.createSpring(0, config)
+
+    const onConfigure = vi.fn()
+    spring.onConfigure(onConfigure)
+
+    spring.config = config
+    expect(onConfigure).not.toHaveBeenCalled()
+
+    spring.config = defineSpring({ mass: 1, tension: 300, damping: 30 })
+    expect(onConfigure).toHaveBeenCalledOnce()
+
+    spring.config = null
+    expect(onConfigure).toHaveBeenCalledTimes(2)
+  })
+
   test('start and stop alternate strictly across interruptions', () => {
     const system = createSpringSystem()
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))

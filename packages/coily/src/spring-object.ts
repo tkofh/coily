@@ -9,7 +9,7 @@ import {
   describePath,
 } from './channel-tree.ts'
 import { Spring } from './spring.ts'
-import { invariant, isRecord, isRecordOrArray } from './util.ts'
+import { invariant, isRecordOrArray } from './util.ts'
 
 /**
  * Compile-time validation of a value shape: every channel must be a `number`,
@@ -73,28 +73,11 @@ export type ConfigShape<T> =
   | (T extends number ? never : { readonly [K in keyof T]?: ConfigShape<T[K]> | undefined })
 
 /**
- * A channel-wise follow target: the spring object to track, plus optional
- * per-channel offsets.
- */
-export interface SpringObjectWithOffset<T extends object> {
-  /** The spring object whose channels to follow. Its shape must match exactly. */
-  readonly spring: SpringObject<T>
-  /**
-   * A partial shape of constants added channel-wise to the leader's
-   * values. Channels it leaves out follow at an offset of 0.
-   */
-  readonly offset?: PartialShape<T> | undefined
-}
-
-/**
  * What a spring object can animate toward: a partial shape of numbers,
- * or another spring object of the same shape — optionally with offsets —
- * to follow channel by channel.
+ * or another spring object of the same shape to follow channel by
+ * channel.
  */
-export type SpringObjectTarget<T extends object> =
-  | PartialShape<T>
-  | SpringObject<T>
-  | SpringObjectWithOffset<T>
+export type SpringObjectTarget<T extends object> = PartialShape<T> | SpringObject<T>
 
 // ── Config resolution ───────────────────────────────────────────────
 
@@ -136,8 +119,8 @@ const applyJump = (spring: Spring, value: number) => {
 const assignConfig = (spring: Spring, config: SpringConfig | null) => {
   spring.config = config
 }
-const followChannel = (mine: Spring, theirs: Spring, offset: number | undefined) => {
-  mine.target = offset ? { spring: theirs, offset } : theirs
+const followChannel = (mine: Spring, theirs: Spring) => {
+  mine.target = theirs
 }
 
 // Shared so resting and disposed spring objects don't allocate a promise per read.
@@ -231,9 +214,9 @@ export class SpringObject<in out T extends object> {
    * - A partial shape of numbers retargets the channels it names and
    *   leaves the others alone. While following, it also detaches the
    *   named channels from the leader.
-   * - A `SpringObject` of the same shape — or `{ spring, offset }` with a
-   *   partial offset shape — follows the leader channel by channel.
-   *   Channels without a config of their own adopt the leader channel's.
+   * - A `SpringObject` of the same shape follows the leader channel by
+   *   channel. Channels without a config of their own adopt the leader
+   *   channel's.
    *
    * Unknown channels throw with their path.
    */
@@ -244,14 +227,7 @@ export class SpringObject<in out T extends object> {
 
   set target(value: SpringObjectTarget<T>) {
     if (value instanceof SpringObject) {
-      this.#follow(value, undefined)
-    } else if (
-      isRecord(value) &&
-      'spring' in value &&
-      (value as unknown as SpringObjectWithOffset<T>).spring instanceof SpringObject
-    ) {
-      const { spring, offset } = value as unknown as SpringObjectWithOffset<T>
-      this.#follow(spring, offset)
+      this.#follow(value)
     } else {
       this.#motions.flushes.batch(() => {
         this.#map.scatter(value, assignTarget)
@@ -432,9 +408,9 @@ export class SpringObject<in out T extends object> {
     return this.#map.leaves[0]!.onDispose(callback)
   }
 
-  #follow(leader: SpringObject<T>, offset: PartialShape<T> | undefined) {
+  #follow(leader: SpringObject<T>) {
     this.#motions.flushes.batch(() => {
-      this.#map.zip(leader.#map, offset, 'offset', followChannel)
+      this.#map.zip(leader.#map, followChannel)
     })
   }
 }

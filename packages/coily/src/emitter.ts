@@ -1,12 +1,13 @@
 type Handler = () => void
 
-type EventType = 'update' | 'start' | 'stop' | 'dispose'
+type EventType = 'update' | 'start' | 'stop' | 'configure' | 'dispose'
 
 /** Minimal fixed-event emitter behind motions and composite springs. */
 export class Emitter {
   #update: Handler[] = []
   #start: Handler[] = []
   #stop: Handler[] = []
+  #configure: Handler[] = []
   #dispose: Handler[] = []
 
   on(type: EventType, handler: Handler) {
@@ -32,6 +33,7 @@ export class Emitter {
     this.#update.length = 0
     this.#start.length = 0
     this.#stop.length = 0
+    this.#configure.length = 0
     this.#dispose.length = 0
   }
 
@@ -57,6 +59,8 @@ export class Emitter {
         return this.#start
       case 'stop':
         return this.#stop
+      case 'configure':
+        return this.#configure
       case 'dispose':
         return this.#dispose
     }

@@ -90,17 +90,8 @@ export abstract class ChannelTreeNode<L> {
   /** Scatters a partial numeric shape into the leaves the input mentions. */
   abstract scatter(input: unknown, apply: (leaf: L, value: number) => void): void
 
-  /**
-   * Pairs this subtree's leaves with a structurally identical one's. `values`
-   * is an optional partial numeric shape (named `label` in errors) delivered
-   * alongside each pair; absent entries arrive as `undefined`.
-   */
-  abstract zip(
-    theirs: ChannelTreeNode<L>,
-    values: unknown,
-    label: string,
-    fn: (mine: L, theirs: L, value: number | undefined, path: string) => void,
-  ): void
+  /** Pairs this subtree's leaves with a structurally identical one's. */
+  abstract zip(theirs: ChannelTreeNode<L>, fn: (mine: L, theirs: L) => void): void
 
   /**
    * Broadcasts a covering shape: `resolve` decides value-for-subtree vs
@@ -145,19 +136,9 @@ export class LeafNode<L> extends ChannelTreeNode<L> {
     apply(this.leaf, input)
   }
 
-  zip(
-    theirs: ChannelTreeNode<L>,
-    values: unknown,
-    label: string,
-    fn: (mine: L, theirs: L, value: number | undefined, path: string) => void,
-  ): void {
+  zip(theirs: ChannelTreeNode<L>, fn: (mine: L, theirs: L) => void): void {
     invariant(theirs instanceof LeafNode, () => `Shape mismatch at ${describePath(this.path)}`)
-    let value: number | undefined
-    if (values !== undefined) {
-      invariant(isNumber(values), `Expected a number at '${this.path}' in ${label}`)
-      value = values
-    }
-    fn(this.leaf, theirs.leaf, value, this.path)
+    fn(this.leaf, theirs.leaf)
   }
 
   broadcast<V>(
@@ -212,27 +193,13 @@ export class ListNode<L> extends ChannelTreeNode<L> {
     }
   }
 
-  zip(
-    theirs: ChannelTreeNode<L>,
-    values: unknown,
-    label: string,
-    fn: (mine: L, theirs: L, value: number | undefined, path: string) => void,
-  ): void {
+  zip(theirs: ChannelTreeNode<L>, fn: (mine: L, theirs: L) => void): void {
     invariant(
       theirs instanceof ListNode && theirs.children.length === this.children.length,
       () => `Shape mismatch at ${describePath(this.path)}`,
     )
-    let list: readonly unknown[] | undefined
-    if (values !== undefined) {
-      invariant(isArray(values), `Expected an array at ${describePath(this.path)} in ${label}`)
-      invariant(
-        values.length <= this.children.length,
-        `Unknown channel '${joinPath(this.path, this.children.length)}' in ${label}`,
-      )
-      list = values
-    }
     for (let i = 0; i < this.children.length; i++) {
-      this.children[i]!.zip(theirs.children[i]!, list?.[i], label, fn)
+      this.children[i]!.zip(theirs.children[i]!, fn)
     }
   }
 
@@ -295,34 +262,15 @@ export class RecordNode<L> extends ChannelTreeNode<L> {
     }
   }
 
-  zip(
-    theirs: ChannelTreeNode<L>,
-    values: unknown,
-    label: string,
-    fn: (mine: L, theirs: L, value: number | undefined, path: string) => void,
-  ): void {
+  zip(theirs: ChannelTreeNode<L>, fn: (mine: L, theirs: L) => void): void {
     invariant(
       theirs instanceof RecordNode && theirs.children.size === this.children.size,
       () => `Shape mismatch at ${describePath(this.path)}`,
     )
-    let record: Record<string, unknown> | undefined
-    if (values !== undefined) {
-      invariant(
-        isRecord(values),
-        () => `Expected an object at ${describePath(this.path)} in ${label}`,
-      )
-      for (const key of Object.keys(values)) {
-        invariant(
-          this.children.has(key),
-          () => `Unknown channel '${joinPath(this.path, key)}' in ${label}`,
-        )
-      }
-      record = values
-    }
     for (const [key, child] of this.children) {
       const their = theirs.children.get(key)
       invariant(their !== undefined, () => `Shape mismatch at ${describePath(this.path)}`)
-      child.zip(their, record?.[key], label, fn)
+      child.zip(their, fn)
     }
   }
 

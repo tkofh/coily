@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from 'vitest'
 import { createSpringSystem } from '../src/system.ts'
 import { defineSpring } from '../src/config.ts'
+import { type SpringSource, SpringSourceSymbol, mapSpring } from '../src/spring-source.ts'
 
 const config = defineSpring({ mass: 1, tension: 170, damping: 26 })
 
@@ -26,11 +27,11 @@ describe('Spring: following', () => {
       expect(follower.value).toBe(50)
     })
 
-    test('starts at leader value plus offset', () => {
+    test('starts at a mapped leader value', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(50, config)
       const follower = system.createSpring(leader.value + 20)
-      follower.target = { spring: leader, offset: 20 }
+      follower.target = mapSpring(leader, (value) => value + 20)
 
       expect(follower.value).toBe(70)
     })
@@ -59,11 +60,11 @@ describe('Spring: following', () => {
       expect(follower.value).toBeCloseTo(100, 0)
     })
 
-    test('follows leader with offset', () => {
+    test('follows a mapped leader', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
       const follower = system.createSpring(leader.value + 25)
-      follower.target = { spring: leader, offset: 25 }
+      follower.target = mapSpring(leader, (value) => value + 25)
 
       leader.target = 100
       advanceUntilResting(system, follower)
@@ -388,6 +389,94 @@ describe('Spring: following', () => {
       }
 
       expect(follower.value).toBeCloseTo(100, 0)
+    })
+  })
+
+  describe('mapped and custom sources', () => {
+    test('maps compose', () => {
+      const system = createSpringSystem()
+      const leader = system.createSpring(50, config)
+      const follower = system.createSpring(0)
+      follower.target = mapSpring(
+        mapSpring(leader, (value) => -value),
+        (value) => value + 10,
+      )
+
+      advanceUntilResting(system, follower)
+
+      expect(follower.value).toBeCloseTo(-40, 0)
+    })
+
+    test('inherits the leader config through a map', () => {
+      const system = createSpringSystem()
+      const leader = system.createSpring(0, config)
+      const follower = system.createSpring(0)
+      follower.target = mapSpring(leader, (value) => value * 2)
+
+      expect(follower.tension).toBe(config.tension)
+    })
+
+    test('leader config changes cascade through a map', () => {
+      const system = createSpringSystem()
+      const leader = system.createSpring(0, config)
+      const follower = system.createSpring(0)
+      follower.target = mapSpring(leader, (value) => value * 2)
+
+      leader.config = defineSpring({ mass: 1, tension: 300, damping: 30 })
+
+      expect(follower.tension).toBe(300)
+    })
+
+    test('leader dispose detaches followers through a map', () => {
+      const system = createSpringSystem()
+      const leader = system.createSpring(40, config)
+      const follower = system.createSpring(0)
+      follower.target = mapSpring(leader, (value) => value + 10)
+      advanceUntilResting(system, follower)
+
+      leader.dispose()
+      follower.target = 100
+      advanceUntilResting(system, follower)
+
+      expect(follower.value).toBeCloseTo(100, 0)
+    })
+
+    test('any object honoring the SpringSource contract can be followed', () => {
+      const system = createSpringSystem()
+      const listeners = new Set<() => void>()
+      let current = 5
+      const source: SpringSource = {
+        [SpringSourceSymbol]: true,
+        get value() {
+          return current
+        },
+        config: null,
+        onUpdate: (callback) => {
+          listeners.add(callback)
+          return () => listeners.delete(callback)
+        },
+        onConfigure: () => () => {},
+        onDispose: () => () => {},
+      }
+
+      const follower = system.createSpring(0)
+      follower.target = source
+      expect(follower.target).toBe(5)
+
+      current = 80
+      for (const callback of listeners) callback()
+      advanceUntilResting(system, follower)
+
+      expect(follower.value).toBeCloseTo(80, 0)
+    })
+
+    test('throws on a target that is neither a number nor a SpringSource', () => {
+      const system = createSpringSystem()
+      const spring = system.createSpring(0)
+
+      expect(() => {
+        spring.target = {} as never
+      }).toThrow('Spring target must be a number or a SpringSource')
     })
   })
 })

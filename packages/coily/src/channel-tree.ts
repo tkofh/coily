@@ -49,17 +49,10 @@ export class ChannelTree<L> {
 
   /**
    * Pairs this map's leaves with another map's, requiring the shapes to
-   * match exactly. `values` is an optional partial numeric shape (labelled
-   * `valuesLabel` in errors) delivered alongside each pair — absent entries
-   * arrive as `undefined`.
+   * match exactly.
    */
-  zip(
-    other: ChannelTree<L>,
-    values: unknown,
-    valuesLabel: string,
-    fn: (mine: L, theirs: L, value: number | undefined, path: string) => void,
-  ): void {
-    this.#root.zip(other.#root, values, valuesLabel, fn)
+  zip(other: ChannelTree<L>, fn: (mine: L, theirs: L) => void): void {
+    this.#root.zip(other.#root, fn)
   }
 
   /**

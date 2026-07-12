@@ -119,16 +119,13 @@ declare const leader: SpringObject<Vector2>
 declare const follower: SpringObject<Vector2>
 
 follower.target = leader
-follower.target = { spring: leader }
-follower.target = { spring: leader, offset: { x: 10 } }
-follower.target = { spring: leader, offset: { x: 10, y: -4 } }
 
 // Structurally identical shapes are the same shape
 declare const twin: SpringObject<{ x: number; y: number }>
 follower.target = twin
 
-// @ts-expect-error offsets are partials of the value shape
-follower.target = { spring: leader, offset: { z: 1 } }
+// @ts-expect-error a leader is passed bare, not wrapped in an object
+follower.target = { spring: leader }
 
 declare const leader3d: SpringObject<{ x: number; y: number; z: number }>
 // @ts-expect-error a wider shape cannot lead this spring

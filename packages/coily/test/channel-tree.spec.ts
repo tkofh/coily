@@ -78,19 +78,17 @@ describe('ChannelTree: scatter', () => {
 })
 
 describe('ChannelTree: zip', () => {
-  test('pairs leaves by position with optional values alongside', () => {
+  test('pairs leaves by position', () => {
     const a = createMap({ position: { x: 1, y: 2 }, opacity: 3 })
     const b = createMap({ position: { x: 4, y: 5 }, opacity: 6 })
-    const seen: [string, number, number, number | undefined][] = []
+    const seen: [number, number][] = []
 
-    a.zip(b, { position: { x: 10 } }, 'offset', (mine, theirs, value, path) =>
-      seen.push([path, mine.value, theirs.value, value]),
-    )
+    a.zip(b, (mine, theirs) => seen.push([mine.value, theirs.value]))
 
     expect(seen).toEqual([
-      ['position.x', 1, 4, 10],
-      ['position.y', 2, 5, undefined],
-      ['opacity', 3, 6, undefined],
+      [1, 4],
+      [2, 5],
+      [3, 6],
     ])
   })
 
@@ -100,17 +98,9 @@ describe('ChannelTree: zip', () => {
     const list = createMap({ x: [0, 0], y: 0 })
     const fn = vi.fn()
 
-    expect(() => wide.zip(narrow, undefined, 'offset', fn)).toThrow('Shape mismatch at the root')
-    expect(() => narrow.zip(wide, undefined, 'offset', fn)).toThrow('Shape mismatch at the root')
-    expect(() => wide.zip(list, undefined, 'offset', fn)).toThrow("Shape mismatch at 'x'")
-  })
-
-  test('labels unknown value channels', () => {
-    const a = createMap({ x: 0 })
-    const b = createMap({ x: 0 })
-    const fn = vi.fn()
-
-    expect(() => a.zip(b, { z: 1 }, 'offset', fn)).toThrow("Unknown channel 'z' in offset")
+    expect(() => wide.zip(narrow, fn)).toThrow('Shape mismatch at the root')
+    expect(() => narrow.zip(wide, fn)).toThrow('Shape mismatch at the root')
+    expect(() => wide.zip(list, fn)).toThrow("Shape mismatch at 'x'")
   })
 })
 

@@ -1,38 +1,15 @@
 import { SpringConfig } from './config.ts'
 import type { MotionSet } from './motion-set.ts'
 import { Motion } from './motion.ts'
-
-/** A follow target: the spring to track, plus a constant offset. */
-export interface SpringWithOffset {
-  /** The spring whose live value to follow. */
-  spring: Spring
-  /**
-   * Constant added to the leader's value, in value units.
-   * @default 0
-   */
-  offset?: number | undefined
-}
+import { type SpringSource, SpringSourceSymbol, isSpringSource } from './spring-source.ts'
+import { invariant } from './util.ts'
 
 /**
- * What a spring can animate toward: a fixed number, another spring to
- * follow, or a spring plus a constant offset.
+ * What a spring can animate toward: a fixed number, or a `SpringSource`
+ * — another spring, or a value derived from one with `mapSpring` —
+ * whose live value the spring follows.
  */
-export type SpringTarget = number | Spring | SpringWithOffset
-
-function normalizeTarget(
-  target: SpringTarget | undefined,
-): { spring: Spring; offset: number } | null {
-  if (target instanceof Spring) return { spring: target, offset: 0 }
-  if (
-    typeof target === 'object' &&
-    target !== null &&
-    'spring' in target &&
-    target.spring instanceof Spring
-  ) {
-    return { spring: target.spring, offset: target.offset ?? 0 }
-  }
-  return null
-}
+export type SpringTarget = number | SpringSource
 
 // Shared so resting and disposed springs don't allocate a promise per read.
 const RESOLVED = Promise.resolve()
@@ -46,16 +23,17 @@ const RESOLVED = Promise.resolve()
  * https://github.com/tkofh/coily/blob/main/PRECISION.md for the
  * numerical contract.
  */
-export class Spring {
+export class Spring implements SpringSource {
+  /** Brands the spring as a `SpringSource`, so it can be followed. */
+  readonly [SpringSourceSymbol] = true as const
+
   #target: number
   #override: SpringConfig | null
   #resolved: SpringConfig
   readonly #motion: Motion
   readonly #motions: MotionSet
-  readonly #followers = new Set<Spring>()
 
-  #leader: Spring | null = null
-  #offset = 0
+  #leader: SpringSource | null = null
   #unsubLeader: (() => void) | null = null
 
   #settled: Promise<void> | null = null
@@ -71,17 +49,16 @@ export class Spring {
   }
 
   /**
-   * The value the spring is animating toward. While following another
-   * spring, reads return the leader's value plus the offset, as of the
-   * leader's last update.
+   * The value the spring is animating toward. While following a source,
+   * reads return the source's value as of its last update.
    *
    * Assignment accepts any `SpringTarget`:
    * - A number retargets the spring. The current value and momentum carry
    *   over, so mid-flight retargets stay smooth. Assigning a number while
    *   following also stops the following.
-   * - A `Spring` — or `{ spring, offset }` — makes this spring follow the
-   *   leader's live value. Followers without a config of their own adopt
-   *   the leader's.
+   * - A `SpringSource` — a `Spring`, or a `mapSpring` derivation of one —
+   *   makes this spring follow the source's live value. Followers without
+   *   a config of their own adopt the source's.
    *
    * Under reduced motion, retargets apply instantly.
    */
@@ -94,8 +71,8 @@ export class Spring {
       this.#unfollow()
       this.#setTarget(value)
     } else {
-      const normalized = normalizeTarget(value)!
-      this.#follow(normalized.spring, normalized.offset)
+      invariant(isSpringSource(value), 'Spring target must be a number or a SpringSource')
+      this.#follow(value)
     }
   }
 
@@ -191,7 +168,7 @@ export class Spring {
 
   set config(value: SpringConfig | null) {
     this.#override = value
-    this.#applyConfig(value ?? (this.#leader ? this.#leader.#resolved : SpringConfig.default))
+    this.#applyConfig(value ?? this.#leader?.config ?? SpringConfig.default)
   }
 
   /**
@@ -271,17 +248,11 @@ export class Spring {
     if (this.#unsubLeader) {
       this.#unsubLeader()
       this.#unsubLeader = null
-    }
-    if (this.#leader) {
-      this.#leader.#followers.delete(this)
       this.#leader = null
     }
 
-    for (const follower of this.#followers) {
-      follower.#unfollow()
-    }
-
     this.#motions.remove(this.#motion)
+    // Disposing the motion emits 'dispose', which detaches any followers.
     this.#motion.dispose()
   }
 
@@ -312,6 +283,15 @@ export class Spring {
     return this.#motion.onStop(callback)
   }
 
+  /**
+   * Subscribes to the resolved config changing — an assignment to
+   * `config`, or a cascade from the source while following without a
+   * config of this spring's own. Returns an unsubscribe function.
+   */
+  onConfigure(callback: () => void) {
+    return this.#motion.onConfigure(callback)
+  }
+
   /** Subscribes to `dispose`, which fires once. Returns an unsubscribe function. */
   onDispose(callback: () => void) {
     return this.#motion.onDispose(callback)
@@ -334,25 +314,32 @@ export class Spring {
     }
   }
 
-  #follow(leader: Spring, offset: number) {
-    if (this.#unsubLeader) {
-      this.#unsubLeader()
-      this.#leader!.#followers.delete(this)
-    }
-
-    this.#leader = leader
-    this.#offset = offset
-    leader.#followers.add(this)
+  #follow(source: SpringSource) {
+    this.#unsubLeader?.()
+    this.#leader = source
 
     if (this.#override === null) {
-      this.#applyConfig(leader.#resolved)
+      this.#applyConfig(source.config ?? SpringConfig.default)
     }
 
-    this.#unsubLeader = leader.onUpdate(() => {
-      this.#setTarget(this.#leader!.value + this.#offset)
+    const unsubUpdate = source.onUpdate(() => {
+      this.#setTarget(source.value)
     })
+    const unsubConfigure = source.onConfigure(() => {
+      if (this.#override === null) {
+        this.#applyConfig(source.config ?? SpringConfig.default)
+      }
+    })
+    const unsubDispose = source.onDispose(() => {
+      this.#unfollow()
+    })
+    this.#unsubLeader = () => {
+      unsubUpdate()
+      unsubConfigure()
+      unsubDispose()
+    }
 
-    this.#setTarget(leader.value + offset)
+    this.#setTarget(source.value)
   }
 
   #unfollow() {
@@ -360,9 +347,7 @@ export class Spring {
 
     this.#unsubLeader!()
     this.#unsubLeader = null
-    this.#leader.#followers.delete(this)
     this.#leader = null
-    this.#offset = 0
 
     if (this.#override === null) {
       // Adopt the inherited config as our own: unfollowing must not
@@ -375,15 +360,11 @@ export class Spring {
     if (this.#resolved === next) return
 
     this.#resolved = next
+    // configure() emits, which cascades the change to followers that
+    // haven't overridden their config.
     this.#motion.configure(next)
     if (!this.#motion.isResting) {
       this.#motions.add(this.#motion)
-    }
-
-    for (const follower of this.#followers) {
-      if (follower.#override === null) {
-        follower.#applyConfig(next)
-      }
     }
   }
 }
