@@ -77,7 +77,7 @@ describe('ChannelTree: scatter', () => {
       "Expected an object at 'position'",
     )
     expect(() => map.scatter({ position: { x: {} } }, acceptNumber, apply)).toThrow(
-      "Expected a number for channel 'position.x'",
+      "Expected a finite number for channel 'position.x'",
     )
     expect(() => map.scatter({ color: { 0: 1 } }, acceptNumber, apply)).toThrow(
       "Expected an array at 'color'",

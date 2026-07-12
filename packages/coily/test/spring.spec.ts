@@ -108,6 +108,45 @@ describe('Spring: input validation', () => {
       'Provide either dampingRatio or bounce, not both',
     )
   })
+
+  test('rejects non-finite options', () => {
+    expect(() => defineSpring({ tension: Number.POSITIVE_INFINITY, damping: 26 })).toThrow(
+      'Invalid tension: expected a finite number',
+    )
+    expect(() => defineSpring({ tension: 170, damping: Number.NaN })).toThrow(
+      'Invalid damping: expected a finite number',
+    )
+    expect(() =>
+      defineSpring({ duration: 500, dampingRatio: 1, displacement: Number.NaN }),
+    ).toThrow('Invalid displacement: expected a finite number')
+  })
+})
+
+describe('Spring: non-finite writes', () => {
+  test('creation and every write path reject non-finite numbers', () => {
+    const system = createSpringSystem()
+    expect(() => system.createSpring(Number.NaN)).toThrow('Spring value must be a finite number')
+
+    const spring = system.createSpring(0)
+    expect(() => {
+      spring.target = Number.NaN
+    }).toThrow('Spring target must be a finite number')
+    expect(() => {
+      spring.target = Number.POSITIVE_INFINITY
+    }).toThrow('Spring target must be a finite number')
+    expect(() => {
+      spring.value = Number.NaN
+    }).toThrow('Spring value must be a finite number')
+    expect(() => {
+      spring.velocity = Number.NEGATIVE_INFINITY
+    }).toThrow('Spring velocity must be a finite number')
+    expect(() => spring.jumpTo(Number.NaN)).toThrow('Spring value must be a finite number')
+  })
+
+  test('advance rejects a non-finite dt', () => {
+    const system = createSpringSystem()
+    expect(() => system.advance(Number.NaN)).toThrow('dt must be a finite number of milliseconds')
+  })
 })
 
 describe('Spring: default values', () => {

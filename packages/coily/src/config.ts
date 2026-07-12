@@ -208,6 +208,16 @@ export class SpringDefinition {
     const displacement = raw.displacement ?? 1
     const precision = raw.precision ?? 2
 
+    // Every provided option must be a finite number before its own range
+    // check: comparisons reject NaN on their own, but let infinities
+    // through to poison the derived parameters.
+    for (const key of Object.keys(raw)) {
+      const value = raw[key]
+      if (value !== undefined) {
+        invariant(Number.isFinite(value), () => `Invalid ${key}: expected a finite number`)
+      }
+    }
+
     // Validate individual values
     if (mass !== undefined) invariant(mass > 0, 'Mass must be greater than 0')
     if (tension !== undefined) invariant(tension > 0, 'Tension must be greater than 0')

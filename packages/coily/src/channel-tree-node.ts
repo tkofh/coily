@@ -14,9 +14,12 @@ export const BRANCH: unique symbol = Symbol('branch')
 /** A resolver's verdict at a node: a value covering the whole subtree, or `BRANCH` to descend deeper. */
 export type Coverage<V> = V | typeof BRANCH
 
-/** The standard scatter leaf guard: partial numeric shapes take only numbers at channels. */
+/** The standard scatter leaf guard: partial numeric shapes take only finite numbers at channels. */
 export function acceptNumber(input: unknown, path: string): number {
-  invariant(isNumber(input), `Expected a number for channel '${path}'`)
+  invariant(
+    isNumber(input) && Number.isFinite(input),
+    () => `Expected a finite number for channel '${path}'`,
+  )
   return input
 }
 
@@ -74,6 +77,10 @@ export abstract class ChannelTreeNode<L> {
     leaves: L[],
   ): ChannelTreeNode<L> {
     if (isNumber(value)) {
+      invariant(
+        Number.isFinite(value),
+        () => `Invalid value at '${path}': channel values must be finite`,
+      )
       const leaf = factory(value, path)
       leaves.push(leaf)
       return new LeafNode(leaf, path)

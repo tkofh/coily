@@ -256,6 +256,23 @@ describe('pathological listeners: thrown user code', () => {
   })
 })
 
+describe('pathological values', () => {
+  test('a source that produces a non-finite value throws at the retarget', () => {
+    const system = createSpringSystem()
+    const leader = system.createSpring(0, config)
+    const follower = system.createSpring(0)
+
+    follower.target = mapSpring(leader, (value) => (value > 50 ? Number.NaN : value))
+    leader.target = 100
+
+    expect(() => {
+      for (let i = 0; i < 600; i++) system.advance(FRAME)
+    }).toThrow('Spring target must be a finite number')
+
+    expect(Number.isFinite(follower.value)).toBe(true)
+  })
+})
+
 describe('pathological listeners: reentrant writes', () => {
   test('a follower can retarget itself from its own update listener', () => {
     const system = createSpringSystem()

@@ -2,24 +2,42 @@
 'coily': minor
 ---
 
-Follow offsets generalize into computed targets. `SpringWithOffset` and
-`CompositeSpringWithOffset` are gone; in their place, `SpringTarget` is now
-`number | SpringSource`, where `SpringSource` is the followable contract
-every `Spring` implements and `mapSpring` derives new sources from
-existing ones with any pure function of the value:
+Springs can follow live values, not just fixed numbers. `SpringTarget`
+is now `number | SpringSource`, where `SpringSource<T>` is an open
+contract (`T` defaults to `number`): every `Spring` is a source, every
+`CompositeSpring` is a source of its value shape, and any object
+honoring the contract — brand it with `SpringSourceSymbol` — can bridge
+a pointer position or scroll offset into the graph. `Spring` and
+`CompositeSpring` gained `onConfigure`, which subscribes to resolved
+config changes (coalesced per write batch or tick on composites).
+
+`mapSpring` derives new sources by a pure function of existing ones:
 
 ```ts
-// before                                          // after
-follower.target = { spring: leader, offset: 20 }   follower.target = mapSpring(leader, (v) => v + 20)
+// one spring: offsets, mirrors, clamps
+follower.target = mapSpring(leader, (v) => v + 20)
+
+// a shape of sources combines several springs
+distance.target = mapSpring({ x, y }, ({ x, y }) => Math.hypot(x, y), null)
+
+// a composite spring maps as a whole
+magnitude.target = mapSpring(point, ({ x, y }) => Math.hypot(x, y), null)
 ```
 
-Maps compose, and one source can lead many springs. Followers inherit
-config and detach on dispose through a map exactly as they would
-following the spring directly. The contract is open — implement it
-(brand with `SpringSourceSymbol`) to make any live value followable —
-and `Spring` gained `onConfigure`, which subscribes to resolved config
-changes.
+A single-source map passes the source's config through, or pins the one
+given as the optional third argument. Aggregates — shapes and
+composites — leave no single config to inherit, so there the argument
+is required: the config the derived source offers followers, or `null`
+to offer none. Followers inherit config and detach on dispose through a
+map exactly as if following the spring directly; a derived value is
+released with the first of its sources. Composition is flat — mapping a
+mapped source extends its pipeline instead of nesting it — so chains of
+any length read iteratively and subscribe at their roots.
 
-Object-level offset shapes had no replacement and no known use, so
-channel-wise following now takes the leader composite spring bare:
-`follower.target = leader`.
+Only scalar sources can be followed directly: assigning a composite to
+`Spring.target` throws, pointing at `mapSpring`.
+
+`SpringWithOffset` and `CompositeSpringWithOffset` are removed — a map
+is the general form of an offset. Object-level offset shapes had no
+replacement and no known use, so channel-wise following now takes the
+leader composite bare: `follower.target = leader`.

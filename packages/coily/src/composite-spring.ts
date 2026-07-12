@@ -122,10 +122,16 @@ const readVelocity = (spring: Spring) => spring.velocity
  * channel's path.
  */
 function acceptChannelTarget(input: unknown, path: string): number | SpringSource {
-  if (isNumber(input)) return input
+  if (isNumber(input)) {
+    invariant(
+      Number.isFinite(input),
+      () => `Invalid value at '${path}': expected a finite number or a scalar SpringSource`,
+    )
+    return input
+  }
   invariant(
     isSpringSource(input) && typeof input.value === 'number',
-    () => `Invalid value at '${path}': expected a number or a scalar SpringSource`,
+    () => `Invalid value at '${path}': expected a finite number or a scalar SpringSource`,
   )
   return input as SpringSource
 }
@@ -166,7 +172,8 @@ const RESOLVED = Promise.resolve()
  * directly.
  *
  * The shape is fixed at construction. Writes naming unknown channels
- * throw with the channel's path (`position.z`).
+ * throw with the channel's path (`position.z`), and so do non-finite
+ * channel values.
  */
 export class CompositeSpring<in out T extends object> implements SpringSource<ReadonlyShape<T>> {
   /** Brands the composite as a `SpringSource`, so `mapSpring` can read it. */

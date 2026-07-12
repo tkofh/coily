@@ -19,7 +19,10 @@ const RESOLVED = Promise.resolve()
  * motion. Create springs with `SpringSystem.createSpring`; the owning
  * system advances them, so a spring only moves while its system runs.
  *
- * Reads return the exact simulated state; nothing is rounded. See
+ * Reads return the exact simulated state; nothing is rounded. Numeric
+ * writes — `target`, `value`, `velocity`, `jumpTo` — require finite
+ * numbers: `NaN` or an infinity throws rather than poisoning the
+ * simulation. See
  * https://github.com/tkofh/coily/blob/main/PRECISION.md for the
  * numerical contract.
  */
@@ -41,6 +44,7 @@ export class Spring implements SpringSource {
   #disposed = false
 
   constructor(motions: MotionSet, value: number, config?: SpringDefinition) {
+    invariant(Number.isFinite(value), 'Spring value must be a finite number')
     this.#motions = motions
     this.#override = config ?? null
     this.#resolved = config ?? SpringDefinition.default
@@ -94,6 +98,7 @@ export class Spring implements SpringSource {
   }
 
   set value(value: number) {
+    invariant(Number.isFinite(value), 'Spring value must be a finite number')
     if (this.#motions.reduced) {
       if (value !== this.value) {
         this.jumpTo(value)
@@ -121,6 +126,7 @@ export class Spring implements SpringSource {
   }
 
   set velocity(value: number) {
+    invariant(Number.isFinite(value), 'Spring velocity must be a finite number')
     if (this.#motions.reduced) return
 
     this.#motions.add(this.#motion)
@@ -228,6 +234,7 @@ export class Spring implements SpringSource {
    * synchronously — `update`, plus `stop` if the spring was moving.
    */
   jumpTo(value: number) {
+    invariant(Number.isFinite(value), 'Spring value must be a finite number')
     this.#target = value
     this.#motion.finish()
   }
@@ -302,6 +309,9 @@ export class Spring implements SpringSource {
   }
 
   #setTarget(value: number) {
+    // Guards followed sources too: a map that produces NaN mid-flight
+    // throws here, at the moment of the poisoned retarget.
+    invariant(Number.isFinite(value), 'Spring target must be a finite number')
     if (value !== this.#target) {
       if (this.#motions.reduced) {
         this.jumpTo(value)

@@ -62,6 +62,14 @@ describe('CompositeSpring: creation', () => {
     ).toThrow("Invalid value at 'position.y'")
   })
 
+  test('throws on non-finite leaves with their path', () => {
+    const system = createSpringSystem()
+
+    expect(() => system.createSpring({ position: { x: Number.NaN, y: 0 } })).toThrow(
+      "Invalid value at 'position.x': channel values must be finite",
+    )
+  })
+
   test('throws on empty shapes and empty subtrees', () => {
     const system = createSpringSystem()
 
@@ -181,10 +189,22 @@ describe('CompositeSpring: partial targets', () => {
     }).toThrow("Expected an object at 'position'")
     expect(() => {
       spring.target = { position: { x: { deep: 1 } } } as never
-    }).toThrow("Invalid value at 'position.x': expected a number or a scalar SpringSource")
+    }).toThrow("Invalid value at 'position.x': expected a finite number or a scalar SpringSource")
     expect(() => {
       spring.value = { position: { x: { deep: 1 } } } as never
-    }).toThrow("Expected a number for channel 'position.x'")
+    }).toThrow("Expected a finite number for channel 'position.x'")
+  })
+
+  test('throws on non-finite channel writes with their path', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring({ position: { x: 0, y: 0 } }, config)
+
+    expect(() => {
+      spring.target = { position: { x: Number.NaN } }
+    }).toThrow("Invalid value at 'position.x': expected a finite number or a scalar SpringSource")
+    expect(() => {
+      spring.value = { position: { x: Number.POSITIVE_INFINITY } }
+    }).toThrow("Expected a finite number for channel 'position.x'")
   })
 })
 
@@ -590,11 +610,11 @@ describe('CompositeSpring: following', () => {
 
     expect(() => {
       follower.target = { position: { x: 'nope' } } as never
-    }).toThrow("Invalid value at 'position.x': expected a number or a scalar SpringSource")
+    }).toThrow("Invalid value at 'position.x': expected a finite number or a scalar SpringSource")
 
     expect(() => {
       follower.target = { position: { x: composite } } as never
-    }).toThrow("Invalid value at 'position.x': expected a number or a scalar SpringSource")
+    }).toThrow("Invalid value at 'position.x': expected a finite number or a scalar SpringSource")
   })
 })
 

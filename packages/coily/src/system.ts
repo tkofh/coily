@@ -84,6 +84,7 @@ class SpringSystemImpl implements SpringSystem {
   }
 
   advance(dt: number) {
+    invariant(Number.isFinite(dt), 'dt must be a finite number of milliseconds')
     this.#motion.tick(dt / 1000)
   }
 
