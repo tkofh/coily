@@ -9,5 +9,10 @@ export type {
   SpringObject,
   SpringObjectTarget,
 } from './spring-object.ts'
-export { type SpringConfig, type SpringState, defineSpring, type SpringOptions } from './config.ts'
+export {
+  type SpringDefinition,
+  type SpringState,
+  defineSpring,
+  type SpringDefinitionOptions,
+} from './config.ts'
 export type { TickerOptions } from './ticker.ts'

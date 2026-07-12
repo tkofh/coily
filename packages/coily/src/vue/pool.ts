@@ -1,5 +1,5 @@
 import { onScopeDispose } from 'vue'
-import type { SpringConfig } from '../config.ts'
+import type { SpringDefinition } from '../config.ts'
 import type { ConfigShape, Shape, SpringObject } from '../spring-object.ts'
 import type { Spring } from '../spring.ts'
 import { injectSpringSystem } from './reactive-spring.ts'
@@ -16,10 +16,10 @@ export interface SpringPool {
    * Creates a pooled spring at rest at `value`. Without `config`, the
    * default applies.
    */
-  createSpring(value: number, config?: SpringConfig): Spring
+  createSpring(value: number, config?: SpringDefinition): Spring
   /**
    * Creates a pooled composite spring over a numeric shape whose leaves
-   * are all numbers. `config` applies per channel: one `SpringConfig`
+   * are all numbers. `config` applies per channel: one `SpringDefinition`
    * for all, or a shape with configs at any level.
    */
   createSpring<T extends object>(value: T & Shape<T>, config?: ConfigShape<T>): SpringObject<T>
@@ -62,10 +62,10 @@ export function useSpringPool(): SpringPool {
   // can satisfy both, since SpringObject's type parameter is invariant.
   const createSpring = ((
     value: number | Record<string, number>,
-    config?: SpringConfig | ConfigShape<Record<string, number>>,
+    config?: SpringDefinition | ConfigShape<Record<string, number>>,
   ) =>
     typeof value === 'number'
-      ? adopt(system.createSpring(value, config as SpringConfig | undefined))
+      ? adopt(system.createSpring(value, config as SpringDefinition | undefined))
       : adopt(
           system.createSpring(value, config as ConfigShape<Record<string, number>> | undefined),
         )) as SpringPool['createSpring']

@@ -1,4 +1,4 @@
-import { SpringConfig } from './config.ts'
+import { SpringDefinition } from './config.ts'
 import { Emitter } from './emitter.ts'
 import { State } from './state.ts'
 import { CriticallyDampedSolver, OverdampedSolver, UnderdampedSolver } from './solver.ts'
@@ -14,7 +14,7 @@ export class Motion {
   /** Tick-pass marker written by `MotionSet` so a motion re-added mid-pass isn't ticked twice. */
   _pass = 0
 
-  #config: SpringConfig
+  #config: SpringDefinition
   readonly #state: State
 
   #underdampedSolver: UnderdampedSolver | null = null
@@ -32,7 +32,7 @@ export class Motion {
 
   readonly #emitter: Emitter
 
-  constructor(config: SpringConfig, position: number, velocity: number) {
+  constructor(config: SpringDefinition, position: number, velocity: number) {
     this.#config = config
     this.#state = new State(config, position, velocity)
     this.#emitter = new Emitter()
@@ -70,7 +70,7 @@ export class Motion {
     return this.#state.isResting
   }
 
-  configure(config: SpringConfig) {
+  configure(config: SpringDefinition) {
     this.#config = config
     this.#state.configure(config)
     this.#needsUpdate = true

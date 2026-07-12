@@ -1,4 +1,4 @@
-import type { SpringConfig } from './config.ts'
+import type { SpringDefinition } from './config.ts'
 import { MotionSet } from './motion-set.ts'
 import { Spring } from './spring.ts'
 import { type ConfigShape, type Shape, SpringObject } from './spring-object.ts'
@@ -55,14 +55,14 @@ class SpringSystemImpl implements SpringSystem {
     return this.#motion.reduced
   }
 
-  createSpring(value: number, config?: SpringConfig): Spring
+  createSpring(value: number, config?: SpringDefinition): Spring
   createSpring<T extends object>(value: T & Shape<T>, config?: ConfigShape<T>): SpringObject<T>
   createSpring(
     value: number | Record<string, number>,
-    config?: SpringConfig | ConfigShape<Record<string, number>>,
+    config?: SpringDefinition | ConfigShape<Record<string, number>>,
   ): Spring | SpringObject<Record<string, number>> {
     if (typeof value === 'number') {
-      return new Spring(this.#motion, value, config as SpringConfig | undefined)
+      return new Spring(this.#motion, value, config as SpringDefinition | undefined)
     }
     return new SpringObject(
       this.#motion,
@@ -123,13 +123,13 @@ export interface SpringSystem {
    * the default: critically damped, settling in about 500ms. To follow
    * another spring, assign it to the new spring's `target`.
    */
-  createSpring(value: number, config?: SpringConfig): Spring
+  createSpring(value: number, config?: SpringDefinition): Spring
   /**
    * Creates a composite spring over a numeric shape: a plain object or
    * array, nested arbitrarily, whose leaves are all numbers. Each leaf
    * becomes an independently sprung channel.
    *
-   * `config` applies per channel: a single `SpringConfig` for every
+   * `config` applies per channel: a single `SpringDefinition` for every
    * channel, or a shape mirroring the value with configs at any level.
    */
   createSpring<T extends object>(value: T & Shape<T>, config?: ConfigShape<T>): SpringObject<T>

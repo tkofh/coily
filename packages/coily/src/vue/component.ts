@@ -1,16 +1,16 @@
 import { type SlotsType, defineComponent, toRefs } from 'vue'
 import { useSpring } from './spring.ts'
-import type { SpringConfig, SpringOptions } from '../config.ts'
+import type { SpringDefinition, SpringDefinitionOptions } from '../config.ts'
 
 export interface SpringValueProps {
   /** The value to animate toward. Changing it retargets the spring, momentum intact. */
   target: number
   /**
-   * Spring config: a `SpringConfig` or any option shape `defineSpring`
+   * Spring config: a `SpringDefinition` or any option shape `defineSpring`
    * accepts. Changing it reconfigures the spring in place; omit it for
    * the default.
    */
-  config?: SpringOptions | SpringConfig
+  config?: SpringDefinitionOptions | SpringDefinition
 }
 
 /** `SpringValue` emits no events. */

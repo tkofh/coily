@@ -9,18 +9,20 @@ import {
   toValue,
   watchSyncEffect,
 } from 'vue'
-import { SpringConfig, type SpringOptions } from '../config.ts'
+import { SpringDefinition, type SpringDefinitionOptions } from '../config.ts'
 import type { SpringSystem } from '../system.ts'
 import { injectLocal } from './local.ts'
 import { SpringSystemKey } from './system.ts'
 
 /**
- * Options for a scalar `useSpring`: a `SpringConfig`, any option shape
+ * Options for a scalar `useSpring`: a `SpringDefinition`, any option shape
  * `defineSpring` accepts, or a ref/getter of either. Reactive options
  * reconfigure the spring in place when they change; `undefined` means
  * the default config.
  */
-export type UseSpringOptions = MaybeRefOrGetter<SpringOptions | SpringConfig | undefined>
+export type UseSpringOptions = MaybeRefOrGetter<
+  SpringDefinitionOptions | SpringDefinition | undefined
+>
 
 /** The spring surface the reactive wrapper needs — satisfied by both `Spring` and `SpringObject`. */
 interface SpringLike<V, W, C> {
@@ -92,11 +94,11 @@ export function injectSpringSystem(): SpringSystem {
 
 export function resolveSpringConfig(
   options: UseSpringOptions | undefined,
-): ComputedRef<SpringConfig | undefined> {
+): ComputedRef<SpringDefinition | undefined> {
   return computed(() => {
     const opts = toValue(options)
-    if (opts instanceof SpringConfig) return opts
-    return opts ? new SpringConfig(opts) : undefined
+    if (opts instanceof SpringDefinition) return opts
+    return opts ? new SpringDefinition(opts) : undefined
   })
 }
 

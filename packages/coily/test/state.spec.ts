@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'vitest'
-import { SpringConfig } from '../src/config.ts'
+import { SpringDefinition } from '../src/config.ts'
 import { State } from '../src/state.ts'
 
 /** ωₙ = √(tension/mass) = 1, so the resting envelope is simply |x| + |v|. */
 function makeConfig(precision: number) {
-  return new SpringConfig({ tension: 1, damping: 1, precision })
+  return new SpringDefinition({ tension: 1, damping: 1, precision })
 }
 
 describe('State', () => {
@@ -54,14 +54,14 @@ describe('State', () => {
 
     test('a stiff spring rests with velocity above the raw threshold', () => {
       // ωₙ = 10: v = 0.04 is only worth 0.004 of future travel
-      const stiff = new SpringConfig({ tension: 100, damping: 1, precision: 2 })
+      const stiff = new SpringDefinition({ tension: 100, damping: 1, precision: 2 })
       const state = new State(stiff, 0, 0.04)
       expect(state.isResting).toBe(true)
     })
 
     test('a soft spring keeps moving with velocity below the raw threshold', () => {
       // ωₙ = 0.1: v = 0.004 is worth 0.04 of future travel — 8× the threshold
-      const soft = new SpringConfig({ tension: 0.01, damping: 1, precision: 2 })
+      const soft = new SpringDefinition({ tension: 0.01, damping: 1, precision: 2 })
       const state = new State(soft, 0, 0.004)
       expect(state.isResting).toBe(false)
     })

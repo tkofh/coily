@@ -9,13 +9,13 @@
 import type {
   ReadonlyShape,
   Spring,
-  SpringConfig,
+  SpringDefinition,
   SpringObject,
   SpringSystem,
 } from '../src/index.ts'
 
 declare const system: SpringSystem
-declare const cfg: SpringConfig
+declare const cfg: SpringDefinition
 
 // ── Value shapes: everything numeric composes ───────────────────────
 
@@ -151,7 +151,7 @@ obj.config = { z: cfg }
 // @ts-expect-error a number is not a config
 obj.config = { opacity: 170 }
 
-// Configs are always `SpringConfig` instances, so a bare options object is
+// Configs are always `SpringDefinition` instances, so a bare options object is
 // rejected everywhere a config is expected.
 // @ts-expect-error bare options are not a config
 system.createSpring({ x: 0, y: 0 }, { tension: 170, damping: 26 })
@@ -159,7 +159,7 @@ system.createSpring({ x: 0, y: 0 }, { tension: 170, damping: 26 })
 system.createSpring({ x: 0, y: 0 }, { x: { tension: 170, damping: 26 } })
 
 // A channel named like a spring option is unremarkable — there is no
-// ambiguity to resolve, since a config is always a `SpringConfig`.
+// ambiguity to resolve, since a config is always a `SpringDefinition`.
 const collide = system.createSpring({ tension: 0, damping: 0 })
 collide.config = cfg
 collide.config = { tension: cfg, damping: cfg }

@@ -7,12 +7,12 @@
  * is self-validating: tsc fails if the line stops erroring.
  */
 import { type Ref, ref } from 'vue'
-import type { SpringConfig } from '../../src/index.ts'
+import type { SpringDefinition } from '../../src/index.ts'
 import { type SpringRef, useSpring } from '../../src/vue/spring.ts'
 import type { SpringObjectRef } from '../../src/vue/spring-object.ts'
 import { useSpringPool } from '../../src/vue/pool.ts'
 
-declare const cfg: SpringConfig
+declare const cfg: SpringDefinition
 
 // ── Record shapes create object springs ─────────────────────────────
 

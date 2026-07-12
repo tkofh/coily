@@ -1,22 +1,22 @@
-import type { SpringConfig } from './config.ts'
+import type { SpringDefinition } from './config.ts'
 
 /**
  * The mutable position/velocity pair a motion and its solvers share, in
  * displacement space: position 0 means at the target.
  */
 export class State {
-  #config: SpringConfig
+  #config: SpringDefinition
 
   #position: number
   #velocity: number
 
-  constructor(config: SpringConfig, position: number, velocity: number) {
+  constructor(config: SpringDefinition, position: number, velocity: number) {
     this.#config = config
     this.#position = position
     this.#velocity = velocity
   }
 
-  configure(config: SpringConfig) {
+  configure(config: SpringDefinition) {
     this.#config = config
   }
 

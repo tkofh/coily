@@ -1,4 +1,4 @@
-import { SpringConfig } from './config.ts'
+import { SpringDefinition } from './config.ts'
 import { Emitter } from './emitter.ts'
 import type { MotionSet } from './motion-set.ts'
 import {
@@ -59,16 +59,16 @@ export type ReadonlyShape<T> = T extends number
   : { readonly [K in keyof T]: ReadonlyShape<T[K]> }
 
 /**
- * Configuration for a spring object: a single `SpringConfig` applied to every
+ * Configuration for a spring object: a single `SpringDefinition` applied to every
  * channel, or an object mirroring the value shape with configs at any level.
  * A config at a subtree applies to every channel below it.
  * `null` reverts to the default config (or the leader's while following).
- * Configs are always `SpringConfig` instances (from `defineSpring`), so a
+ * Configs are always `SpringDefinition` instances (from `defineSpring`), so a
  * plain object is unambiguously a config shape and any non-config leaf it
  * reaches is an error.
  */
 export type ConfigShape<T> =
-  | SpringConfig
+  | SpringDefinition
   | null
   | (T extends number ? never : { readonly [K in keyof T]?: ConfigShape<T[K]> | undefined })
 
@@ -82,18 +82,18 @@ export type SpringObjectTarget<T extends object> = PartialShape<T> | SpringObjec
 // ── Config resolution ───────────────────────────────────────────────
 
 function invalidConfig(path: string): string {
-  return `Invalid config for ${describePath(path)}: expected a SpringConfig, null, or a config shape matching the value`
+  return `Invalid config for ${describePath(path)}: expected a SpringDefinition, null, or a config shape matching the value`
 }
 
 /**
- * Decides what a config node means: `null` and `SpringConfig` instances are
+ * Decides what a config node means: `null` and `SpringDefinition` instances are
  * configs covering the whole subtree, any other object or array is a config
  * shape to descend into (its structure is checked on the way down), and
  * anything else — a bare number, string, or options object — is invalid.
  */
-function resolveConfigNode(node: unknown, path: string): Coverage<SpringConfig | null> {
+function resolveConfigNode(node: unknown, path: string): Coverage<SpringDefinition | null> {
   if (node === null) return null
-  if (node instanceof SpringConfig) return node
+  if (node instanceof SpringDefinition) return node
   if (isRecordOrArray(node)) return BRANCH
   throw new Error(invalidConfig(path))
 }
@@ -116,7 +116,7 @@ const assignVelocity = (spring: Spring, value: number) => {
 const applyJump = (spring: Spring, value: number) => {
   spring.jumpTo(value)
 }
-const assignConfig = (spring: Spring, config: SpringConfig | null) => {
+const assignConfig = (spring: Spring, config: SpringDefinition | null) => {
   spring.config = config
 }
 const followChannel = (mine: Spring, theirs: Spring) => {
@@ -278,7 +278,7 @@ export class SpringObject<in out T extends object> {
 
   /**
    * The shared config when every channel resolves to the same
-   * `SpringConfig`, and `null` when they differ.
+   * `SpringDefinition`, and `null` when they differ.
    *
    * Assignment accepts a `ConfigShape`: one config for every channel,
    * `null` to revert every channel to the default (or to its leader
@@ -286,7 +286,7 @@ export class SpringObject<in out T extends object> {
    * configs at any level — a config at a subtree covers every channel
    * below it. Non-config leaves throw with their path.
    */
-  get config(): SpringConfig | null {
+  get config(): SpringDefinition | null {
     const channels = this.#map.leaves
     const first = channels[0]!.config
     for (let i = 1; i < channels.length; i++) {

@@ -1,4 +1,4 @@
-import { SpringConfig } from './config.ts'
+import { SpringDefinition } from './config.ts'
 import type { MotionSet } from './motion-set.ts'
 import { Motion } from './motion.ts'
 import { type SpringSource, SpringSourceSymbol, isSpringSource } from './spring-source.ts'
@@ -28,8 +28,8 @@ export class Spring implements SpringSource {
   readonly [SpringSourceSymbol] = true as const
 
   #target: number
-  #override: SpringConfig | null
-  #resolved: SpringConfig
+  #override: SpringDefinition | null
+  #resolved: SpringDefinition
   readonly #motion: Motion
   readonly #motions: MotionSet
 
@@ -40,10 +40,10 @@ export class Spring implements SpringSource {
   #resolveSettled: (() => void) | null = null
   #disposed = false
 
-  constructor(motions: MotionSet, value: number, config?: SpringConfig) {
+  constructor(motions: MotionSet, value: number, config?: SpringDefinition) {
     this.#motions = motions
     this.#override = config ?? null
-    this.#resolved = config ?? SpringConfig.default
+    this.#resolved = config ?? SpringDefinition.default
     this.#target = value
     this.#motion = new Motion(this.#resolved, 0, 0)
   }
@@ -124,9 +124,9 @@ export class Spring implements SpringSource {
   }
 
   /**
-   * The spring's resolved `SpringConfig`: its own if one was assigned,
+   * The spring's resolved `SpringDefinition`: its own if one was assigned,
    * otherwise the leader's while following, otherwise
-   * `SpringConfig.default`.
+   * `SpringDefinition.default`.
    *
    * Assigning a config reconfigures the spring in place — value and
    * velocity are preserved, so mid-flight reconfigures stay smooth.
@@ -166,9 +166,9 @@ export class Spring implements SpringSource {
     return this.#resolved.precision
   }
 
-  set config(value: SpringConfig | null) {
+  set config(value: SpringDefinition | null) {
     this.#override = value
-    this.#applyConfig(value ?? this.#leader?.config ?? SpringConfig.default)
+    this.#applyConfig(value ?? this.#leader?.config ?? SpringDefinition.default)
   }
 
   /**
@@ -319,7 +319,7 @@ export class Spring implements SpringSource {
     this.#leader = source
 
     if (this.#override === null) {
-      this.#applyConfig(source.config ?? SpringConfig.default)
+      this.#applyConfig(source.config ?? SpringDefinition.default)
     }
 
     const unsubUpdate = source.onUpdate(() => {
@@ -327,7 +327,7 @@ export class Spring implements SpringSource {
     })
     const unsubConfigure = source.onConfigure(() => {
       if (this.#override === null) {
-        this.#applyConfig(source.config ?? SpringConfig.default)
+        this.#applyConfig(source.config ?? SpringDefinition.default)
       }
     })
     const unsubDispose = source.onDispose(() => {
@@ -356,7 +356,7 @@ export class Spring implements SpringSource {
     }
   }
 
-  #applyConfig(next: SpringConfig) {
+  #applyConfig(next: SpringDefinition) {
     if (this.#resolved === next) return
 
     this.#resolved = next

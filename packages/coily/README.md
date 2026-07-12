@@ -59,7 +59,7 @@ Without a config, springs are critically damped with a ~500ms settle time.
 - `spring.value` — current value; writable to displace the spring
 - `spring.velocity` — current velocity; writable to fling
 - `spring.jumpTo(v)` — snap to a value with no animation
-- `spring.config` — assign a new `SpringConfig`, or `null` to revert to the default (or the leader's, if following)
+- `spring.config` — assign a new `SpringDefinition`, or `null` to revert to the default (or the leader's, if following)
 - `spring.isResting`, `spring.timeRemaining` — settle state and estimated ms until rest
 - `spring.settled` — a promise that resolves when the spring next comes to rest (immediately if already resting). Retargeting mid-flight extends the wait; disposing resolves it. `await spring.settled` to sequence animations
 - `spring.onUpdate(cb)` / `onStart(cb)` / `onStop(cb)` / `onDispose(cb)` — subscribe; each returns an unsubscribe function. `start` fires when the spring leaves rest, `stop` when it settles — the two always alternate, and retargeting mid-flight fires neither
@@ -101,13 +101,13 @@ The shape is fixed at creation, and unknown channels throw with their path (`pos
 
 Shapes are validated at compile time too (the `Shape` type — interfaces like your own `Vector2` work without index signatures): non-numeric, optional, or `undefined`-typed channels are rejected where they're declared.
 
-Configs apply per channel. Pass a single `SpringConfig` for every channel, or a shape mirroring the value with configs (or `null` to revert) at any level — a config at a subtree covers every channel below it:
+Configs apply per channel. Pass a single `SpringDefinition` for every channel, or a shape mirroring the value with configs (or `null` to revert) at any level — a config at a subtree covers every channel below it:
 
 ```ts
 spring.config = { position: stiff, opacity: defineSpring({ duration: 300, dampingRatio: 1 }) }
 ```
 
-Configs are `SpringConfig` instances — build them with `defineSpring`. Unlike the scalar `useSpring` above, config positions here don't accept bare option objects: a plain object is always a per-channel shape, so any non-config leaf it reaches throws with its path.
+Configs are `SpringDefinition` instances — build them with `defineSpring`. Unlike the scalar `useSpring` above, config positions here don't accept bare option objects: a plain object is always a per-channel shape, so any non-config leaf it reaches throws with its path.
 
 Spring objects chain channel-wise. Assign another spring object of the exact same shape, and a partial numeric target detaches only the channels it names:
 

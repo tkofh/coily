@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { SpringConfig, defineSpring } from '../src/config.ts'
+import { SpringDefinition, defineSpring } from '../src/config.ts'
 import { createSpringSystem } from '../src/system.ts'
 
 const config = defineSpring({ mass: 1, tension: 170, damping: 26 })
@@ -195,7 +195,7 @@ describe('SpringObject: config shapes', () => {
   test('rejects a bare options object as a single config', () => {
     const system = createSpringSystem()
 
-    // Configs must be `SpringConfig` instances (via `defineSpring`); a bare
+    // Configs must be `SpringDefinition` instances (via `defineSpring`); a bare
     // options object reads as a config shape, so its option keys are unknown
     // channels.
     expect(() =>
@@ -234,7 +234,7 @@ describe('SpringObject: config shapes', () => {
 
     spring.config = null
 
-    expect(spring.config).toBe(SpringConfig.default)
+    expect(spring.config).toBe(SpringDefinition.default)
   })
 
   test('a partial config shape leaves unmentioned channels alone', () => {

@@ -1,4 +1,4 @@
-import type { SpringConfig } from './config.ts'
+import type { SpringDefinition } from './config.ts'
 
 /**
  * Brands a value as a `SpringSource`. A registry symbol
@@ -24,7 +24,7 @@ export interface SpringSource {
   /** The current value, in value units. */
   readonly value: number
   /** The config followers without their own adopt. `null` means the default. */
-  readonly config: SpringConfig | null
+  readonly config: SpringDefinition | null
   /** Subscribes to value changes. Returns an unsubscribe function. */
   onUpdate(callback: () => void): () => void
   /** Subscribes to `config` changes. Returns an unsubscribe function. */

@@ -13,11 +13,11 @@ import {
 } from './reactive-spring.ts'
 
 /**
- * Options for an object `useSpring`: a `ConfigShape` — one `SpringConfig`
+ * Options for an object `useSpring`: a `ConfigShape` — one `SpringDefinition`
  * for every channel, `null`, or a shape with configs at any level — or a
  * ref/getter of one. Reactive options reconfigure channels in place.
  *
- * Unlike scalar options, config positions here take `SpringConfig`
+ * Unlike scalar options, config positions here take `SpringDefinition`
  * instances only (build them with `defineSpring`): a plain object is
  * always read as a per-channel shape.
  */

@@ -6,14 +6,17 @@ import { SpringSystemKey } from '../../src/vue/system.ts'
 import { useSpring, type SpringRef } from '../../src/vue/spring.ts'
 import type { MaybeRefOrGetter } from 'vue'
 
-interface SpringOptions {
+interface SpringDefinitionOptions {
   mass: number
   tension: number
   damping: number
   precision?: number
 }
 
-function mountSpring(target: MaybeRefOrGetter<number>, options?: MaybeRefOrGetter<SpringOptions>) {
+function mountSpring(
+  target: MaybeRefOrGetter<number>,
+  options?: MaybeRefOrGetter<SpringDefinitionOptions>,
+) {
   const system = createSpringSystem()
   let spring!: SpringRef
   const wrapper = mount(

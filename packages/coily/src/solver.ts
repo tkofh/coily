@@ -1,4 +1,4 @@
-import type { SpringConfig } from './config.ts'
+import type { SpringDefinition } from './config.ts'
 import type { State } from './state.ts'
 
 // Closed-form solutions of the damped spring equation, one class per
@@ -23,7 +23,7 @@ export class UnderdampedSolver {
     this.#state = state
   }
 
-  configure(config?: SpringConfig) {
+  configure(config?: SpringDefinition) {
     if (config) {
       this.#decayRate = config.dampingRatio * config.naturalFrequency
       this.#dampedFrequency = config.naturalFrequency * Math.sqrt(1 - config.dampingRatio ** 2)
@@ -65,7 +65,7 @@ export class CriticallyDampedSolver {
     this.#state = state
   }
 
-  configure(config?: SpringConfig) {
+  configure(config?: SpringDefinition) {
     if (config) {
       this.#naturalFrequency = config.naturalFrequency
     }
@@ -102,7 +102,7 @@ export class OverdampedSolver {
     this.#state = state
   }
 
-  configure(config?: SpringConfig) {
+  configure(config?: SpringDefinition) {
     if (config) {
       this.#decayRate = config.dampingRatio * config.naturalFrequency
       this.#dampedFrequency = config.naturalFrequency * Math.sqrt(config.dampingRatio ** 2 - 1)
