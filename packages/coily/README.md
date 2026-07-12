@@ -84,7 +84,17 @@ mirrored.target = mapSpring(leader, (v) => -v)
 
 Followers inherit the leader's config unless given their own. Assigning a number to `target` unfollows.
 
-A mapped value is a `SpringSource` — the interface every `Spring` implements and the contract `target` accepts. It's an open contract: any object honoring it (a pointer position, a scroll offset) can be followed directly.
+`mapSpring` also combines several springs: pass a shape — a plain object or array with springs at the leaves, nested arbitrarily — and a function of their values. Several springs leave no single config to inherit, so a third argument states what the derived value offers followers: a `SpringDefinition`, or `null` to offer none (followers fall back to their default). The same argument is optional on single-spring maps, replacing the pass-through:
+
+```ts
+const x = system.createSpring(0)
+const y = system.createSpring(0)
+
+const distance = system.createSpring(0)
+distance.target = mapSpring({ x, y }, ({ x, y }) => Math.hypot(x, y), null)
+```
+
+A mapped value is a `SpringSource` — the interface every `Spring` implements and the contract `target` accepts. It's an open contract: any object honoring it (a pointer position, a scroll offset) can be followed directly, and can sit at the leaves of a `mapSpring` shape.
 
 ### Objects
 

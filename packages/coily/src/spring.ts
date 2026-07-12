@@ -56,7 +56,7 @@ export class Spring implements SpringSource {
    * - A number retargets the spring. The current value and momentum carry
    *   over, so mid-flight retargets stay smooth. Assigning a number while
    *   following also stops the following.
-   * - A `SpringSource` — a `Spring`, or a `mapSpring` derivation of one —
+   * - A `SpringSource` — a `Spring`, or a value derived with `mapSpring` —
    *   makes this spring follow the source's live value. Followers without
    *   a config of their own adopt the source's.
    *

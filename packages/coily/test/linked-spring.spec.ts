@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest'
 import { createSpringSystem } from '../src/system.ts'
-import { defineSpring } from '../src/config.ts'
+import { SpringDefinition, defineSpring } from '../src/config.ts'
 import { type SpringSource, SpringSourceSymbol, mapSpring } from '../src/spring-source.ts'
 
 const config = defineSpring({ mass: 1, tension: 170, damping: 26 })
@@ -477,6 +477,176 @@ describe('Spring: following', () => {
       expect(() => {
         spring.target = {} as never
       }).toThrow('Spring target must be a number or a SpringSource')
+    })
+  })
+
+  describe('shape-mapped sources', () => {
+    test('combines several leaders into one value', () => {
+      const system = createSpringSystem()
+      const x = system.createSpring(3, config)
+      const y = system.createSpring(4, config)
+      const follower = system.createSpring(0)
+      follower.target = mapSpring({ x, y }, ({ x, y }) => Math.hypot(x, y), null)
+
+      expect(follower.target).toBe(5)
+
+      x.target = 6
+      y.target = 8
+      advanceUntilResting(system, follower)
+
+      expect(follower.value).toBeCloseTo(10, 0)
+    })
+
+    test('tracks whichever leader moves', () => {
+      const system = createSpringSystem()
+      const a = system.createSpring(0, config)
+      const b = system.createSpring(0, config)
+      const follower = system.createSpring(0)
+      follower.target = mapSpring({ a, b }, ({ a, b }) => a + b, null)
+
+      a.target = 100
+      advanceUntilResting(system, follower)
+      expect(follower.value).toBeCloseTo(100, 0)
+
+      b.target = 50
+      advanceUntilResting(system, follower)
+      expect(follower.value).toBeCloseTo(150, 0)
+    })
+
+    test('nested shapes read as their values', () => {
+      const system = createSpringSystem()
+      const x = system.createSpring(1, config)
+      const y = system.createSpring(2, config)
+      const scale = system.createSpring(10, config)
+      const follower = system.createSpring(0)
+      follower.target = mapSpring(
+        { point: { x, y }, scale },
+        ({ point, scale }) => (point.x + point.y) * scale,
+        null,
+      )
+
+      expect(follower.target).toBe(30)
+    })
+
+    test('arrays work as shapes', () => {
+      const system = createSpringSystem()
+      const a = system.createSpring(1, config)
+      const b = system.createSpring(2, config)
+      const follower = system.createSpring(0)
+      follower.target = mapSpring([a, b] as const, ([first, second]) => first + second, null)
+
+      expect(follower.target).toBe(3)
+    })
+
+    test('offers no config when given null', () => {
+      const system = createSpringSystem()
+      const a = system.createSpring(0, config)
+      const b = system.createSpring(0, config)
+      const follower = system.createSpring(0)
+      follower.target = mapSpring({ a, b }, ({ a, b }) => a + b, null)
+
+      expect(follower.config).toBe(SpringDefinition.default)
+    })
+
+    test('offers the given config to followers', () => {
+      const system = createSpringSystem()
+      const a = system.createSpring(0)
+      const b = system.createSpring(0)
+      const follower = system.createSpring(0)
+      follower.target = mapSpring({ a, b }, ({ a, b }) => a + b, config)
+
+      expect(follower.config).toBe(config)
+    })
+
+    test("a single-source map offers its given config instead of the leader's", () => {
+      const stiff = defineSpring({ mass: 1, tension: 300, damping: 30 })
+      const system = createSpringSystem()
+      const leader = system.createSpring(0, config)
+      const follower = system.createSpring(0)
+      follower.target = mapSpring(leader, (value) => value, stiff)
+
+      expect(follower.tension).toBe(300)
+
+      leader.config = defineSpring({ mass: 1, tension: 500, damping: 40 })
+      expect(follower.tension).toBe(300)
+    })
+
+    test('disposing any source detaches followers, which stay usable', () => {
+      const system = createSpringSystem()
+      const a = system.createSpring(10, config)
+      const b = system.createSpring(20, config)
+      const follower = system.createSpring(30)
+      follower.target = mapSpring({ a, b }, ({ a, b }) => a + b, null)
+
+      b.dispose()
+      a.target = 100
+      advanceUntilResting(system, a)
+      expect(follower.target).toBeCloseTo(30, 0)
+
+      follower.target = 50
+      advanceUntilResting(system, follower)
+      expect(follower.value).toBeCloseTo(50, 0)
+    })
+
+    test('a source at several leaves subscribes once', () => {
+      const system = createSpringSystem()
+      const listeners = new Set<() => void>()
+      let subscriptions = 0
+      let current = 5
+      const source: SpringSource = {
+        [SpringSourceSymbol]: true,
+        get value() {
+          return current
+        },
+        config: null,
+        onUpdate: (callback) => {
+          subscriptions++
+          listeners.add(callback)
+          return () => listeners.delete(callback)
+        },
+        onConfigure: () => () => {},
+        onDispose: () => () => {},
+      }
+
+      const follower = system.createSpring(0)
+      follower.target = mapSpring({ a: source, b: source }, ({ a, b }) => a + b, null)
+
+      expect(subscriptions).toBe(1)
+      expect(follower.target).toBe(10)
+
+      current = 40
+      for (const callback of listeners) callback()
+      advanceUntilResting(system, follower)
+
+      expect(follower.value).toBeCloseTo(80, 0)
+    })
+
+    test('a mapped source works as a leaf', () => {
+      const system = createSpringSystem()
+      const leader = system.createSpring(10, config)
+      const doubled = mapSpring(leader, (value) => value * 2)
+      const other = system.createSpring(1, config)
+      const follower = system.createSpring(0)
+      follower.target = mapSpring({ doubled, other }, ({ doubled, other }) => doubled + other, null)
+
+      expect(follower.target).toBe(21)
+    })
+
+    test('throws on an invalid leaf with its path', () => {
+      const system = createSpringSystem()
+      const spring = system.createSpring(0)
+
+      expect(() => {
+        mapSpring({ position: { x: spring, z: 5 } } as never, () => 0, null)
+      }).toThrow(
+        "Invalid value at 'position.z': expected a SpringSource or a nested shape of SpringSources",
+      )
+    })
+
+    test('throws on an empty shape', () => {
+      expect(() => {
+        mapSpring({} as never, () => 0, null)
+      }).toThrow('Invalid value at the root: a shape must contain at least one source')
     })
   })
 })
