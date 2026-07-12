@@ -435,4 +435,52 @@ describe('Ticker', () => {
       expect(source.pending).toBe(1)
     })
   })
+
+  describe('resilience', () => {
+    test('keeps scheduling after a listener throws mid-step', () => {
+      const source = new FrameSource().install()
+      const motions = new MotionSet()
+      const ticker = new Ticker(motions)
+      const motion = activeMotion()
+
+      let boom = true
+      motion.onUpdate(() => {
+        if (boom) {
+          boom = false
+          throw new Error('boom')
+        }
+      })
+      motions.add(motion)
+      ticker.start()
+
+      source.frame(16) // priming frame: baseline only
+      expect(() => source.frame(16)).toThrow('boom')
+
+      // The throw escaped the frame callback, but the next frame was
+      // already scheduled — the loop survives and keeps stepping.
+      expect(source.pending).toBe(1)
+      const before = ticker.frame
+      source.frame(16)
+      expect(ticker.frame).toBe(before + 1)
+    })
+
+    test('a listener stopping the ticker mid-step leaves no stray frame', () => {
+      const source = new FrameSource().install()
+      const motions = new MotionSet()
+      const ticker = new Ticker(motions)
+      const motion = activeMotion()
+
+      motion.onUpdate(() => {
+        ticker.stop()
+      })
+      motions.add(motion)
+      ticker.start()
+
+      source.frame(16)
+      source.frame(16) // steps once; the listener stops the ticker
+
+      expect(ticker.stopped).toBe(true)
+      expect(source.pending).toBe(0)
+    })
+  })
 })

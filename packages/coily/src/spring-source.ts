@@ -88,6 +88,36 @@ function emptyShape(path: string): string {
   return `Invalid value at ${describePath(path)}: a shape must contain at least one source`
 }
 
+/** A mapped source's flattened recipe: read the base, run the pipeline. */
+interface MappedRecipe {
+  /** Deduplicated subscription targets — the chain's true roots. */
+  readonly sources: readonly SpringSource<unknown>[]
+  /** Reads the value the pipeline starts from. */
+  readonly read: () => unknown
+  /** The composed maps, applied in order. */
+  readonly fns: readonly ((value: unknown) => unknown)[]
+  /**
+   * The statically offered config. `null` means the config was never
+   * given anywhere in the chain: it passes through from the root, which
+   * the pinned invariant guarantees is a single source.
+   */
+  readonly pinned: { readonly value: SpringDefinition | null } | null
+}
+
+// Mapped sources flatten when composed: the registry lets `mapSpring`
+// recognize its own results and extend their recipe instead of nesting
+// getters, so reads stay iterative and chain depth never approaches the
+// call stack.
+const RECIPES = new WeakMap<object, MappedRecipe>()
+
+function applyFns(fns: readonly ((value: unknown) => unknown)[], value: unknown): unknown {
+  let result = value
+  for (const fn of fns) {
+    result = fn(result)
+  }
+  return result
+}
+
 /**
  * Validates one node of a source shape and compiles its reader,
  * collecting the leaves along the way. Structure is fixed at creation,
@@ -95,6 +125,11 @@ function emptyShape(path: string): string {
  */
 function compileNode(node: unknown, path: string, leaves: SpringSource<unknown>[]): () => unknown {
   if (isSpringSource(node)) {
+    const recipe = RECIPES.get(node)
+    if (recipe) {
+      leaves.push(...recipe.sources)
+      return () => applyFns(recipe.fns, recipe.read())
+    }
     leaves.push(node)
     return () => node.value
   }
@@ -146,7 +181,9 @@ function compileNode(node: unknown, path: string, leaves: SpringSource<unknown>[
  * subscriptions and needs no disposal, and reads compute `map(source.value)`
  * on the fly. `map` must be pure — it runs on every read and every
  * source update, and nothing re-evaluates it when anything other than
- * `source` changes.
+ * `source` changes. Composition is flat: mapping a mapped source
+ * extends its pipeline rather than wrapping it, so chains cost one
+ * function call per map however long they grow.
  */
 export function mapSpring(
   source: SpringSource,
@@ -190,59 +227,67 @@ export function mapSpring(
   config?: SpringDefinition | null,
 ): SpringSource {
   const compute = map as (value: unknown) => number
-  const offered = config ?? null
 
+  let recipe: MappedRecipe
   if (isSpringSource(source)) {
-    const pinned = config !== undefined
-    return Object.freeze({
-      [SpringSourceSymbol]: true as const,
-      get value() {
-        return compute(source.value)
-      },
-      get config() {
-        return pinned ? offered : source.config
-      },
-      onUpdate: (callback: () => void) => source.onUpdate(callback),
-      onConfigure: pinned ? neverConfigure : (callback: () => void) => source.onConfigure(callback),
-      onDispose: (callback: () => void) => source.onDispose(callback),
-    })
+    const flat = RECIPES.get(source)
+    const pinned = config !== undefined ? { value: config ?? null } : (flat?.pinned ?? null)
+    recipe = flat
+      ? { sources: flat.sources, read: flat.read, fns: [...flat.fns, compute], pinned }
+      : { sources: [source], read: () => source.value, fns: [compute], pinned }
+  } else {
+    const leaves: SpringSource<unknown>[] = []
+    const read = compileNode(source, '', leaves)
+    recipe = {
+      // The same source can sit at several leaves; subscribe to it once.
+      sources: [...new Set(leaves)],
+      read,
+      fns: [compute],
+      pinned: { value: config ?? null },
+    }
   }
 
-  const leaves: SpringSource<unknown>[] = []
-  const readValues = compileNode(source, '', leaves)
-  // The same source can sit at several leaves; subscribe to it once.
-  const sources = [...new Set(leaves)]
+  const { sources, read, fns, pinned } = recipe
+  // Passthrough configs only arise on single-source chains, so `single`
+  // is always set where the members below rely on it.
+  const single = sources.length === 1 ? sources[0]! : null
 
-  return Object.freeze({
+  const mapped: SpringSource = Object.freeze({
     [SpringSourceSymbol]: true as const,
     get value() {
-      return compute(readValues())
+      return applyFns(fns, read()) as number
     },
     get config() {
-      return offered
+      return pinned ? pinned.value : single!.config
     },
-    onUpdate: (callback: () => void) => {
-      const unsubscribes = sources.map((leaf) => leaf.onUpdate(callback))
-      return () => {
-        for (const unsubscribe of unsubscribes) unsubscribe()
-      }
-    },
-    onConfigure: neverConfigure,
-    onDispose: (callback: () => void) => {
-      // The first source to dispose releases the derived value: fire
-      // once, then drop every subscription.
-      let fired = false
-      const unsubscribes = sources.map((leaf) =>
-        leaf.onDispose(() => {
-          if (fired) return
-          fired = true
-          for (const unsubscribe of unsubscribes) unsubscribe()
-          callback()
-        }),
-      )
-      return () => {
-        for (const unsubscribe of unsubscribes) unsubscribe()
-      }
-    },
+    onUpdate: single
+      ? (callback: () => void) => single.onUpdate(callback)
+      : (callback: () => void) => {
+          const unsubscribes = sources.map((leaf) => leaf.onUpdate(callback))
+          return () => {
+            for (const unsubscribe of unsubscribes) unsubscribe()
+          }
+        },
+    onConfigure: pinned ? neverConfigure : (callback: () => void) => single!.onConfigure(callback),
+    onDispose: single
+      ? (callback: () => void) => single.onDispose(callback)
+      : (callback: () => void) => {
+          // The first source to dispose releases the derived value: fire
+          // once, then drop every subscription.
+          let fired = false
+          const unsubscribes = sources.map((leaf) =>
+            leaf.onDispose(() => {
+              if (fired) return
+              fired = true
+              for (const unsubscribe of unsubscribes) unsubscribe()
+              callback()
+            }),
+          )
+          return () => {
+            for (const unsubscribe of unsubscribes) unsubscribe()
+          }
+        },
   })
+  RECIPES.set(mapped, recipe)
+  return mapped
 }

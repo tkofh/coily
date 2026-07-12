@@ -98,6 +98,8 @@ const magnitude = system.createSpring(mapSpring(point, ({ x, y }) => Math.hypot(
 
 A mapped value is a `SpringSource` — the contract `target` accepts and every `Spring` implements. A `CompositeSpring` is a source _of its shape_: `mapSpring` reads it, alone or at the leaves of a shape, but only scalar sources can be followed directly. The contract is open: any object honoring it (a pointer position, a scroll offset) can be followed or mapped.
 
+Follow graphs may contain cycles — retargets never re-emit, so nothing loops within a frame. Mutual followers converge to a shared value; a cycle whose maps expand (`(v) => v + 10` in both directions) chases forever and never rests, keeping the system awake until you break the cycle.
+
 ### Composites
 
 `createSpring` also takes any numeric shape — a plain object or array whose leaves are all numbers, nested arbitrarily. Each leaf becomes an independent channel behind one composite API — a `CompositeSpring`:
