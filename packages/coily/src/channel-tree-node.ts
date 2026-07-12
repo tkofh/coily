@@ -14,6 +14,12 @@ export const BRANCH: unique symbol = Symbol('branch')
 /** A resolver's verdict at a node: a value covering the whole subtree, or `BRANCH` to descend deeper. */
 export type Coverage<V> = V | typeof BRANCH
 
+/** The standard scatter leaf guard: partial numeric shapes take only numbers at channels. */
+export function acceptNumber(input: unknown, path: string): number {
+  invariant(isNumber(input), `Expected a number for channel '${path}'`)
+  return input
+}
+
 type Read<L> = (leaf: L) => number
 
 /** One mirror position a view rewrites on refresh: `carrier[key] = read(leaf)`. */
@@ -87,8 +93,15 @@ export abstract class ChannelTreeNode<L> {
     key: string | number,
   ): void
 
-  /** Scatters a partial numeric shape into the leaves the input mentions. */
-  abstract scatter(input: unknown, apply: (leaf: L, value: number) => void): void
+  /**
+   * Scatters a partial shape into the leaves the input mentions; `accept`
+   * validates (and narrows) the value named at each leaf.
+   */
+  abstract scatter<V>(
+    input: unknown,
+    accept: (input: unknown, path: string) => V,
+    apply: (leaf: L, value: V) => void,
+  ): void
 
   /** Pairs this subtree's leaves with a structurally identical one's. */
   abstract zip(theirs: ChannelTreeNode<L>, fn: (mine: L, theirs: L) => void): void
@@ -131,9 +144,12 @@ export class LeafNode<L> extends ChannelTreeNode<L> {
     slots.push({ leaf: this.leaf, key, carrier })
   }
 
-  scatter(input: unknown, apply: (leaf: L, value: number) => void): void {
-    invariant(isNumber(input), `Expected a number for channel '${this.path}'`)
-    apply(this.leaf, input)
+  scatter<V>(
+    input: unknown,
+    accept: (input: unknown, path: string) => V,
+    apply: (leaf: L, value: V) => void,
+  ): void {
+    apply(this.leaf, accept(input, this.path))
   }
 
   zip(theirs: ChannelTreeNode<L>, fn: (mine: L, theirs: L) => void): void {
@@ -181,7 +197,11 @@ export class ListNode<L> extends ChannelTreeNode<L> {
     }
   }
 
-  scatter(input: unknown, apply: (leaf: L, value: number) => void): void {
+  scatter<V>(
+    input: unknown,
+    accept: (input: unknown, path: string) => V,
+    apply: (leaf: L, value: V) => void,
+  ): void {
     invariant(isArray(input), () => `Expected an array at ${describePath(this.path)}`)
     invariant(
       input.length <= this.children.length,
@@ -189,7 +209,7 @@ export class ListNode<L> extends ChannelTreeNode<L> {
     )
     for (let i = 0; i < input.length; i++) {
       if (input[i] === undefined) continue
-      this.children[i]!.scatter(input[i], apply)
+      this.children[i]!.scatter(input[i], accept, apply)
     }
   }
 
@@ -251,14 +271,18 @@ export class RecordNode<L> extends ChannelTreeNode<L> {
     }
   }
 
-  scatter(input: unknown, apply: (leaf: L, value: number) => void): void {
+  scatter<V>(
+    input: unknown,
+    accept: (input: unknown, path: string) => V,
+    apply: (leaf: L, value: V) => void,
+  ): void {
     invariant(isRecord(input), () => `Expected an object at ${describePath(this.path)}`)
     for (const key of Object.keys(input)) {
       const value = input[key]
       if (value === undefined) continue
       const child = this.children.get(key)
       invariant(child !== undefined, () => `Unknown channel '${joinPath(this.path, key)}'`)
-      child.scatter(value, apply)
+      child.scatter(value, accept, apply)
     }
   }
 

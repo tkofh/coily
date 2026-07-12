@@ -121,10 +121,16 @@ spring.config = { position: stiff, opacity: defineSpring({ duration: 300, dampin
 
 Configs are `SpringDefinition` instances — build them with `defineSpring`. Unlike the scalar `useSpring` above, config positions here don't accept bare option objects: a plain object is always a per-channel shape, so any non-config leaf it reaches throws with its path.
 
-Composite springs chain channel-wise. Assign another composite spring of the exact same shape, and a partial numeric target detaches only the channels it names:
+Composite springs chain channel-wise. Assign another composite spring of the exact same shape to follow it whole — or name channels individually: each channel of a partial target takes a number or a scalar `SpringSource`, and while following, a partial target detaches only the channels it names:
 
 ```ts
 follower.target = leader
+
+// or mix numbers and live sources per channel
+follower.target = {
+  opacity: 0.5,
+  position: { x: mapSpring(leader, ({ position }) => -position.x, null) },
+}
 ```
 
 ## Reduced motion

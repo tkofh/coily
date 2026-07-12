@@ -1,7 +1,7 @@
 import { type Coverage, ChannelTreeNode, ChannelView } from './channel-tree-node.ts'
 import { invariant, isRecordOrArray } from './util.ts'
 
-export { BRANCH, ChannelView, describePath } from './channel-tree-node.ts'
+export { BRANCH, ChannelView, acceptNumber, describePath } from './channel-tree-node.ts'
 export type { Coverage } from './channel-tree-node.ts'
 
 /**
@@ -39,12 +39,17 @@ export class ChannelTree<L> {
   }
 
   /**
-   * Scatters a partial numeric shape: `apply` runs for each channel the input
-   * mentions, the rest are untouched. Unknown channels and structure
-   * mismatches throw; `undefined` entries (and array holes) are skipped.
+   * Scatters a partial shape: `accept` validates (and narrows) the value at
+   * each channel the input mentions, `apply` runs per accepted channel, and
+   * the rest are untouched. Unknown channels and structure mismatches throw;
+   * `undefined` entries (and array holes) are skipped.
    */
-  scatter(input: unknown, apply: (leaf: L, value: number) => void): void {
-    this.#root.scatter(input, apply)
+  scatter<V>(
+    input: unknown,
+    accept: (input: unknown, path: string) => V,
+    apply: (leaf: L, value: V) => void,
+  ): void {
+    this.#root.scatter(input, accept, apply)
   }
 
   /**

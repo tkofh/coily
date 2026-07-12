@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from 'vitest'
 import { SpringDefinition, defineSpring } from '../src/config.ts'
+import { type SpringSource, SpringSourceSymbol, mapSpring } from '../src/spring-source.ts'
 import { createSpringSystem } from '../src/system.ts'
 
 const config = defineSpring({ mass: 1, tension: 170, damping: 26 })
@@ -180,6 +181,9 @@ describe('CompositeSpring: partial targets', () => {
     }).toThrow("Expected an object at 'position'")
     expect(() => {
       spring.target = { position: { x: { deep: 1 } } } as never
+    }).toThrow("Invalid value at 'position.x': expected a number or a scalar SpringSource")
+    expect(() => {
+      spring.value = { position: { x: { deep: 1 } } } as never
     }).toThrow("Expected a number for channel 'position.x'")
   })
 })
@@ -491,6 +495,106 @@ describe('CompositeSpring: following', () => {
     expect(() => {
       a.target = b as never
     }).toThrow('Shape mismatch')
+  })
+
+  test('a target shape can mix numbers and sources per channel', () => {
+    const system = createSpringSystem()
+    const leader = system.createSpring(0, config)
+    const follower = system.createSpring({ x: 0, y: 0 }, config)
+
+    follower.target = { x: 25, y: leader }
+    leader.target = 100
+
+    for (let i = 0; i < 600 && !follower.isResting; i++) system.advance(FRAME)
+
+    expect(follower.value.x).toBeCloseTo(25, 0)
+    expect(follower.value.y).toBeCloseTo(100, 0)
+  })
+
+  test('a channel can follow a value derived from another composite', () => {
+    const system = createSpringSystem()
+    const point = system.createSpring({ x: 3, y: 4 }, config)
+    const follower = system.createSpring({ magnitude: 0, tag: 1 }, config)
+
+    follower.target = { magnitude: mapSpring(point, ({ x, y }) => Math.hypot(x, y), null) }
+
+    for (let i = 0; i < 600 && !follower.isResting; i++) system.advance(FRAME)
+
+    expect(follower.value.magnitude).toBeCloseTo(5, 0)
+    expect(follower.value.tag).toBe(1)
+  })
+
+  test('a channel adopts a followed source config without its own', () => {
+    const system = createSpringSystem()
+    const leader = system.createSpring(0, config)
+    const follower = system.createSpring({ x: 0 })
+
+    follower.target = { x: leader }
+
+    expect(follower.config).toBe(config)
+  })
+
+  test('a source target detaches only the channels it names', () => {
+    const system = createSpringSystem()
+    const leader = system.createSpring({ x: 0, y: 0 }, config)
+    const solo = system.createSpring(0, config)
+    const follower = system.createSpring({ x: 0, y: 0 })
+    follower.target = leader
+
+    follower.target = { x: solo }
+    leader.target = { x: 100, y: 100 }
+    solo.target = -50
+
+    for (let i = 0; i < 600; i++) {
+      system.advance(FRAME)
+      if (follower.isResting) break
+    }
+
+    expect(follower.value.x).toBeCloseTo(-50, 0)
+    expect(follower.value.y).toBeCloseTo(100, 0)
+  })
+
+  test('any SpringSource can sit at a channel', () => {
+    const system = createSpringSystem()
+    const listeners = new Set<() => void>()
+    let current = 5
+    const source: SpringSource = {
+      [SpringSourceSymbol]: true,
+      get value() {
+        return current
+      },
+      config: null,
+      onUpdate: (callback) => {
+        listeners.add(callback)
+        return () => listeners.delete(callback)
+      },
+      onConfigure: () => () => {},
+      onDispose: () => () => {},
+    }
+    const follower = system.createSpring({ x: 0 }, config)
+
+    follower.target = { x: source }
+    expect(follower.target.x).toBe(5)
+
+    current = 80
+    for (const callback of listeners) callback()
+    for (let i = 0; i < 600 && !follower.isResting; i++) system.advance(FRAME)
+
+    expect(follower.value.x).toBeCloseTo(80, 0)
+  })
+
+  test('invalid channel targets throw with their path', () => {
+    const system = createSpringSystem()
+    const composite = system.createSpring({ x: 0, y: 0 })
+    const follower = system.createSpring({ position: { x: 0, y: 0 } })
+
+    expect(() => {
+      follower.target = { position: { x: 'nope' } } as never
+    }).toThrow("Invalid value at 'position.x': expected a number or a scalar SpringSource")
+
+    expect(() => {
+      follower.target = { position: { x: composite } } as never
+    }).toThrow("Invalid value at 'position.x': expected a number or a scalar SpringSource")
   })
 })
 

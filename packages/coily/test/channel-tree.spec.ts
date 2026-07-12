@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { BRANCH, ChannelTree, type Coverage } from '../src/channel-tree.ts'
+import { BRANCH, ChannelTree, type Coverage, acceptNumber } from '../src/channel-tree.ts'
 
 interface Leaf {
   path: string
@@ -53,8 +53,10 @@ describe('ChannelTree: scatter', () => {
     const map = createMap({ position: { x: 0, y: 0 }, color: [0, 0, 0] })
     const seen: [string, number][] = []
 
-    map.scatter({ position: { x: 5, y: undefined }, color: [undefined, 6] }, (leaf, value) =>
-      seen.push([leaf.path, value]),
+    map.scatter(
+      { position: { x: 5, y: undefined }, color: [undefined, 6] },
+      acceptNumber,
+      (leaf, value) => seen.push([leaf.path, value]),
     )
 
     expect(seen).toEqual([
@@ -67,13 +69,35 @@ describe('ChannelTree: scatter', () => {
     const map = createMap({ position: { x: 0 }, color: [0] })
     const apply = vi.fn()
 
-    expect(() => map.scatter({ z: 1 }, apply)).toThrow("Unknown channel 'z'")
-    expect(() => map.scatter({ color: [1, 2] }, apply)).toThrow("Unknown channel 'color.1'")
-    expect(() => map.scatter({ position: 1 }, apply)).toThrow("Expected an object at 'position'")
-    expect(() => map.scatter({ position: { x: {} } }, apply)).toThrow(
+    expect(() => map.scatter({ z: 1 }, acceptNumber, apply)).toThrow("Unknown channel 'z'")
+    expect(() => map.scatter({ color: [1, 2] }, acceptNumber, apply)).toThrow(
+      "Unknown channel 'color.1'",
+    )
+    expect(() => map.scatter({ position: 1 }, acceptNumber, apply)).toThrow(
+      "Expected an object at 'position'",
+    )
+    expect(() => map.scatter({ position: { x: {} } }, acceptNumber, apply)).toThrow(
       "Expected a number for channel 'position.x'",
     )
-    expect(() => map.scatter({ color: { 0: 1 } }, apply)).toThrow("Expected an array at 'color'")
+    expect(() => map.scatter({ color: { 0: 1 } }, acceptNumber, apply)).toThrow(
+      "Expected an array at 'color'",
+    )
+  })
+
+  test('accept narrows leaf values for the caller', () => {
+    const map = createMap({ x: 0, label: 0 })
+    const seen: [string, string][] = []
+
+    map.scatter(
+      { x: 'wide', label: 'ok' },
+      (input, path) => `${String(input)}@${path}`,
+      (leaf, value) => seen.push([leaf.path, value]),
+    )
+
+    expect(seen).toEqual([
+      ['x', 'wide@x'],
+      ['label', 'ok@label'],
+    ])
   })
 })
 

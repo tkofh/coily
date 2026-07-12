@@ -13,6 +13,7 @@ import type {
   CompositeSpring,
   SpringSystem,
 } from '../src/index.ts'
+import { mapSpring } from '../src/index.ts'
 
 declare const system: SpringSystem
 declare const cfg: SpringDefinition
@@ -178,3 +179,22 @@ const composite: CompositeSpring<{ target: number; value: number }> = system.cre
 })
 void scalar
 void composite
+
+// ── Mixed targets: channels take numbers or scalar sources ──────────
+
+declare const nested: CompositeSpring<{ position: Vector2; opacity: number }>
+declare const scalarLeader: Spring
+
+nested.target = { opacity: scalarLeader }
+nested.target = { position: { x: 5, y: scalarLeader } }
+nested.target = { opacity: mapSpring(scalarLeader, (v) => -v) }
+nested.target = { opacity: mapSpring(nested, ({ position }) => position.x, null) }
+
+declare const point: CompositeSpring<Vector2>
+// @ts-expect-error a composite is not a scalar source; map it first
+nested.target = { opacity: point }
+// @ts-expect-error a source targets a single channel, not a branch
+nested.target = { position: scalarLeader }
+// value writes stay numeric — sources are targets, not displacements
+// @ts-expect-error a source is not a value
+nested.value = { opacity: scalarLeader }

@@ -73,7 +73,8 @@ mapSpring({ pos: composite, t: a }, ({ pos, t }) => pos.x * t, null)
 
 declare const p1: CompositeSpring<{ x: number; y: number }>
 declare const p2: CompositeSpring<{ x: number; y: number }>
-mapSpring([p1, p2] as const, ([from, to]) => (to.y - from.y) / (to.x - from.x), null)
+// `const T` infers bare array literals as tuples — no `as const` needed
+mapSpring([p1, p2], ([from, to]) => (to.y - from.y) / (to.x - from.x), null)
 
 // @ts-expect-error a composite map must state the config it offers
 mapSpring(composite, ({ x, y }) => x + y)

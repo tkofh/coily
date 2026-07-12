@@ -6,11 +6,12 @@ import {
   ChannelTree,
   type ChannelView,
   type Coverage,
+  acceptNumber,
   describePath,
 } from './channel-tree.ts'
 import { Spring } from './spring.ts'
-import { type SpringSource, SpringSourceSymbol } from './spring-source.ts'
-import { invariant, isRecordOrArray } from './util.ts'
+import { type SpringSource, SpringSourceSymbol, isSpringSource } from './spring-source.ts'
+import { invariant, isNumber, isRecordOrArray } from './util.ts'
 
 /**
  * Compile-time validation of a value shape: every channel must be a `number`,
@@ -74,11 +75,21 @@ export type ConfigShape<T> =
   | (T extends number ? never : { readonly [K in keyof T]?: ConfigShape<T[K]> | undefined })
 
 /**
- * What a composite spring can animate toward: a partial shape of numbers,
- * or another composite spring of the same shape to follow channel by
- * channel.
+ * A partial target shape: the same nesting as the value with any subset
+ * of the channels present, each taking a number to animate toward or a
+ * scalar `SpringSource` to follow. Absent (or `undefined`) channels are
+ * left alone.
  */
-export type CompositeSpringTarget<T extends object> = PartialShape<T> | CompositeSpring<T>
+export type TargetShape<T> = T extends number
+  ? number | SpringSource
+  : { readonly [K in keyof T]?: TargetShape<T[K]> | undefined }
+
+/**
+ * What a composite spring can animate toward: a partial shape mixing
+ * numbers and scalar `SpringSource`s per channel, or another composite
+ * spring of the same shape to follow channel by channel.
+ */
+export type CompositeSpringTarget<T extends object> = TargetShape<T> | CompositeSpring<T>
 
 // ── Config resolution ───────────────────────────────────────────────
 
@@ -105,7 +116,21 @@ const readTarget = (spring: Spring) => spring.target
 const readValue = (spring: Spring) => spring.value
 const readVelocity = (spring: Spring) => spring.velocity
 
-const assignTarget = (spring: Spring, value: number) => {
+/**
+ * The target scatter's leaf guard: a channel animates toward a number,
+ * or follows a scalar source. Checked here so the error carries the
+ * channel's path.
+ */
+function acceptChannelTarget(input: unknown, path: string): number | SpringSource {
+  if (isNumber(input)) return input
+  invariant(
+    isSpringSource(input) && typeof input.value === 'number',
+    () => `Invalid value at '${path}': expected a number or a scalar SpringSource`,
+  )
+  return input as SpringSource
+}
+
+const assignTarget = (spring: Spring, value: number | SpringSource) => {
   spring.target = value
 }
 const assignValue = (spring: Spring, value: number) => {
@@ -232,12 +257,14 @@ export class CompositeSpring<in out T extends object> implements SpringSource<Re
    * frames.
    *
    * Assignment accepts a `CompositeSpringTarget`:
-   * - A partial shape of numbers retargets the channels it names and
-   *   leaves the others alone. While following, it also detaches the
-   *   named channels from the leader.
+   * - A partial shape retargets the channels it names and leaves the
+   *   others alone. Each named channel takes a number, or a scalar
+   *   `SpringSource` to follow — a `Spring`, or a value derived with
+   *   `mapSpring`. While following a leader, naming a channel also
+   *   detaches that channel from it.
    * - A `CompositeSpring` of the same shape follows the leader channel by
    *   channel. Channels without a config of their own adopt the leader
-   *   channel's.
+   *   channel's (and likewise adopt a followed source's).
    *
    * Unknown channels throw with their path.
    */
@@ -251,7 +278,7 @@ export class CompositeSpring<in out T extends object> implements SpringSource<Re
       this.#follow(value)
     } else {
       this.#motions.flushes.batch(() => {
-        this.#map.scatter(value, assignTarget)
+        this.#map.scatter(value, acceptChannelTarget, assignTarget)
       })
     }
   }
@@ -274,7 +301,7 @@ export class CompositeSpring<in out T extends object> implements SpringSource<Re
 
   set value(value: PartialShape<T>) {
     this.#motions.flushes.batch(() => {
-      this.#map.scatter(value, assignValue)
+      this.#map.scatter(value, acceptNumber, assignValue)
     })
   }
 
@@ -293,7 +320,7 @@ export class CompositeSpring<in out T extends object> implements SpringSource<Re
 
   set velocity(value: PartialShape<T>) {
     this.#motions.flushes.batch(() => {
-      this.#map.scatter(value, assignVelocity)
+      this.#map.scatter(value, acceptNumber, assignVelocity)
     })
   }
 
@@ -368,7 +395,7 @@ export class CompositeSpring<in out T extends object> implements SpringSource<Re
    */
   jumpTo(value: PartialShape<T>) {
     this.#motions.flushes.batch(() => {
-      this.#map.scatter(value, applyJump)
+      this.#map.scatter(value, acceptNumber, applyJump)
     })
   }
 

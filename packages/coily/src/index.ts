@@ -12,6 +12,7 @@ export type {
   PartialShape,
   ReadonlyShape,
   Shape,
+  TargetShape,
   CompositeSpring,
   CompositeSpringTarget,
 } from './composite-spring.ts'
