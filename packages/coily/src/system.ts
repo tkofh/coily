@@ -1,6 +1,6 @@
 import type { SpringConfig } from './config.ts'
 import { MotionSet } from './motion-set.ts'
-import { Spring, type SpringPosition } from './spring.ts'
+import { Spring } from './spring.ts'
 import { type ConfigShape, type Shape, SpringObject } from './spring-object.ts'
 import { Ticker, type TickerOptions } from './ticker.ts'
 
@@ -55,15 +55,20 @@ class SpringSystemImpl implements SpringSystem {
     return this.#motion.reduced
   }
 
-  createSpring(position: SpringPosition, config?: SpringConfig): Spring {
-    return new Spring(this.#motion, position, config)
-  }
-
-  createSpringObject<T extends object>(
-    value: T & Shape<T>,
-    config?: ConfigShape<T>,
-  ): SpringObject<T> {
-    return new SpringObject(this.#motion, value, config)
+  createSpring(value: number, config?: SpringConfig): Spring
+  createSpring<T extends object>(value: T & Shape<T>, config?: ConfigShape<T>): SpringObject<T>
+  createSpring(
+    value: number | Record<string, number>,
+    config?: SpringConfig | ConfigShape<Record<string, number>>,
+  ): Spring | SpringObject<Record<string, number>> {
+    if (typeof value === 'number') {
+      return new Spring(this.#motion, value, config as SpringConfig | undefined)
+    }
+    return new SpringObject(
+      this.#motion,
+      value,
+      config as ConfigShape<Record<string, number>> | undefined,
+    )
   }
 
   advance(dt: number) {
@@ -114,12 +119,11 @@ class SpringSystemImpl implements SpringSystem {
  */
 export interface SpringSystem {
   /**
-   * Creates a spring at `position` — a number for a spring at rest, or a
-   * target/value pair for one created displaced or following another
-   * spring. Without `config`, springs use the default: critically damped,
-   * settling in about 500ms.
+   * Creates a spring at rest at `value`. Without `config`, springs use
+   * the default: critically damped, settling in about 500ms. To follow
+   * another spring, assign it to the new spring's `target`.
    */
-  createSpring(position: SpringPosition, config?: SpringConfig): Spring
+  createSpring(value: number, config?: SpringConfig): Spring
   /**
    * Creates a composite spring over a numeric shape: a plain object or
    * array, nested arbitrarily, whose leaves are all numbers. Each leaf
@@ -128,10 +132,7 @@ export interface SpringSystem {
    * `config` applies per channel: a single `SpringConfig` for every
    * channel, or a shape mirroring the value with configs at any level.
    */
-  createSpringObject<T extends object>(
-    value: T & Shape<T>,
-    config?: ConfigShape<T>,
-  ): SpringObject<T>
+  createSpring<T extends object>(value: T & Shape<T>, config?: ConfigShape<T>): SpringObject<T>
   /**
    * Advances every moving spring by `dt` milliseconds. For manual
    * stepping in place of `start()` — tests, custom loops, offline

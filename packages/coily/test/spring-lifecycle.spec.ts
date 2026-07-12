@@ -2,49 +2,20 @@ import { describe, expect, test } from 'vitest'
 import { createSpringSystem, defineSpring } from '../src/index.ts'
 
 describe('initial conditions', () => {
-  test('correct initial state with only target defined', () => {
+  test('a new spring rests at its value', () => {
     const system = createSpringSystem()
 
-    const spring = system.createSpring(
-      { target: 1 },
-      defineSpring({ damping: 1, mass: 1, tension: 1 }),
-    )
+    const spring = system.createSpring(1, defineSpring({ damping: 1, mass: 1, tension: 1 }))
 
     expect(spring.target).toBe(1)
     expect(spring.value).toBe(1)
   })
 
-  test('correct initial state with only value defined', () => {
+  test('retargeting a new spring displaces it without moving its value', () => {
     const system = createSpringSystem()
 
-    const spring = system.createSpring(
-      { value: 1 },
-      defineSpring({ damping: 1, mass: 1, tension: 1 }),
-    )
-
-    expect(spring.target).toBe(1)
-    expect(spring.value).toBe(1)
-  })
-
-  test('correct initial state with both target and value defined', () => {
-    const system = createSpringSystem()
-
-    const spring = system.createSpring(
-      { target: 1, value: 1 },
-      defineSpring({ damping: 1, mass: 1, tension: 1 }),
-    )
-
-    expect(spring.target).toBe(1)
-    expect(spring.value).toBe(1)
-  })
-
-  test('correct initial state with target and value as different values', () => {
-    const system = createSpringSystem()
-
-    const spring = system.createSpring(
-      { target: 1, value: 2 },
-      defineSpring({ damping: 1, mass: 1, tension: 1 }),
-    )
+    const spring = system.createSpring(2, defineSpring({ damping: 1, mass: 1, tension: 1 }))
+    spring.target = 1
 
     expect(spring.target).toBe(1)
     expect(spring.value).toBe(2)

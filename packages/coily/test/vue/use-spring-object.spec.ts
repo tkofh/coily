@@ -266,7 +266,7 @@ describe('useSpring shape dispatch', () => {
   })
 })
 
-describe('useSpringPool createSpringObject', () => {
+describe('useSpringPool createSpring', () => {
   test('pool spring objects dispose with the scope', () => {
     let pool!: SpringPool
     const {
@@ -275,7 +275,7 @@ describe('useSpringPool createSpringObject', () => {
       result: spring,
     } = mountWith(() => {
       pool = useSpringPool()
-      return pool.createSpringObject({ x: 0, y: 0 })
+      return pool.createSpring({ x: 0, y: 0 })
     })
 
     spring.target = { x: 100 }

@@ -11,7 +11,7 @@ const FRAME = 1000 / 60
 describe('SpringObject: creation', () => {
   test('creates resting at the given value', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ position: { x: 10, y: 20 }, opacity: 1 }, config)
+    const spring = system.createSpring({ position: { x: 10, y: 20 }, opacity: 1 }, config)
 
     expect(spring.value).toEqual({ position: { x: 10, y: 20 }, opacity: 1 })
     expect(spring.target).toEqual({ position: { x: 10, y: 20 }, opacity: 1 })
@@ -20,7 +20,7 @@ describe('SpringObject: creation', () => {
 
   test('supports arrays as shapes', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ color: [255, 128, 0] }, config)
+    const spring = system.createSpring({ color: [255, 128, 0] }, config)
 
     expect(spring.value).toEqual({ color: [255, 128, 0] })
     expect(Array.isArray(spring.value.color)).toBe(true)
@@ -28,14 +28,14 @@ describe('SpringObject: creation', () => {
 
   test('supports numeric keys', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ 0: 5, 1: 10 }, config)
+    const spring = system.createSpring({ 0: 5, 1: 10 }, config)
 
     expect(spring.value).toEqual({ 0: 5, 1: 10 })
   })
 
   test('value, velocity, and target return stable cached objects', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ position: { x: 0, y: 0 } }, config)
+    const spring = system.createSpring({ position: { x: 0, y: 0 } }, config)
 
     expect(spring.value).toBe(spring.value)
     expect(spring.value.position).toBe(spring.value.position)
@@ -46,7 +46,7 @@ describe('SpringObject: creation', () => {
   test('does not alias the input object', () => {
     const system = createSpringSystem()
     const input = { x: 1, y: 2 }
-    const spring = system.createSpringObject(input, config)
+    const spring = system.createSpring(input, config)
 
     input.x = 99
 
@@ -57,7 +57,7 @@ describe('SpringObject: creation', () => {
     const system = createSpringSystem()
 
     expect(() =>
-      system.createSpringObject({ position: { x: 0, y: 'nope' as unknown as number } }, config),
+      system.createSpring({ position: { x: 0, y: 'nope' as unknown as number } }, config),
     ).toThrow("Invalid value at 'position.y'")
   })
 
@@ -66,17 +66,15 @@ describe('SpringObject: creation', () => {
 
     // The `Shape` constraint also rejects these at compile time; the casts
     // keep the runtime backstop covered for untyped callers.
-    expect(() => system.createSpringObject({} as never)).toThrow('at least one channel')
-    expect(() => system.createSpringObject({ position: {} } as never)).toThrow(
-      'at least one channel',
-    )
-    expect(() => system.createSpringObject({ items: [] } as never)).toThrow('at least one channel')
+    expect(() => system.createSpring({} as never)).toThrow('at least one channel')
+    expect(() => system.createSpring({ position: {} } as never)).toThrow('at least one channel')
+    expect(() => system.createSpring({ items: [] } as never)).toThrow('at least one channel')
   })
 
   test('throws on non-plain objects in the shape', () => {
     const system = createSpringSystem()
 
-    expect(() => system.createSpringObject({ when: new Date() as unknown as number })).toThrow(
+    expect(() => system.createSpring({ when: new Date() as unknown as number })).toThrow(
       "Invalid value at 'when'",
     )
   })
@@ -85,7 +83,7 @@ describe('SpringObject: creation', () => {
 describe('SpringObject: simulation', () => {
   test('animates every channel toward its target', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ position: { x: 0, y: 0 }, opacity: 0 }, config)
+    const spring = system.createSpring({ position: { x: 0, y: 0 }, opacity: 0 }, config)
 
     spring.target = { position: { x: 100, y: 50 }, opacity: 1 }
     system.advance(100)
@@ -98,7 +96,7 @@ describe('SpringObject: simulation', () => {
 
   test('settles at the target', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ position: { x: 0, y: 0 }, opacity: 0 }, config)
+    const spring = system.createSpring({ position: { x: 0, y: 0 }, opacity: 0 }, config)
 
     spring.target = { position: { x: 100, y: 50 }, opacity: 1 }
     for (let i = 0; i < 240 && !spring.isResting; i++) {
@@ -111,7 +109,7 @@ describe('SpringObject: simulation', () => {
 
   test('velocity reflects motion per channel', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ x: 0, y: 0 }, config)
+    const spring = system.createSpring({ x: 0, y: 0 }, config)
 
     spring.target = { x: 100 }
     system.advance(FRAME)
@@ -122,7 +120,7 @@ describe('SpringObject: simulation', () => {
 
   test('timeRemaining is the max across channels', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ near: 0, far: 0 }, config)
+    const spring = system.createSpring({ near: 0, far: 0 }, config)
 
     spring.target = { near: 1 }
     const nearOnly = spring.timeRemaining
@@ -136,7 +134,7 @@ describe('SpringObject: simulation', () => {
 describe('SpringObject: partial targets', () => {
   test('retargets only the given channels', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ position: { x: 0, y: 0 }, opacity: 1 }, config)
+    const spring = system.createSpring({ position: { x: 0, y: 0 }, opacity: 1 }, config)
 
     spring.target = { opacity: 0 }
 
@@ -148,7 +146,7 @@ describe('SpringObject: partial targets', () => {
 
   test('partial arrays skip missing entries', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ color: [255, 128, 0] }, config)
+    const spring = system.createSpring({ color: [255, 128, 0] }, config)
 
     spring.target = { color: [0, undefined, 255] }
 
@@ -157,7 +155,7 @@ describe('SpringObject: partial targets', () => {
 
   test('throws on unknown channels', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ position: { x: 0, y: 0 } }, config)
+    const spring = system.createSpring({ position: { x: 0, y: 0 } }, config)
 
     expect(() => {
       spring.target = { position: { z: 5 } } as never
@@ -166,7 +164,7 @@ describe('SpringObject: partial targets', () => {
 
   test('throws on out-of-range array indices', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ color: [0, 0, 0] }, config)
+    const spring = system.createSpring({ color: [0, 0, 0] }, config)
 
     expect(() => {
       spring.target = { color: [0, 0, 0, 0] } as never
@@ -175,7 +173,7 @@ describe('SpringObject: partial targets', () => {
 
   test('throws on structure mismatches', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ position: { x: 0, y: 0 } }, config)
+    const spring = system.createSpring({ position: { x: 0, y: 0 } }, config)
 
     expect(() => {
       spring.target = { position: 5 } as never
@@ -189,7 +187,7 @@ describe('SpringObject: partial targets', () => {
 describe('SpringObject: config shapes', () => {
   test('a single config applies to every channel', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ x: 0, y: 0 }, config)
+    const spring = system.createSpring({ x: 0, y: 0 }, config)
 
     expect(spring.config).toBe(config)
   })
@@ -201,13 +199,13 @@ describe('SpringObject: config shapes', () => {
     // options object reads as a config shape, so its option keys are unknown
     // channels.
     expect(() =>
-      system.createSpringObject({ x: 0 }, { mass: 1, tension: 170, damping: 26 } as never),
+      system.createSpring({ x: 0 }, { mass: 1, tension: 170, damping: 26 } as never),
     ).toThrow("Unknown channel 'mass'")
   })
 
   test('per-channel configs animate channels at different speeds', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ fast: 0, slow: 0 }, { fast: stiff, slow: gentle })
+    const spring = system.createSpring({ fast: 0, slow: 0 }, { fast: stiff, slow: gentle })
 
     spring.target = { fast: 100, slow: 100 }
     system.advance(100)
@@ -218,7 +216,7 @@ describe('SpringObject: config shapes', () => {
 
   test('a subtree config applies to every channel below it', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject(
+    const spring = system.createSpring(
       { position: { x: 0, y: 0 }, opacity: 0 },
       { position: stiff },
     )
@@ -232,7 +230,7 @@ describe('SpringObject: config shapes', () => {
 
   test('setting config to null reverts all channels to the default', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ x: 0, y: 0 }, config)
+    const spring = system.createSpring({ x: 0, y: 0 }, config)
 
     spring.config = null
 
@@ -241,7 +239,7 @@ describe('SpringObject: config shapes', () => {
 
   test('a partial config shape leaves unmentioned channels alone', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ x: 0, y: 0 }, config)
+    const spring = system.createSpring({ x: 0, y: 0 }, config)
 
     spring.config = { x: stiff }
 
@@ -257,14 +255,14 @@ describe('SpringObject: config shapes', () => {
     // A plain object is a config shape, so its leaves must be configs — a
     // number is not, even when the channel is named like a spring option.
     expect(() =>
-      system.createSpringObject({ tension: 0, damping: 0 }, { tension: 170, damping: 26 } as never),
+      system.createSpring({ tension: 0, damping: 0 }, { tension: 170, damping: 26 } as never),
     ).toThrow("Invalid config for 'tension'")
   })
 
   test('throws on config keys that are not channels', () => {
     const system = createSpringSystem()
 
-    expect(() => system.createSpringObject({ x: 0 }, { opacityy: config } as never)).toThrow(
+    expect(() => system.createSpring({ x: 0 }, { opacityy: config } as never)).toThrow(
       "Unknown channel 'opacityy'",
     )
   })
@@ -273,7 +271,7 @@ describe('SpringObject: config shapes', () => {
 describe('SpringObject: coalesced events', () => {
   test('onUpdate fires exactly once per frame while several channels move', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ position: { x: 0, y: 0 }, opacity: 0 }, config)
+    const spring = system.createSpring({ position: { x: 0, y: 0 }, opacity: 0 }, config)
     spring.target = { position: { x: 100, y: 100 }, opacity: 1 }
 
     const onUpdate = vi.fn()
@@ -288,7 +286,7 @@ describe('SpringObject: coalesced events', () => {
 
   test('onStart fires synchronously and once when several channels start together', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ x: 0, y: 0 }, config)
+    const spring = system.createSpring({ x: 0, y: 0 }, config)
 
     const onStart = vi.fn()
     spring.onStart(onStart)
@@ -300,7 +298,7 @@ describe('SpringObject: coalesced events', () => {
 
   test('onStart does not fire when another channel wakes mid-motion', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ x: 0, y: 0 }, config)
+    const spring = system.createSpring({ x: 0, y: 0 }, config)
 
     const onStart = vi.fn()
     spring.onStart(onStart)
@@ -314,7 +312,7 @@ describe('SpringObject: coalesced events', () => {
 
   test('stop arrives after the final update of the frame', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ x: 1, y: 1 }, config)
+    const spring = system.createSpring({ x: 1, y: 1 }, config)
     spring.target = { x: 0, y: 0 }
 
     const order: string[] = []
@@ -333,7 +331,7 @@ describe('SpringObject: coalesced events', () => {
 
   test('jumpTo emits a single update synchronously', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ position: { x: 0, y: 0 }, opacity: 1 }, config)
+    const spring = system.createSpring({ position: { x: 0, y: 0 }, opacity: 1 }, config)
 
     const onUpdate = vi.fn()
     spring.onUpdate(onUpdate)
@@ -347,7 +345,7 @@ describe('SpringObject: coalesced events', () => {
 
   test('unsubscribe stops composite events', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ x: 0, y: 0 }, config)
+    const spring = system.createSpring({ x: 0, y: 0 }, config)
     spring.target = { x: 100, y: 100 }
 
     const onUpdate = vi.fn()
@@ -365,7 +363,7 @@ describe('SpringObject: coalesced events', () => {
 describe('SpringObject: partial jumps and writes', () => {
   test('jumpTo affects only the given channels', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ position: { x: 0, y: 0 }, opacity: 1 }, config)
+    const spring = system.createSpring({ position: { x: 0, y: 0 }, opacity: 1 }, config)
     spring.target = { position: { x: 100, y: 100 } }
 
     spring.jumpTo({ opacity: 0 })
@@ -376,7 +374,7 @@ describe('SpringObject: partial jumps and writes', () => {
 
   test('writing value displaces the given channels', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ x: 0, y: 0 }, config)
+    const spring = system.createSpring({ x: 0, y: 0 }, config)
 
     spring.value = { x: 50 }
 
@@ -387,7 +385,7 @@ describe('SpringObject: partial jumps and writes', () => {
 
   test('writing velocity injects energy into the given channels', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ x: 0, y: 0 }, config)
+    const spring = system.createSpring({ x: 0, y: 0 }, config)
 
     spring.velocity = { x: 100 }
     system.advance(FRAME)
@@ -400,8 +398,8 @@ describe('SpringObject: partial jumps and writes', () => {
 describe('SpringObject: following', () => {
   test('follows another object channel-wise', () => {
     const system = createSpringSystem()
-    const leader = system.createSpringObject({ position: { x: 0, y: 0 }, opacity: 0 }, config)
-    const follower = system.createSpringObject({ position: { x: 0, y: 0 }, opacity: 0 })
+    const leader = system.createSpring({ position: { x: 0, y: 0 }, opacity: 0 }, config)
+    const follower = system.createSpring({ position: { x: 0, y: 0 }, opacity: 0 })
 
     follower.target = leader
     leader.target = { position: { x: 100, y: 50 }, opacity: 1 }
@@ -418,9 +416,9 @@ describe('SpringObject: following', () => {
 
   test('chains: a follower of a follower propagates in the same frame', () => {
     const system = createSpringSystem()
-    const a = system.createSpringObject({ x: 0 }, config)
-    const b = system.createSpringObject({ x: 0 })
-    const c = system.createSpringObject({ x: 0 })
+    const a = system.createSpring({ x: 0 }, config)
+    const b = system.createSpring({ x: 0 })
+    const c = system.createSpring({ x: 0 })
 
     b.target = a
     c.target = b
@@ -434,8 +432,8 @@ describe('SpringObject: following', () => {
 
   test('follows with an offset shape', () => {
     const system = createSpringSystem()
-    const leader = system.createSpringObject({ position: { x: 0, y: 0 }, opacity: 0 }, config)
-    const follower = system.createSpringObject({ position: { x: 0, y: 0 }, opacity: 0 })
+    const leader = system.createSpring({ position: { x: 0, y: 0 }, opacity: 0 }, config)
+    const follower = system.createSpring({ position: { x: 0, y: 0 }, opacity: 0 })
 
     follower.target = { spring: leader, offset: { position: { x: 10 } } }
     leader.target = { position: { x: 100, y: 50 } }
@@ -451,8 +449,8 @@ describe('SpringObject: following', () => {
 
   test('inherits the leader config per channel', () => {
     const system = createSpringSystem()
-    const leader = system.createSpringObject({ x: 0, y: 0 }, config)
-    const follower = system.createSpringObject({ x: 0, y: 0 })
+    const leader = system.createSpring({ x: 0, y: 0 }, config)
+    const follower = system.createSpring({ x: 0, y: 0 })
 
     follower.target = leader
 
@@ -461,8 +459,8 @@ describe('SpringObject: following', () => {
 
   test('a partial numeric target detaches only the channels it names', () => {
     const system = createSpringSystem()
-    const leader = system.createSpringObject({ x: 0, y: 0 }, config)
-    const follower = system.createSpringObject({ x: 0, y: 0 })
+    const leader = system.createSpring({ x: 0, y: 0 }, config)
+    const follower = system.createSpring({ x: 0, y: 0 })
     follower.target = leader
 
     follower.target = { x: -50 }
@@ -478,8 +476,8 @@ describe('SpringObject: following', () => {
 
   test('throws on shape mismatches', () => {
     const system = createSpringSystem()
-    const a = system.createSpringObject({ x: 0, y: 0 }, config)
-    const b = system.createSpringObject({ x: 0 }, config)
+    const a = system.createSpring({ x: 0, y: 0 }, config)
+    const b = system.createSpring({ x: 0 }, config)
 
     expect(() => {
       b.target = a as never
@@ -491,8 +489,8 @@ describe('SpringObject: following', () => {
 
   test('throws on unknown offset channels', () => {
     const system = createSpringSystem()
-    const leader = system.createSpringObject({ x: 0 }, config)
-    const follower = system.createSpringObject({ x: 0 })
+    const leader = system.createSpring({ x: 0 }, config)
+    const follower = system.createSpring({ x: 0 })
 
     expect(() => {
       follower.target = { spring: leader, offset: { z: 5 } as never }
@@ -505,14 +503,14 @@ describe('SpringObject: settled promise', () => {
 
   test('resolves immediately when already resting', async () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ x: 0 }, config)
+    const spring = system.createSpring({ x: 0 }, config)
 
     await expect(spring.settled).resolves.toBeUndefined()
   })
 
   test('resolves only when every channel has come to rest', async () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ near: 0, far: 0 }, config)
+    const spring = system.createSpring({ near: 0, far: 0 }, config)
     spring.target = { near: 1, far: 1000 }
 
     let resolved = false
@@ -535,7 +533,7 @@ describe('SpringObject: settled promise', () => {
 
   test('dispose resolves a pending promise', async () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ x: 0 }, config)
+    const spring = system.createSpring({ x: 0 }, config)
     spring.target = { x: 100 }
 
     const settled = spring.settled
@@ -548,7 +546,7 @@ describe('SpringObject: settled promise', () => {
 describe('SpringObject: reduced motion', () => {
   test('partial retargets jump instantly with a single update', () => {
     const system = createSpringSystem({ reducedMotion: 'always' })
-    const spring = system.createSpringObject({ position: { x: 0, y: 0 }, opacity: 1 }, config)
+    const spring = system.createSpring({ position: { x: 0, y: 0 }, opacity: 1 }, config)
 
     const onUpdate = vi.fn()
     const onStart = vi.fn()
@@ -567,7 +565,7 @@ describe('SpringObject: reduced motion', () => {
 describe('SpringObject: dispose', () => {
   test('dispose stops the spring and its events', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ x: 0, y: 0 }, config)
+    const spring = system.createSpring({ x: 0, y: 0 }, config)
     spring.target = { x: 100, y: 100 }
 
     const onUpdate = vi.fn()
@@ -581,7 +579,7 @@ describe('SpringObject: dispose', () => {
 
   test('onDispose fires once for all channels', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ position: { x: 0, y: 0 }, opacity: 1 }, config)
+    const spring = system.createSpring({ position: { x: 0, y: 0 }, opacity: 1 }, config)
 
     const onDispose = vi.fn()
     spring.onDispose(onDispose)
@@ -592,7 +590,7 @@ describe('SpringObject: dispose', () => {
 
   test('double dispose is a no-op', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ x: 0 }, config)
+    const spring = system.createSpring({ x: 0 }, config)
 
     const onDispose = vi.fn()
     spring.onDispose(onDispose)
@@ -604,8 +602,8 @@ describe('SpringObject: dispose', () => {
 
   test('followers detach when the leader is disposed', () => {
     const system = createSpringSystem()
-    const leader = system.createSpringObject({ x: 0 }, config)
-    const follower = system.createSpringObject({ x: 0 })
+    const leader = system.createSpring({ x: 0 }, config)
+    const follower = system.createSpring({ x: 0 })
     follower.target = leader
 
     leader.dispose()

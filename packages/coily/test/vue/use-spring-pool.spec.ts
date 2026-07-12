@@ -31,7 +31,8 @@ describe('useSpringPool', () => {
   test('creates springs on the provided system', () => {
     const { pool, system } = mountPool()
 
-    const spring = pool.createSpring({ target: 100, value: 0 }, config)
+    const spring = pool.createSpring(0, config)
+    spring.target = 100
     system.advance(1000 / 60)
 
     expect(spring.value).toBeGreaterThan(0)
@@ -41,8 +42,9 @@ describe('useSpringPool', () => {
   test('disposes live springs when the component unmounts', () => {
     const { wrapper, pool, system } = mountPool()
 
-    const spring = pool.createSpring({ target: 100, value: 0 }, config)
-    const object = pool.createSpringObject({ x: 0, y: 0 })
+    const spring = pool.createSpring(0, config)
+    spring.target = 100
+    const object = pool.createSpring({ x: 0, y: 0 })
     object.target = { x: 100, y: 100 }
     system.advance(1000 / 60)
 
@@ -59,8 +61,10 @@ describe('useSpringPool', () => {
   test('manually disposed springs unregister from the pool', () => {
     const { wrapper, pool } = mountPool()
 
-    const early = pool.createSpring({ target: 100, value: 0 }, config)
-    const late = pool.createSpring({ target: 100, value: 0 }, config)
+    const early = pool.createSpring(0, config)
+    early.target = 100
+    const late = pool.createSpring(0, config)
+    late.target = 100
 
     const earlyDispose = vi.fn()
     const lateDispose = vi.fn()

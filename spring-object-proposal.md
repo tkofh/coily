@@ -119,6 +119,20 @@ multiplied. Fix it in core with an end-of-pass flush:
    `createSpring`/`useSpring` on input type. Overloads read better; needs a
    type-ergonomics spike to confirm error messages stay humane.
    - preferrably we can use overloads to avoid the need for `*Object` api surface area, but if the types don't allow it then i'm fine with `createSpringObject`/`useSpringObject`
+   - **Resolution (initial):** `useSpring` folded shapes in via overloads
+     — every input it takes (number, ref, getter, branded ref) is
+     runtime-distinguishable. Core kept `createSpringObject` because
+     `SpringPosition`'s displaced form collided with `Shape<T>`:
+     `{ target: 100, value: 0 }` was simultaneously a displaced scalar
+     and a two-channel shape, with no runtime discriminator and different
+     return types.
+   - **Update (2026-07-11, release prep):** merged. Displaced creation
+     was pure sugar — create-then-retarget/follow is observably
+     equivalent, listeners can't exist during construction — so
+     `SpringPosition` was dropped and the collision with it. One
+     `createSpring` on `SpringSystem` and `SpringPool`: a number is a
+     scalar spring, any object or array is a shape. `createSpringObject`
+     is gone (see the merge-create-spring changeset).
 2. Tuples/arrays in v1 (`[x, y]`, color triples), or records only first?
    - i think at the very least we should support numeric keys (i.e. `type Leaf = Record<string | number, number | Leaf>`), but if we can make arrays work as well i think that would be even better. feels like it would be incomplete without them.
 3. Partial-target semantics: silently ignore unknown keys, or throw?

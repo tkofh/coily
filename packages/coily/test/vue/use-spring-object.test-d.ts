@@ -95,8 +95,8 @@ useSpring([0, () => 10])
 // ── Pool creation ───────────────────────────────────────────────────
 
 const pool = useSpringPool()
-const poolSpring = pool.createSpringObject({ x: 0 }, cfg)
+const poolSpring = pool.createSpring({ x: 0 }, cfg)
 const poolValue: number = poolSpring.value.x
 void poolValue
 // @ts-expect-error string channels are not animatable
-pool.createSpringObject({ x: 'nope' })
+pool.createSpring({ x: 'nope' })

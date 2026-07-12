@@ -43,14 +43,6 @@ describe('reduced motion: always', () => {
     await expect(spring.settled).resolves.toBeUndefined()
   })
 
-  test('a displaced spring is created at its target', () => {
-    const system = createSpringSystem({ reducedMotion: 'always' })
-    const spring = system.createSpring({ target: 100, value: 0 }, config)
-
-    expect(spring.value).toBe(100)
-    expect(spring.isResting).toBe(true)
-  })
-
   test('value writes move the spring instantly and stick', () => {
     const system = createSpringSystem({ reducedMotion: 'always' })
     const spring = system.createSpring(0, config)
@@ -77,8 +69,10 @@ describe('reduced motion: always', () => {
   test('followers collapse with their leader', () => {
     const system = createSpringSystem({ reducedMotion: 'always' })
     const leader = system.createSpring(0, config)
-    const middle = system.createSpring({ target: leader })
-    const tail = system.createSpring({ target: middle })
+    const middle = system.createSpring(leader.value)
+    middle.target = leader
+    const tail = system.createSpring(middle.value)
+    tail.target = middle
 
     leader.target = 100
 
@@ -89,7 +83,7 @@ describe('reduced motion: always', () => {
 
   test('spring objects jump on every channel', () => {
     const system = createSpringSystem({ reducedMotion: 'always' })
-    const spring = system.createSpringObject({ x: 0, y: 0 }, config)
+    const spring = system.createSpring({ x: 0, y: 0 }, config)
 
     spring.target = { x: 100, y: 200 }
 
@@ -99,7 +93,7 @@ describe('reduced motion: always', () => {
 
   test('spring object retargets emit one update and no start/stop', () => {
     const system = createSpringSystem({ reducedMotion: 'always' })
-    const spring = system.createSpringObject({ x: 0, y: 0 }, config)
+    const spring = system.createSpring({ x: 0, y: 0 }, config)
 
     const onUpdate = vi.fn()
     const onStart = vi.fn()
@@ -179,7 +173,8 @@ describe("reduced motion: 'user' media query", () => {
   test('finishes in-flight motions when the preference changes to reduce', () => {
     const media = stubMatchMedia(false)
     const system = createSpringSystem()
-    const spring = system.createSpring({ target: 100, value: 0 }, config)
+    const spring = system.createSpring(0, config)
+    spring.target = 100
 
     system.advance(1000 / 60)
     expect(spring.isResting).toBe(false)
@@ -194,7 +189,7 @@ describe("reduced motion: 'user' media query", () => {
   test('finishes spring objects with one coalesced update and stop', () => {
     const media = stubMatchMedia(false)
     const system = createSpringSystem()
-    const spring = system.createSpringObject({ x: 0, y: 0 }, config)
+    const spring = system.createSpring({ x: 0, y: 0 }, config)
     spring.target = { x: 100, y: 200 }
 
     system.advance(1000 / 60)

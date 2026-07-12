@@ -149,7 +149,7 @@ const RESOLVED = Promise.resolve()
  * spring, called a channel, behind one API: targets, values, velocities,
  * and configs read and write as (partial) shapes, and events are
  * coalesced across channels. Create spring objects with
- * `SpringSystem.createSpringObject`.
+ * `SpringSystem.createSpring`.
  *
  * The shape is fixed at construction. Writes naming unknown channels
  * throw with the channel's path (`position.z`).

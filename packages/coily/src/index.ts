@@ -1,5 +1,5 @@
 export { createSpringSystem, type SpringSystem, type SpringSystemOptions } from './system.ts'
-export type { Spring, SpringPosition, SpringTarget, SpringWithOffset } from './spring.ts'
+export type { Spring, SpringTarget, SpringWithOffset } from './spring.ts'
 export type {
   ConfigShape,
   PartialShape,

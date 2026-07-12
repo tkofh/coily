@@ -19,24 +19,6 @@ export interface SpringWithOffset {
  */
 export type SpringTarget = number | Spring | SpringWithOffset
 
-interface DisplacedSpringPosition {
-  /** The initial target. When omitted, the spring starts at rest at `value`. */
-  target?: SpringTarget | undefined
-  /**
-   * The initial value. When omitted, the spring starts at the target.
-   * Provide both `target` and `value` to create a spring already in
-   * motion. Ignored under reduced motion: springs start at their target.
-   */
-  value?: number | undefined
-}
-
-/**
- * Where a spring starts: a plain number for a spring at rest at that
- * value, or a target/value pair for one created displaced or already
- * following another spring.
- */
-export type SpringPosition = number | DisplacedSpringPosition
-
 function normalizeTarget(
   target: SpringTarget | undefined,
 ): { spring: Spring; offset: number } | null {
@@ -80,49 +62,12 @@ export class Spring {
   #resolveSettled: (() => void) | null = null
   #disposed = false
 
-  constructor(motions: MotionSet, position: SpringPosition, config?: SpringConfig) {
+  constructor(motions: MotionSet, value: number, config?: SpringConfig) {
     this.#motions = motions
-
-    let numericTarget: number
-    let value: number
-    let normalized: { spring: Spring; offset: number } | null = null
-
-    if (typeof position === 'number') {
-      numericTarget = position
-      value = position
-    } else {
-      normalized = normalizeTarget(position.target)
-      if (normalized) {
-        numericTarget = normalized.spring.value + normalized.offset
-        value = position.value ?? numericTarget
-      } else {
-        numericTarget = (position.target as number | undefined) ?? position.value ?? 0
-        value = position.value ?? numericTarget
-      }
-    }
-
-    if (motions.reduced) {
-      value = numericTarget
-    }
-
     this.#override = config ?? null
-    this.#resolved = config ?? (normalized ? normalized.spring.#resolved : SpringConfig.default)
-
-    this.#target = numericTarget
-    this.#motion = new Motion(this.#resolved, value - numericTarget, 0)
-
-    if (!this.#motion.isResting) {
-      this.#motions.add(this.#motion)
-    }
-
-    if (normalized) {
-      this.#leader = normalized.spring
-      this.#offset = normalized.offset
-      normalized.spring.#followers.add(this)
-      this.#unsubLeader = normalized.spring.onUpdate(() => {
-        this.#setTarget(this.#leader!.value + this.#offset)
-      })
-    }
+    this.#resolved = config ?? SpringConfig.default
+    this.#target = value
+    this.#motion = new Motion(this.#resolved, 0, 0)
   }
 
   /**

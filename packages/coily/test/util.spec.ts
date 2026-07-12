@@ -52,7 +52,8 @@ describe('computeTimeRemaining', () => {
     const est = config.computeTimeRemaining({ position: 100, velocity: 0 })
 
     const system = createSpringSystem()
-    const spring = system.createSpring({ target: 0, value: 100 }, config)
+    const spring = system.createSpring(100, config)
+    spring.target = 0
 
     let t = 0
     const dt = 1000 / 60
@@ -71,7 +72,8 @@ describe('computeTimeRemaining', () => {
     const est = config.computeTimeRemaining({ position: 100, velocity: 0 })
 
     const system = createSpringSystem()
-    const spring = system.createSpring({ target: 0, value: 100 }, config)
+    const spring = system.createSpring(100, config)
+    spring.target = 0
 
     let t = 0
     const dt = 1000 / 60
@@ -88,7 +90,8 @@ describe('computeTimeRemaining', () => {
     const est = config.computeTimeRemaining({ position: 100, velocity: 0 })
 
     const system = createSpringSystem()
-    const spring = system.createSpring({ target: 0, value: 100 }, config)
+    const spring = system.createSpring(100, config)
+    spring.target = 0
 
     let t = 0
     const dt = 1000 / 60

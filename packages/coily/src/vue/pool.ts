@@ -1,7 +1,7 @@
 import { onScopeDispose } from 'vue'
 import type { SpringConfig } from '../config.ts'
 import type { ConfigShape, Shape, SpringObject } from '../spring-object.ts'
-import type { Spring, SpringPosition } from '../spring.ts'
+import type { Spring } from '../spring.ts'
 import { injectSpringSystem } from './reactive-spring.ts'
 
 /**
@@ -13,20 +13,16 @@ import { injectSpringSystem } from './reactive-spring.ts'
  */
 export interface SpringPool {
   /**
-   * Creates a pooled spring at `position` — a number for a spring at
-   * rest, or a target/value pair for one created displaced or following
-   * another spring. Without `config`, the default applies.
+   * Creates a pooled spring at rest at `value`. Without `config`, the
+   * default applies.
    */
-  createSpring(position: SpringPosition, config?: SpringConfig): Spring
+  createSpring(value: number, config?: SpringConfig): Spring
   /**
    * Creates a pooled composite spring over a numeric shape whose leaves
    * are all numbers. `config` applies per channel: one `SpringConfig`
    * for all, or a shape with configs at any level.
    */
-  createSpringObject<T extends object>(
-    value: T & Shape<T>,
-    config?: ConfigShape<T>,
-  ): SpringObject<T>
+  createSpring<T extends object>(value: T & Shape<T>, config?: ConfigShape<T>): SpringObject<T>
 }
 
 interface PoolSpring {
@@ -62,10 +58,17 @@ export function useSpringPool(): SpringPool {
     }
   }, true)
 
-  return {
-    createSpring: (position, config) => adopt(system.createSpring(position, config)),
-    createSpringObject<T extends object>(value: T & Shape<T>, config?: ConfigShape<T>) {
-      return adopt(system.createSpringObject<T>(value, config))
-    },
-  }
+  // Cast recovers the overload pair: no single implementation signature
+  // can satisfy both, since SpringObject's type parameter is invariant.
+  const createSpring = ((
+    value: number | Record<string, number>,
+    config?: SpringConfig | ConfigShape<Record<string, number>>,
+  ) =>
+    typeof value === 'number'
+      ? adopt(system.createSpring(value, config as SpringConfig | undefined))
+      : adopt(
+          system.createSpring(value, config as ConfigShape<Record<string, number>> | undefined),
+        )) as SpringPool['createSpring']
+
+  return { createSpring }
 }

@@ -6,8 +6,10 @@ describe('SpringSystem', () => {
     const system = createSpringSystem()
     const config = defineSpring({ mass: 1, tension: 170, damping: 10 })
 
-    const a = system.createSpring({ target: 100, value: 0 }, config)
-    const b = system.createSpring({ target: -50, value: 0 }, config)
+    const a = system.createSpring(0, config)
+    a.target = 100
+    const b = system.createSpring(0, config)
+    b.target = -50
 
     system.advance(1000 / 60)
 
@@ -21,7 +23,8 @@ describe('SpringSystem', () => {
     const config = defineSpring({ mass: 1, tension: 170, damping: 10 })
 
     const resting = system.createSpring(0, config)
-    const active = system.createSpring({ target: 100, value: 0 }, config)
+    const active = system.createSpring(0, config)
+    active.target = 100
 
     const restingUpdate = vi.fn()
     const activeUpdate = vi.fn()
@@ -36,10 +39,8 @@ describe('SpringSystem', () => {
 
   test('springs that come to rest are removed from scheduler', () => {
     const system = createSpringSystem()
-    const spring = system.createSpring(
-      { target: 0, value: 1 },
-      defineSpring({ mass: 1, tension: 170, damping: 26 }),
-    )
+    const spring = system.createSpring(1, defineSpring({ mass: 1, tension: 170, damping: 26 }))
+    spring.target = 0
 
     const onStop = vi.fn()
     spring.onStop(onStop)
@@ -82,8 +83,10 @@ describe('SpringSystem', () => {
     const system = createSpringSystem()
     const config = defineSpring({ mass: 1, tension: 170, damping: 26 })
 
-    const a = system.createSpring({ target: 100, value: 0 }, config)
-    const b = system.createSpring({ target: -200, value: 0 }, config)
+    const a = system.createSpring(0, config)
+    a.target = 100
+    const b = system.createSpring(0, config)
+    b.target = -200
     const c = system.createSpring(50, config)
 
     for (let i = 0; i < 600; i++) {

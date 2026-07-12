@@ -64,7 +64,7 @@ export function createSpringObjectRef<T extends object>(
 ): SpringObjectRef<T> {
   const system = injectSpringSystem()
   const config = resolveConfigShape(options)
-  const spring = system.createSpringObject<T>(toValue(value), config.value)
+  const spring = system.createSpring<T>(toValue(value), config.value)
   const ref = createReactiveSpringRef<ReadonlyShape<T>, PartialShape<T>, ConfigShape<T>>(
     spring,
     config,
@@ -85,7 +85,7 @@ export function createLinkedSpringObjectRef<T extends object>(
   const system = injectSpringSystem()
   const leader = leaderRef[SpringObjectInstanceKey]
   const config = resolveConfigShape(options)
-  const spring = system.createSpringObject<T>(leader.value as unknown as T & Shape<T>, config.value)
+  const spring = system.createSpring<T>(leader.value as unknown as T & Shape<T>, config.value)
   spring.target = leader
   return createReactiveSpringRef<ReadonlyShape<T>, PartialShape<T>, ConfigShape<T>>(
     spring,

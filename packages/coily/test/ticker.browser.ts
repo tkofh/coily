@@ -37,7 +37,8 @@ const defaultConfig = defineSpring({ mass: 1, tension: 170, damping: 26 })
 describe('ticker with requestAnimationFrame', () => {
   test('start() drives spring updates via rAF', async () => {
     const system = createSpringSystem({ reducedMotion: 'never' })
-    const spring = system.createSpring({ target: 0, value: 100 }, defaultConfig)
+    const spring = system.createSpring(100, defaultConfig)
+    spring.target = 0
 
     system.start()
     await frames(5)
@@ -49,7 +50,8 @@ describe('ticker with requestAnimationFrame', () => {
 
   test('spring settles to target', async () => {
     const system = createSpringSystem({ reducedMotion: 'never' })
-    const spring = system.createSpring({ target: 0, value: 50 }, defaultConfig)
+    const spring = system.createSpring(50, defaultConfig)
+    spring.target = 0
 
     const settled = waitForStop(spring)
     system.start()
@@ -63,7 +65,8 @@ describe('ticker with requestAnimationFrame', () => {
 
   test('stop() halts the animation loop', async () => {
     const system = createSpringSystem({ reducedMotion: 'never' })
-    const spring = system.createSpring({ target: 0, value: 100 }, defaultConfig)
+    const spring = system.createSpring(100, defaultConfig)
+    spring.target = 0
 
     system.start()
     await frames(3)
@@ -78,11 +81,10 @@ describe('ticker with requestAnimationFrame', () => {
 
   test('multiple springs settle independently', async () => {
     const system = createSpringSystem({ reducedMotion: 'never' })
-    const springA = system.createSpring({ target: 50, value: 0 }, defaultConfig)
-    const springB = system.createSpring(
-      { target: -30, value: 0 },
-      defineSpring({ mass: 1, tension: 80, damping: 20 }),
-    )
+    const springA = system.createSpring(0, defaultConfig)
+    springA.target = 50
+    const springB = system.createSpring(0, defineSpring({ mass: 1, tension: 80, damping: 20 }))
+    springB.target = -30
 
     const settledA = waitForStop(springA)
     const settledB = waitForStop(springB)
@@ -99,7 +101,8 @@ describe('ticker with requestAnimationFrame', () => {
 
   test('changing target mid-animation settles at new target', async () => {
     const system = createSpringSystem({ reducedMotion: 'never' })
-    const spring = system.createSpring({ target: 100, value: 0 }, defaultConfig)
+    const spring = system.createSpring(0, defaultConfig)
+    spring.target = 100
 
     system.start()
     await frames(5)
@@ -116,8 +119,10 @@ describe('ticker with requestAnimationFrame', () => {
 
   test('dispose() during animation does not cause errors', async () => {
     const system = createSpringSystem({ reducedMotion: 'never' })
-    const springA = system.createSpring({ target: 100, value: 0 }, defaultConfig)
-    const springB = system.createSpring({ target: 50, value: 0 }, defaultConfig)
+    const springA = system.createSpring(0, defaultConfig)
+    springA.target = 100
+    const springB = system.createSpring(0, defaultConfig)
+    springB.target = 50
 
     const settledB = waitForStop(springB)
 
@@ -134,7 +139,8 @@ describe('ticker with requestAnimationFrame', () => {
 
   test('onUpdate fires each frame during animation', async () => {
     const system = createSpringSystem({ reducedMotion: 'never' })
-    const spring = system.createSpring({ target: 0, value: 100 }, defaultConfig)
+    const spring = system.createSpring(100, defaultConfig)
+    spring.target = 0
 
     let updateCount = 0
     spring.onUpdate(() => {
@@ -159,11 +165,13 @@ describe('ticker with requestAnimationFrame', () => {
       adjustedLag: 16,
       reducedMotion: 'never',
     })
-    const clampedSpring = clamped.createSpring({ target: 0, value: 100 }, springOpts)
+    const clampedSpring = clamped.createSpring(100, springOpts)
+    clampedSpring.target = 0
 
     // Reference system: manually advanced by exactly adjustedLag
     const reference = createSpringSystem({ reducedMotion: 'never' })
-    const refSpring = reference.createSpring({ target: 0, value: 100 }, springOpts)
+    const refSpring = reference.createSpring(100, springOpts)
+    refSpring.target = 0
 
     // Let the clamped system run a few normal frames to establish timing
     clamped.start()
@@ -187,10 +195,8 @@ describe('ticker with requestAnimationFrame', () => {
     // as if no clamping occurred (i.e., with the full 200ms elapsed).
     // If lag was NOT clamped, the spring would have jumped much further.
     const unclamped = createSpringSystem({ reducedMotion: 'never' })
-    const unclampedSpring = unclamped.createSpring(
-      { target: 0, value: valueBeforeSpike },
-      springOpts,
-    )
+    const unclampedSpring = unclamped.createSpring(valueBeforeSpike, springOpts)
+    unclampedSpring.target = 0
     unclamped.advance(200)
     const unclampedValue = unclampedSpring.value
 

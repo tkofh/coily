@@ -71,18 +71,22 @@ A spring can follow another spring's live value instead of a fixed number:
 
 ```ts
 const leader = system.createSpring(0)
-const follower = system.createSpring({ target: leader })
-const trailing = system.createSpring({ target: { spring: leader, offset: 20 } })
+
+const follower = system.createSpring(leader.value)
+follower.target = leader
+
+const trailing = system.createSpring(leader.value + 20)
+trailing.target = { spring: leader, offset: 20 }
 ```
 
 Followers inherit the leader's config unless given their own. Assigning a number to `target` unfollows.
 
 ### Objects
 
-`system.createSpringObject(value, config?)` springs over any numeric shape — a plain object or array whose leaves are all numbers, nested arbitrarily. Each leaf becomes an independent channel behind one composite API:
+`createSpring` also takes any numeric shape — a plain object or array whose leaves are all numbers, nested arbitrarily. Each leaf becomes an independent channel behind one composite API:
 
 ```ts
-const spring = system.createSpringObject({ position: { x: 0, y: 0 }, opacity: 1 })
+const spring = system.createSpring({ position: { x: 0, y: 0 }, opacity: 1 })
 
 spring.target = { position: { x: 100 } } // partial — other channels are left alone
 spring.value // { position: { x, y }, opacity } — a stable, read-only mirror
@@ -109,7 +113,7 @@ trailing.target = { spring: leader, offset: { position: { x: 20 } } }
 
 ## Reduced motion
 
-Coily respects `prefers-reduced-motion` by default. When it's active, springs snap to their targets instead of animating: retargets and value writes apply instantly, velocity impulses are ignored, and springs created displaced start at their target. Events stay coherent — one `update` per change, no `start`/`stop`, and `settled` resolves immediately — so code written against the animated path keeps working.
+Coily respects `prefers-reduced-motion` by default. When it's active, springs snap to their targets instead of animating: retargets and value writes apply instantly, and velocity impulses are ignored. Events stay coherent — one `update` per change, no `start`/`stop`, and `settled` resolves immediately — so code written against the animated path keeps working.
 
 Control it with the `reducedMotion` system option: `'user'` (default — follow the OS setting, including live changes, which finish in-flight animations instantly), `'always'`, or `'never'`. Read `system.reducedMotion` to gate purely decorative effects (particles, flourishes) in your own code.
 
@@ -146,7 +150,7 @@ Numeric shapes work the same way: pass a record or array (plain, ref, or getter)
 
 There's also a renderless `<SpringValue :target="n">` component exposing `{ value, velocity, isResting, timeRemaining, jumpTo }` through its default slot.
 
-For imperative work — a dynamic set of springs created and disposed at arbitrary times (particles, per-item effects) — `useSpringPool()` returns `createSpring`/`createSpringObject` bound to the provided system. Every spring created through the pool is disposed automatically when the component's scope is torn down, so leaked motions are structurally impossible; disposing a spring manually before that is fine.
+For imperative work — a dynamic set of springs created and disposed at arbitrary times (particles, per-item effects) — `useSpringPool()` returns `createSpring` bound to the provided system. Every spring created through the pool is disposed automatically when the component's scope is torn down, so leaked motions are structurally impossible; disposing a spring manually before that is fine.
 
 ## Nuxt
 

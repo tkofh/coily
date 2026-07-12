@@ -8,10 +8,9 @@
  */
 import type {
   ReadonlyShape,
-  Shape,
+  Spring,
   SpringConfig,
   SpringObject,
-  SpringPosition,
   SpringSystem,
 } from '../src/index.ts'
 
@@ -20,11 +19,11 @@ declare const cfg: SpringConfig
 
 // ── Value shapes: everything numeric composes ───────────────────────
 
-system.createSpringObject({ x: 0, y: 0 })
-system.createSpringObject({ position: { x: 0, y: 0 }, color: [0, 0, 0], opacity: 1 })
-system.createSpringObject([0, 0])
-system.createSpringObject({ 0: 10, 1: 20 })
-system.createSpringObject({ items: [{ x: 0 }, { x: 1 }] })
+system.createSpring({ x: 0, y: 0 })
+system.createSpring({ position: { x: 0, y: 0 }, color: [0, 0, 0], opacity: 1 })
+system.createSpring([0, 0])
+system.createSpring({ 0: 10, 1: 20 })
+system.createSpring({ items: [{ x: 0 }, { x: 1 }] })
 
 // Interfaces satisfy `Shape` without index signatures
 interface Vector2 {
@@ -32,59 +31,59 @@ interface Vector2 {
   y: number
 }
 declare const vec: Vector2
-system.createSpringObject(vec)
+system.createSpring(vec)
 
 interface Transform {
   position: Vector2
   scale: number
 }
 declare const transform: Transform
-system.createSpringObject(transform)
+system.createSpring(transform)
 
 // Dynamic records and tuples
 declare const channels: Record<string, number>
-system.createSpringObject(channels)
+system.createSpring(channels)
 declare const pair: [number, number]
-const tuple = system.createSpringObject(pair)
+const tuple = system.createSpring(pair)
 
 // ── Value shapes: non-numeric leaves are rejected at the leaf ───────
 
 // @ts-expect-error string channels are not animatable
-system.createSpringObject({ x: 'nope' })
+system.createSpring({ x: 'nope' })
 // @ts-expect-error boolean channels are not animatable
-system.createSpringObject({ visible: true })
+system.createSpring({ visible: true })
 // @ts-expect-error null is not a channel value
-system.createSpringObject({ x: null })
+system.createSpring({ x: null })
 // @ts-expect-error nested channels are validated too
-system.createSpringObject({ position: { x: 0, y: 'nope' } })
+system.createSpring({ position: { x: 0, y: 'nope' } })
 // @ts-expect-error functions are not channels
-system.createSpringObject({ f: () => 0 })
+system.createSpring({ f: () => 0 })
 // @ts-expect-error class instances are not plain shapes
-system.createSpringObject(new Date())
-// @ts-expect-error primitives are not shapes
-system.createSpringObject(5)
+system.createSpring(new Date())
+// @ts-expect-error strings are neither scalar values nor shapes
+system.createSpring('5')
 // @ts-expect-error a shape needs at least one channel
-system.createSpringObject({})
+system.createSpring({})
 // @ts-expect-error empty subtrees have no channels
-system.createSpringObject({ position: {} })
+system.createSpring({ position: {} })
 // @ts-expect-error empty arrays have no channels
-system.createSpringObject({ items: [] })
+system.createSpring({ items: [] })
 
 // Channels that may be absent or undefined would make two springs of the
 // same declared shape structurally incompatible at runtime, so `Shape`
 // rejects them outright.
 declare const optional: { x: number; y?: number }
 // @ts-expect-error optional channels are rejected
-system.createSpringObject(optional)
+system.createSpring(optional)
 // @ts-expect-error undefined is not a channel value
-system.createSpringObject({ x: 0, y: undefined })
+system.createSpring({ x: 0, y: undefined })
 declare const mixed: { x: number | string }
 // @ts-expect-error union channels must be plain numbers
-system.createSpringObject(mixed)
+system.createSpring(mixed)
 
 // ── Inference, partial writes, and read-only reads ──────────────────
 
-const obj = system.createSpringObject({ position: { x: 0, y: 0 }, opacity: 1 })
+const obj = system.createSpring({ position: { x: 0, y: 0 }, opacity: 1 })
 
 const opacity: number = obj.value.opacity
 const x: number = obj.target.position.x
@@ -140,11 +139,11 @@ follower3d.target = leader
 
 // ── Config shapes ────────────────────────────────────────────────────
 
-system.createSpringObject({ x: 0, y: 0 }, cfg)
-system.createSpringObject({ x: 0, y: 0 }, null)
-system.createSpringObject({ x: 0, y: 0 }, { x: cfg })
-system.createSpringObject({ x: 0, y: 0 }, { x: cfg, y: null })
-system.createSpringObject({ position: { x: 0, y: 0 }, opacity: 1 }, { position: cfg })
+system.createSpring({ x: 0, y: 0 }, cfg)
+system.createSpring({ x: 0, y: 0 }, null)
+system.createSpring({ x: 0, y: 0 }, { x: cfg })
+system.createSpring({ x: 0, y: 0 }, { x: cfg, y: null })
+system.createSpring({ position: { x: 0, y: 0 }, opacity: 1 }, { position: cfg })
 
 obj.config = cfg
 obj.config = null
@@ -158,30 +157,27 @@ obj.config = { opacity: 170 }
 // Configs are always `SpringConfig` instances, so a bare options object is
 // rejected everywhere a config is expected.
 // @ts-expect-error bare options are not a config
-system.createSpringObject({ x: 0, y: 0 }, { tension: 170, damping: 26 })
+system.createSpring({ x: 0, y: 0 }, { tension: 170, damping: 26 })
 // @ts-expect-error bare options are not a config, even at a leaf
-system.createSpringObject({ x: 0, y: 0 }, { x: { tension: 170, damping: 26 } })
+system.createSpring({ x: 0, y: 0 }, { x: { tension: 170, damping: 26 } })
 
 // A channel named like a spring option is unremarkable — there is no
 // ambiguity to resolve, since a config is always a `SpringConfig`.
-const collide = system.createSpringObject({ tension: 0, damping: 0 })
+const collide = system.createSpring({ tension: 0, damping: 0 })
 collide.config = cfg
 collide.config = { tension: cfg, damping: cfg }
 // @ts-expect-error a number is not a config, even at an option-named channel
 collide.config = { tension: 170, damping: 26 }
 
-// ── Why shapes get `createSpringObject`, not a `createSpring` overload ─
+// ── One `createSpring`, dispatched on the value ─────────────────────
 
-// A shape whose root keys are a subset of {target, value} already has a
-// meaning as a scalar spring descriptor. The same literal satisfying both
-// types is the proof: an overloaded `createSpring` would silently pick the
-// scalar parse and return the wrong instance type for such shapes.
-const ambiguous = { target: 100, value: 0 }
-const asScalarDescriptor: SpringPosition = ambiguous
-const asValueShape: Shape<{ target: number; value: number }> = ambiguous
-void asScalarDescriptor
-void asValueShape
-
-// The two creation paths stay disjoint:
-// @ts-expect-error a value shape is not a scalar spring position
-system.createSpring({ x: 0, y: 0 })
+// Scalar creation takes a number; any object or array is a value shape.
+// Channels named `target` or `value` are unremarkable — the displaced
+// scalar creation form that once claimed such literals no longer exists.
+const scalar: Spring = system.createSpring(5)
+const composite: SpringObject<{ target: number; value: number }> = system.createSpring({
+  target: 100,
+  value: 0,
+})
+void scalar
+void composite

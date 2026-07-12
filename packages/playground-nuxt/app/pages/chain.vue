@@ -67,7 +67,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => clearTimeout(autoTimer))
 
-const chainConfig = defineSpring({ bounce: -1, duration: 1000, precision: 3 })
+const chainConfig = defineSpring({ bounce: -1, duration: 500, precision: 3 })
 
 // Build chain: first spring follows mouse, each subsequent spring follows the previous
 const springs: SpringObjectRef<{ x: number; y: number }>[] = []

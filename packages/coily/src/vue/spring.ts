@@ -155,7 +155,9 @@ function createLinkedSpringRef(
   options: UseSpringOptions | undefined,
 ): SpringRef {
   const system = injectSpringSystem()
+  const leader = leaderRef[SpringInstanceKey]
   const config = resolveSpringConfig(options)
-  const spring = system.createSpring({ target: leaderRef[SpringInstanceKey] }, config.value)
+  const spring = system.createSpring(leader.value, config.value)
+  spring.target = leader
   return createReactiveSpringRef(spring, config, SpringInstanceKey)
 }

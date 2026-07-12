@@ -16,7 +16,8 @@ function simulate(
     tension: params.tension,
     damping: params.damping,
   })
-  const spring = system.createSpring({ target: params.target, value: params.value }, config)
+  const spring = system.createSpring(params.value, config)
+  spring.target = params.target
 
   const snapshots: { time: number; value: number; velocity: number }[] = []
   let t = 0

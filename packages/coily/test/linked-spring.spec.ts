@@ -20,7 +20,8 @@ describe('Spring: following', () => {
     test('starts at leader value', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(50, config)
-      const follower = system.createSpring({ target: leader })
+      const follower = system.createSpring(leader.value)
+      follower.target = leader
 
       expect(follower.value).toBe(50)
     })
@@ -28,7 +29,8 @@ describe('Spring: following', () => {
     test('starts at leader value plus offset', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(50, config)
-      const follower = system.createSpring({ target: { spring: leader, offset: 20 } })
+      const follower = system.createSpring(leader.value + 20)
+      follower.target = { spring: leader, offset: 20 }
 
       expect(follower.value).toBe(70)
     })
@@ -36,7 +38,8 @@ describe('Spring: following', () => {
     test('starts at custom value when provided', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(50, config)
-      const follower = system.createSpring({ target: leader, value: 0 })
+      const follower = system.createSpring(0)
+      follower.target = leader
 
       expect(follower.value).toBe(0)
       expect(follower.isResting).toBe(false)
@@ -47,7 +50,8 @@ describe('Spring: following', () => {
     test('follows leader to new target', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
-      const follower = system.createSpring({ target: leader })
+      const follower = system.createSpring(leader.value)
+      follower.target = leader
 
       leader.target = 100
       advanceUntilResting(system, follower)
@@ -58,7 +62,8 @@ describe('Spring: following', () => {
     test('follows leader with offset', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
-      const follower = system.createSpring({ target: { spring: leader, offset: 25 } })
+      const follower = system.createSpring(leader.value + 25)
+      follower.target = { spring: leader, offset: 25 }
 
       leader.target = 100
       advanceUntilResting(system, follower)
@@ -69,7 +74,8 @@ describe('Spring: following', () => {
     test('follower lags behind leader', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
-      const follower = system.createSpring({ target: leader })
+      const follower = system.createSpring(leader.value)
+      follower.target = leader
 
       leader.target = 100
       for (let i = 0; i < 5; i++) system.advance(1000 / 60)
@@ -82,8 +88,10 @@ describe('Spring: following', () => {
     test('chaining: follower of follower', () => {
       const system = createSpringSystem()
       const a = system.createSpring(0, config)
-      const b = system.createSpring({ target: a })
-      const c = system.createSpring({ target: b })
+      const b = system.createSpring(a.value)
+      b.target = a
+      const c = system.createSpring(b.value)
+      c.target = b
 
       a.target = 100
       advanceUntilResting(system, c)
@@ -123,7 +131,8 @@ describe('Spring: following', () => {
     test('can switch from following to standalone', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(100, config)
-      const spring = system.createSpring({ target: leader })
+      const spring = system.createSpring(leader.value)
+      spring.target = leader
 
       advanceUntilResting(system, spring)
       expect(spring.value).toBeCloseTo(100, 0)
@@ -138,7 +147,8 @@ describe('Spring: following', () => {
       const system = createSpringSystem()
       const a = system.createSpring(50, config)
       const b = system.createSpring(200, config)
-      const follower = system.createSpring({ target: a })
+      const follower = system.createSpring(a.value)
+      follower.target = a
 
       advanceUntilResting(system, follower)
       expect(follower.value).toBeCloseTo(50, 0)
@@ -154,7 +164,8 @@ describe('Spring: following', () => {
     test('inherits leader config by default', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
-      const follower = system.createSpring({ target: leader })
+      const follower = system.createSpring(leader.value)
+      follower.target = leader
 
       expect(follower.tension).toBe(leader.tension)
       expect(follower.damping).toBe(leader.damping)
@@ -164,7 +175,8 @@ describe('Spring: following', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
       const customConfig = defineSpring({ mass: 1, tension: 300, damping: 10 })
-      const follower = system.createSpring({ target: leader }, customConfig)
+      const follower = system.createSpring(leader.value, customConfig)
+      follower.target = leader
 
       expect(follower.tension).toBe(300)
     })
@@ -172,7 +184,8 @@ describe('Spring: following', () => {
     test('picks up leader config changes when no override', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
-      const follower = system.createSpring({ target: leader })
+      const follower = system.createSpring(leader.value)
+      follower.target = leader
 
       const newConfig = defineSpring({ mass: 1, tension: 300, damping: 30 })
       leader.config = newConfig
@@ -185,7 +198,8 @@ describe('Spring: following', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
       const customConfig = defineSpring({ mass: 1, tension: 300, damping: 10 })
-      const follower = system.createSpring({ target: leader }, customConfig)
+      const follower = system.createSpring(leader.value, customConfig)
+      follower.target = leader
 
       const newConfig = defineSpring({ mass: 1, tension: 500, damping: 50 })
       leader.config = newConfig
@@ -196,7 +210,8 @@ describe('Spring: following', () => {
     test('setting config on follower overrides inheritance', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
-      const follower = system.createSpring({ target: leader })
+      const follower = system.createSpring(leader.value)
+      follower.target = leader
 
       follower.config = defineSpring({ mass: 1, tension: 400, damping: 20 })
 
@@ -210,7 +225,8 @@ describe('Spring: following', () => {
     test('setting config to null resumes inheritance', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
-      const follower = system.createSpring({ target: leader })
+      const follower = system.createSpring(leader.value)
+      follower.target = leader
 
       follower.config = defineSpring({ mass: 1, tension: 400, damping: 20 })
       expect(follower.tension).toBe(400)
@@ -222,8 +238,10 @@ describe('Spring: following', () => {
     test('config changes propagate through a chain of inheriting followers', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
-      const middle = system.createSpring({ target: leader })
-      const tail = system.createSpring({ target: middle })
+      const middle = system.createSpring(leader.value)
+      middle.target = leader
+      const tail = system.createSpring(middle.value)
+      tail.target = middle
 
       leader.config = defineSpring({ mass: 1, tension: 300, damping: 30 })
 
@@ -235,10 +253,12 @@ describe('Spring: following', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
       const middle = system.createSpring(
-        { target: leader },
+        leader.value,
         defineSpring({ mass: 1, tension: 400, damping: 20 }),
       )
-      const tail = system.createSpring({ target: middle })
+      middle.target = leader
+      const tail = system.createSpring(middle.value)
+      tail.target = middle
 
       leader.config = defineSpring({ mass: 1, tension: 300, damping: 30 })
 
@@ -249,7 +269,8 @@ describe('Spring: following', () => {
     test('unfollowing keeps the inherited config but stops tracking the ex-leader', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
-      const follower = system.createSpring({ target: leader })
+      const follower = system.createSpring(leader.value)
+      follower.target = leader
 
       follower.target = 50
       expect(follower.tension).toBe(config.tension)
@@ -263,7 +284,8 @@ describe('Spring: following', () => {
     test('onUpdate fires when leader moves', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
-      const follower = system.createSpring({ target: leader })
+      const follower = system.createSpring(leader.value)
+      follower.target = leader
       const callback = vi.fn()
 
       follower.onUpdate(callback)
@@ -276,7 +298,8 @@ describe('Spring: following', () => {
     test('a follower emits exactly one update per frame', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
-      const follower = system.createSpring({ target: leader })
+      const follower = system.createSpring(leader.value)
+      follower.target = leader
       const callback = vi.fn()
 
       follower.onUpdate(callback)
@@ -315,7 +338,8 @@ describe('Spring: following', () => {
     test('follower stops following after dispose', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
-      const follower = system.createSpring({ target: leader })
+      const follower = system.createSpring(leader.value)
+      follower.target = leader
       const callback = vi.fn()
 
       follower.onUpdate(callback)
@@ -333,7 +357,8 @@ describe('Spring: following', () => {
     test('leader dispose does not dispose followers', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
-      const follower = system.createSpring({ target: leader })
+      const follower = system.createSpring(leader.value)
+      follower.target = leader
 
       leader.target = 50
       system.advance(1000 / 60)
@@ -348,7 +373,8 @@ describe('Spring: following', () => {
     test('leader dispose detaches followers, which stay usable', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
-      const follower = system.createSpring({ target: leader })
+      const follower = system.createSpring(leader.value)
+      follower.target = leader
 
       leader.dispose()
 
