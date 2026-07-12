@@ -59,7 +59,7 @@ Without a config, springs are critically damped with a ~500ms settle time.
 - `spring.value`: current value, writable to displace the spring
 - `spring.velocity`: current velocity, writable to fling
 - `spring.jumpTo(v)`: snap to a value with no animation
-- `spring.config`: assign a new `SpringDefinition`, or `null` to revert to the default (or the leader's, if following)
+- `spring.config`: assign a new `SpringDefinition`, or `null` to revert to the default
 - `spring.isResting`, `spring.timeRemaining`: settle state and estimated ms until rest
 - `spring.settled`: a promise that resolves when the spring next comes to rest (immediately if already resting). Retargeting mid-flight extends the wait; disposing resolves it. `await spring.settled` to sequence animations
 - `spring.onUpdate(cb)` / `onStart(cb)` / `onStop(cb)` / `onDispose(cb)`: subscribe. Each returns an unsubscribe function. `start` fires when the spring leaves rest, `stop` when it settles. The two always alternate, and retargeting mid-flight fires neither
@@ -77,9 +77,9 @@ const trailing = system.createSpring(mapSpring(leader, (v) => v + 20))
 const mirrored = system.createSpring(mapSpring(leader, (v) => -v))
 ```
 
-Followers inherit the leader's config unless given their own. Assigning a number to `target` unfollows.
+A follower's config is its own: following changes what a spring chases, never how it moves. To match a leader's feel, pass its config at creation — `system.createSpring(leader, leader.config)` — or share a `defineSpring` constant. Assigning a number to `target` unfollows.
 
-`mapSpring` also combines several springs: pass a shape (a plain object or array with springs at the leaves, nested arbitrarily) and a function of their values. An optional third argument pins what the derived value offers followers: a `SpringDefinition`, or `null` to offer none (followers fall back to their default). Omitted, the config the springs share passes through — the one they all use when they agree, none while they differ:
+`mapSpring` also combines several springs: pass a shape (a plain object or array with springs at the leaves, nested arbitrarily) and a function of their values:
 
 ```ts
 const x = system.createSpring(0)

@@ -20,7 +20,7 @@ export interface SpringPool {
   createSpring(value: number, config?: SpringDefinition): Spring
   /**
    * Creates a pooled spring already following `source`, starting at its
-   * current value. Without a `config` of its own it adopts the source's.
+   * current value.
    */
   createSpring(source: SpringSource, config?: SpringDefinition): Spring
   /**

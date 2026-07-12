@@ -7,9 +7,8 @@ import { createSpringSystem } from '../src/system.ts'
  * Adversarial graphs and listeners: self-reference, cycles, thrown user
  * code, reentrant writes, and depth. These pin the containment
  * properties the machinery already relies on — retargets never re-emit,
- * config application early-outs on the resolved reference, and passes
- * recover after a throw — rather than exercising any dedicated guard
- * code.
+ * and passes recover after a throw — rather than exercising any
+ * dedicated guard code.
  */
 
 const config = defineSpring({ mass: 1, tension: 170, damping: 26 })
@@ -114,24 +113,6 @@ describe('pathological graphs: cycles', () => {
     expect(Number.isFinite(b.value)).toBe(true)
   })
 
-  test('a configure cascade through a follow cycle terminates and sticks', () => {
-    const system = createSpringSystem()
-    const a = system.createSpring(0)
-    const b = system.createSpring(0)
-    a.target = b
-    b.target = a
-
-    a.config = stiff
-    expect(a.config).toBe(stiff)
-    expect(b.config).toBe(stiff)
-
-    // Clearing a's own config falls back to its leader — which inherited
-    // from a. The cycle makes the config sticky rather than looping.
-    a.config = null
-    expect(a.config).toBe(stiff)
-    expect(b.config).toBe(stiff)
-  })
-
   test('disposing inside a follow cycle detaches cleanly', () => {
     const system = createSpringSystem()
     const a = system.createSpring(0, config)
@@ -180,29 +161,6 @@ describe('pathological graphs: cycles', () => {
 
     expect(spring.value.x).toBeCloseTo(100, 0)
     expect(spring.value.y).toBeCloseTo(100, 0)
-  })
-
-  test('config passthrough through a self-referential map converges', () => {
-    const system = createSpringSystem()
-    const spring = system.createSpring({ x: 0, y: 0 })
-
-    // x adopts the composite's shared config through the map, and its
-    // adoption feeds back into the resolution it adopted from.
-    spring.target = { x: mapSpring(spring, ({ y }) => y) }
-
-    // Reconfiguring y breaks the agreement mid-follow: the configure
-    // event re-enters the composite through the map, and x must settle
-    // on its default instead of oscillating.
-    spring.config = { y: stiff }
-    spring.target = { y: 50 }
-
-    for (let i = 0; i < 600; i++) {
-      system.advance(FRAME)
-      if (spring.isResting) break
-    }
-
-    expect(spring.value.x).toBeCloseTo(50, 0)
-    expect(spring.value.y).toBeCloseTo(50, 0)
   })
 
   test('a channel chasing an expanding map of itself stays contained', () => {

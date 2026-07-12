@@ -142,7 +142,6 @@ export interface SpringSystem {
    * derived with `mapSpring`. It starts at the source's current value,
    * so nothing moves until the source does; equivalent to creating a
    * spring at `source.value` and assigning `source` to its `target`.
-   * Without a `config` of its own it adopts the source's.
    */
   createSpring(source: SpringSource, config?: SpringDefinition): Spring
   /**

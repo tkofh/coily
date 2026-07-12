@@ -64,7 +64,7 @@ export type ReadonlyShape<T> = T extends number
  * Configuration for a composite spring: a single `SpringDefinition` applied to every
  * channel, or an object mirroring the value shape with configs at any level.
  * A config at a subtree applies to every channel below it.
- * `null` reverts to the default config (or the leader's while following).
+ * `null` reverts to the default config.
  * Configs are always `SpringDefinition` instances (from `defineSpring`), so a
  * plain object is unambiguously a config shape and any non-config leaf it
  * reaches is an error.
@@ -188,22 +188,15 @@ export class CompositeSpring<in out T extends object> implements SpringSource<Re
   readonly #emitter = new Emitter()
   #running = false
   #dirty = false
-  #configured = false
 
   #settled: Promise<void> | null = null
   #resolveSettled: (() => void) | null = null
   #disposed = false
 
-  // One flush per write batch or tick: configure lands first so update
-  // listeners read settled configs, and the coalesced update is emitted
+  // One flush per write batch or tick: the coalesced update is emitted
   // before stop, so a stop always lands after the frame's final update.
   readonly #flush = () => {
     if (this.#disposed) return
-
-    if (this.#configured) {
-      this.#configured = false
-      this.#emitter.emit('configure')
-    }
 
     if (this.#dirty) {
       this.#dirty = false
@@ -242,16 +235,11 @@ export class CompositeSpring<in out T extends object> implements SpringSource<Re
       this.#dirty = true
       this.#motions.flushes.request(this.#flush)
     }
-    const markConfigured = () => {
-      this.#configured = true
-      this.#motions.flushes.request(this.#flush)
-    }
     const schedule = () => {
       this.#motions.flushes.request(this.#flush)
     }
     for (const channel of this.#map.leaves) {
       channel.onUpdate(markDirty)
-      channel.onConfigure(markConfigured)
       channel.onStart(schedule)
       channel.onStop(schedule)
     }
@@ -270,8 +258,7 @@ export class CompositeSpring<in out T extends object> implements SpringSource<Re
    *   `mapSpring`. While following a leader, naming a channel also
    *   detaches that channel from it.
    * - A `CompositeSpring` of the same shape follows the leader channel by
-   *   channel. Channels without a config of their own adopt the leader
-   *   channel's (and likewise adopt a followed source's).
+   *   channel.
    *
    * Unknown channels throw with their path.
    */
@@ -336,10 +323,9 @@ export class CompositeSpring<in out T extends object> implements SpringSource<Re
    * `SpringDefinition`, and `null` when they differ.
    *
    * Assignment accepts a `ConfigShape`: one config for every channel,
-   * `null` to revert every channel to the default (or to its leader
-   * channel's, while following), or a shape mirroring the value with
-   * configs at any level — a config at a subtree covers every channel
-   * below it. Non-config leaves throw with their path.
+   * `null` to revert every channel to the default, or a shape mirroring
+   * the value with configs at any level — a config at a subtree covers
+   * every channel below it. Non-config leaves throw with their path.
    */
   get config(): SpringDefinition | null {
     const channels = this.#map.leaves
@@ -454,16 +440,6 @@ export class CompositeSpring<in out T extends object> implements SpringSource<Re
    */
   onStop(callback: () => void) {
     return this.#emitter.on('stop', callback)
-  }
-
-  /**
-   * Subscribes to any channel's resolved config changing — an assignment
-   * to `config`, or a cascade from a leader — coalesced to at most one
-   * event per write batch or tick, fired before that batch's `update`.
-   * Returns an unsubscribe function.
-   */
-  onConfigure(callback: () => void) {
-    return this.#emitter.on('configure', callback)
   }
 
   /** Subscribes to `dispose`, which fires once. Returns an unsubscribe function. */

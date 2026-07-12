@@ -1,5 +1,4 @@
 import { describePath } from './channel-tree.ts'
-import type { SpringDefinition } from './config.ts'
 import { invariant, isArray, isRecordOrArray } from './util.ts'
 
 /**
@@ -19,20 +18,14 @@ export const SpringSourceSymbol: unique symbol = Symbol.for('coily/spring-source
  *
  * The contract is open — an object with these members can bridge any
  * live value (a pointer position, a scroll offset) into a source.
- * Followers read `value` on every update, adopt `config` when they
- * have none of their own (`null` means the default), and detach on
- * dispose.
+ * Followers read `value` on every update and detach on dispose.
  */
 export interface SpringSource<T = number> {
   readonly [SpringSourceSymbol]: true
   /** The current value, in value units. */
   readonly value: T
-  /** The config followers without their own adopt. `null` means the default. */
-  readonly config: SpringDefinition | null
   /** Subscribes to value changes. Returns an unsubscribe function. */
   onUpdate(callback: () => void): () => void
-  /** Subscribes to `config` changes. Returns an unsubscribe function. */
-  onConfigure(callback: () => void): () => void
   /** Subscribes to the source being released. Returns an unsubscribe function. */
   onDispose(callback: () => void): () => void
 }
@@ -78,10 +71,6 @@ export type SourceShape<T> = 0 extends 1 & T
 export type SourceValues<T> =
   T extends SpringSource<infer V> ? V : { readonly [K in keyof T]: SourceValues<T[K]> }
 
-const noop = () => {}
-// A pinned config never changes, so configure subscriptions never fire.
-const neverConfigure = () => noop
-
 const joinPath = (path: string, key: string) => (path ? `${path}.${key}` : key)
 
 function emptyShape(path: string): string {
@@ -92,22 +81,10 @@ function emptyShape(path: string): string {
 interface MappedRecipe {
   /** Deduplicated subscription targets — the chain's true roots. */
   readonly sources: readonly SpringSource<unknown>[]
-  /**
-   * Deduplicated config providers — the shape's immediate leaves, not
-   * the roots, so a mapped leaf participates with the config it offers
-   * (its pin included) rather than its sources' own.
-   */
-  readonly configSources: readonly SpringSource<unknown>[]
   /** Reads the value the pipeline starts from. */
   readonly read: () => unknown
   /** The composed maps, applied in order. */
   readonly fns: readonly ((value: unknown) => unknown)[]
-  /**
-   * The statically offered config. `null` means the config was never
-   * given anywhere in the chain: the config the `configSources` agree
-   * on passes through, live.
-   */
-  readonly pinned: { readonly value: SpringDefinition | null } | null
 }
 
 // Mapped sources flatten when composed: the registry lets `mapSpring`
@@ -126,20 +103,12 @@ function applyFns(fns: readonly ((value: unknown) => unknown)[], value: unknown)
 
 /**
  * Validates one node of a source shape and compiles its reader,
- * collecting the leaves along the way: subscription roots into `leaves`
- * (a mapped leaf contributes its recipe's roots) and config providers
- * into `configLeaves` (a mapped leaf contributes itself). Structure is
- * fixed at creation, so reads walk precompiled readers instead of
- * re-validating.
+ * collecting the leaves along the way (a mapped leaf contributes its
+ * recipe's roots). Structure is fixed at creation, so reads walk
+ * precompiled readers instead of re-validating.
  */
-function compileNode(
-  node: unknown,
-  path: string,
-  leaves: SpringSource<unknown>[],
-  configLeaves: SpringSource<unknown>[],
-): () => unknown {
+function compileNode(node: unknown, path: string, leaves: SpringSource<unknown>[]): () => unknown {
   if (isSpringSource(node)) {
-    configLeaves.push(node)
     const recipe = RECIPES.get(node)
     if (recipe) {
       leaves.push(...recipe.sources)
@@ -159,7 +128,7 @@ function compileNode(
     invariant(node.length > 0, () => emptyShape(path))
     const readers: (() => unknown)[] = []
     for (let index = 0; index < node.length; index++) {
-      readers.push(compileNode(node[index], joinPath(path, String(index)), leaves, configLeaves))
+      readers.push(compileNode(node[index], joinPath(path, String(index)), leaves))
     }
     return () => readers.map((read) => read())
   }
@@ -168,7 +137,7 @@ function compileNode(
   invariant(keys.length > 0, () => emptyShape(path))
   const readers: [string, () => unknown][] = []
   for (const key of keys) {
-    readers.push([key, compileNode(node[key], joinPath(path, key), leaves, configLeaves)])
+    readers.push([key, compileNode(node[key], joinPath(path, key), leaves)])
   }
   return () => {
     const values: Record<string, unknown> = {}
@@ -186,12 +155,6 @@ function compileNode(
  * `SpringSource` like any other, so it can be mapped again, used as a
  * leaf of a shape map, or followed by several springs at once.
  *
- * `config` sets the config the mapped source offers followers: a
- * `SpringDefinition` to offer that one, `null` to offer none (followers
- * fall back to their default). Omitted, the underlying source's config
- * passes through, changes included; given, it is fixed, and the mapped
- * source never fires configure events.
- *
  * The result is a stateless view, not a spring: it holds no
  * subscriptions and needs no disposal, and reads compute `map(source.value)`
  * on the fly. `map` must be pure — it runs on every read and every
@@ -200,11 +163,7 @@ function compileNode(
  * extends its pipeline rather than wrapping it, so chains cost one
  * function call per map however long they grow.
  */
-export function mapSpring(
-  source: SpringSource,
-  map: (value: number) => number,
-  config?: SpringDefinition | null,
-): SpringSource
+export function mapSpring(source: SpringSource, map: (value: number) => number): SpringSource
 /**
  * Derives a scalar source from several channels by a pure function of
  * their values. `sources` is a shape — a plain object or array with
@@ -215,15 +174,6 @@ export function mapSpring(
  * live value shape for a composite
  * (`mapSpring(point, ({ x, y }) => Math.hypot(x, y))`). Invalid
  * leaves throw with their path (`position.z`).
- *
- * `config` sets the config the mapped source offers followers: a
- * `SpringDefinition` to offer that one, `null` to offer none (followers
- * fall back to their default). Given, it is fixed, and the mapped
- * source never fires configure events. Omitted, the sources' shared
- * config passes through, changes included: the config the leaves offer
- * when every leaf offers the same `SpringDefinition`, none while any
- * differ. A composite leaf offers its channels' shared config; a
- * mapped leaf, whatever it offers its own followers.
  *
  * The result is a stateless view, not a spring: it holds no
  * subscriptions and needs no disposal, and reads compute `map` over the
@@ -237,66 +187,34 @@ export function mapSpring(
 export function mapSpring<const T extends object>(
   sources: T & SourceShape<T>,
   map: (values: SourceValues<T>) => number,
-  config?: SpringDefinition | null,
 ): SpringSource
-export function mapSpring(
-  source: object,
-  map: (value: never) => number,
-  config?: SpringDefinition | null,
-): SpringSource {
+export function mapSpring(source: object, map: (value: never) => number): SpringSource {
   const compute = map as (value: unknown) => number
 
   let recipe: MappedRecipe
   if (isSpringSource(source)) {
     const flat = RECIPES.get(source)
-    const pinned = config !== undefined ? { value: config } : (flat?.pinned ?? null)
     recipe = flat
-      ? {
-          sources: flat.sources,
-          configSources: flat.configSources,
-          read: flat.read,
-          fns: [...flat.fns, compute],
-          pinned,
-        }
-      : {
-          sources: [source],
-          configSources: [source],
-          read: () => source.value,
-          fns: [compute],
-          pinned,
-        }
+      ? { sources: flat.sources, read: flat.read, fns: [...flat.fns, compute] }
+      : { sources: [source], read: () => source.value, fns: [compute] }
   } else {
     const leaves: SpringSource<unknown>[] = []
-    const configLeaves: SpringSource<unknown>[] = []
-    const read = compileNode(source, '', leaves, configLeaves)
+    const read = compileNode(source, '', leaves)
     recipe = {
       // The same source can sit at several leaves; subscribe to it once.
       sources: [...new Set(leaves)],
-      configSources: [...new Set(configLeaves)],
       read,
       fns: [compute],
-      pinned: config !== undefined ? { value: config } : null,
     }
   }
 
-  const { sources, configSources, read, fns, pinned } = recipe
+  const { sources, read, fns } = recipe
   const single = sources.length === 1 ? sources[0]! : null
-  const singleConfig = configSources.length === 1 ? configSources[0]! : null
 
   const mapped: SpringSource = Object.freeze({
     [SpringSourceSymbol]: true as const,
     get value() {
       return applyFns(fns, read()) as number
-    },
-    get config() {
-      if (pinned) return pinned.value
-      // Mirrors `CompositeSpring.config`: the config every provider
-      // offers when they agree, none while any differ.
-      const first = configSources[0]!.config
-      for (let i = 1; i < configSources.length; i++) {
-        if (configSources[i]!.config !== first) return null
-      }
-      return first
     },
     onUpdate: single
       ? (callback: () => void) => single.onUpdate(callback)
@@ -306,18 +224,6 @@ export function mapSpring(
             for (const unsubscribe of unsubscribes) unsubscribe()
           }
         },
-    onConfigure: pinned
-      ? neverConfigure
-      : singleConfig
-        ? (callback: () => void) => singleConfig.onConfigure(callback)
-        : (callback: () => void) => {
-            // A provider's configure may leave the agreement where it was;
-            // followers re-read `config` and no-op when it resolves the same.
-            const unsubscribes = configSources.map((leaf) => leaf.onConfigure(callback))
-            return () => {
-              for (const unsubscribe of unsubscribes) unsubscribe()
-            }
-          },
     onDispose: single
       ? (callback: () => void) => single.onDispose(callback)
       : (callback: () => void) => {

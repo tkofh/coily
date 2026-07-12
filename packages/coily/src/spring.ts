@@ -31,8 +31,7 @@ export class Spring implements SpringSource {
   readonly [SpringSourceSymbol] = true as const
 
   #target: number
-  #override: SpringDefinition | null
-  #resolved: SpringDefinition
+  #config: SpringDefinition
   readonly #motion: Motion
   readonly #motions: MotionSet
 
@@ -46,10 +45,9 @@ export class Spring implements SpringSource {
   constructor(motions: MotionSet, value: number, config?: SpringDefinition) {
     invariant(Number.isFinite(value), 'Spring value must be a finite number')
     this.#motions = motions
-    this.#override = config ?? null
-    this.#resolved = config ?? SpringDefinition.default
+    this.#config = config ?? SpringDefinition.default
     this.#target = value
-    this.#motion = new Motion(this.#resolved, 0, 0)
+    this.#motion = new Motion(this.#config, 0, 0)
   }
 
   /**
@@ -61,8 +59,7 @@ export class Spring implements SpringSource {
    *   over, so mid-flight retargets stay smooth. Assigning a number while
    *   following also stops the following.
    * - A `SpringSource` — a `Spring`, or a value derived with `mapSpring` —
-   *   makes this spring follow the source's live value. Followers without
-   *   a config of their own adopt the source's.
+   *   makes this spring follow the source's live value.
    *
    * Under reduced motion, retargets apply instantly.
    */
@@ -134,51 +131,53 @@ export class Spring implements SpringSource {
   }
 
   /**
-   * The spring's resolved `SpringDefinition`: its own if one was assigned,
-   * otherwise the leader's while following, otherwise
-   * `SpringDefinition.default`.
+   * The spring's `SpringDefinition`: the one it was created with or last
+   * assigned, otherwise `SpringDefinition.default`. Following a source
+   * never changes it — how a spring chases its target is the spring's
+   * own setting.
    *
    * Assigning a config reconfigures the spring in place — value and
    * velocity are preserved, so mid-flight reconfigures stay smooth.
-   * Assigning `null` clears the spring's own config, reverting to the
-   * default (or to the leader's, while following). Reconfiguring a leader
-   * cascades to every follower without a config of its own.
-   *
-   * A follower that stops following keeps the leader config it had been
-   * using as its own.
+   * Assigning `null` reverts to the default.
    */
-  get config() {
-    return this.#resolved
+  get config(): SpringDefinition {
+    return this.#config
   }
 
-  /** The resolved config's mass. */
+  /** The config's mass. */
   get mass() {
-    return this.#resolved.mass
+    return this.#config.mass
   }
 
-  /** The resolved config's tension (stiffness). */
+  /** The config's tension (stiffness). */
   get tension() {
-    return this.#resolved.tension
+    return this.#config.tension
   }
 
-  /** The resolved config's damping (friction). */
+  /** The config's damping (friction). */
   get damping() {
-    return this.#resolved.damping
+    return this.#config.damping
   }
 
-  /** The resolved config's damping ratio. */
+  /** The config's damping ratio. */
   get dampingRatio() {
-    return this.#resolved.dampingRatio
+    return this.#config.dampingRatio
   }
 
-  /** The resolved config's resting precision. */
+  /** The config's resting precision. */
   get precision() {
-    return this.#resolved.precision
+    return this.#config.precision
   }
 
   set config(value: SpringDefinition | null) {
-    this.#override = value
-    this.#applyConfig(value ?? this.#leader?.config ?? SpringDefinition.default)
+    const next = value ?? SpringDefinition.default
+    if (this.#config === next) return
+
+    this.#config = next
+    this.#motion.configure(next)
+    if (!this.#motion.isResting) {
+      this.#motions.add(this.#motion)
+    }
   }
 
   /**
@@ -241,8 +240,8 @@ export class Spring implements SpringSource {
 
   /**
    * Releases the spring permanently: stops following, detaches followers
-   * (each keeps its current target and config), resolves `settled`, and
-   * notifies dispose listeners. Calling it again is a no-op.
+   * (each keeps its current target), resolves `settled`, and notifies
+   * dispose listeners. Calling it again is a no-op.
    *
    * A disposed spring keeps its final value readable; writes throw.
    */
@@ -294,15 +293,6 @@ export class Spring implements SpringSource {
     return this.#motion.onStop(callback)
   }
 
-  /**
-   * Subscribes to the resolved config changing — an assignment to
-   * `config`, or a cascade from the source while following without a
-   * config of this spring's own. Returns an unsubscribe function.
-   */
-  onConfigure(callback: () => void) {
-    return this.#motion.onConfigure(callback)
-  }
-
   /** Subscribes to `dispose`, which fires once. Returns an unsubscribe function. */
   onDispose(callback: () => void) {
     return this.#motion.onDispose(callback)
@@ -332,24 +322,14 @@ export class Spring implements SpringSource {
     this.#unsubLeader?.()
     this.#leader = source
 
-    if (this.#override === null) {
-      this.#applyConfig(source.config ?? SpringDefinition.default)
-    }
-
     const unsubUpdate = source.onUpdate(() => {
       this.#setTarget(source.value)
-    })
-    const unsubConfigure = source.onConfigure(() => {
-      if (this.#override === null) {
-        this.#applyConfig(source.config ?? SpringDefinition.default)
-      }
     })
     const unsubDispose = source.onDispose(() => {
       this.#unfollow()
     })
     this.#unsubLeader = () => {
       unsubUpdate()
-      unsubConfigure()
       unsubDispose()
     }
 
@@ -362,23 +342,5 @@ export class Spring implements SpringSource {
     this.#unsubLeader!()
     this.#unsubLeader = null
     this.#leader = null
-
-    if (this.#override === null) {
-      // Adopt the inherited config as our own: unfollowing must not
-      // visibly reconfigure the spring.
-      this.#override = this.#resolved
-    }
-  }
-
-  #applyConfig(next: SpringDefinition) {
-    if (this.#resolved === next) return
-
-    this.#resolved = next
-    // configure() emits, which cascades the change to followers that
-    // haven't overridden their config.
-    this.#motion.configure(next)
-    if (!this.#motion.isResting) {
-      this.#motions.add(this.#motion)
-    }
   }
 }

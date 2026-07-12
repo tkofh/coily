@@ -75,7 +75,6 @@ export class Motion {
     this.#state.configure(config)
     this.#needsUpdate = true
     this.#syncStart()
-    this.#emitter.emit('configure')
   }
 
   tick(dt: number, emit = true) {
@@ -141,10 +140,6 @@ export class Motion {
 
   onStop(callback: () => void) {
     return this.#emitter.on('stop', callback)
-  }
-
-  onConfigure(callback: () => void) {
-    return this.#emitter.on('configure', callback)
   }
 
   onDispose(callback: () => void) {

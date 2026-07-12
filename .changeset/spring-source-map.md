@@ -7,9 +7,8 @@ is now `number | SpringSource`, where `SpringSource<T>` is an open
 contract (`T` defaults to `number`): every `Spring` is a source, every
 `CompositeSpring` is a source of its value shape, and any object
 honoring the contract — brand it with `SpringSourceSymbol` — can bridge
-a pointer position or scroll offset into the graph. `Spring` and
-`CompositeSpring` gained `onConfigure`, which subscribes to resolved
-config changes (coalesced per write batch or tick on composites).
+a pointer position or scroll offset into the graph. The contract is
+three members: `value`, `onUpdate`, and `onDispose`.
 
 `mapSpring` derives new sources by a pure function of existing ones:
 
@@ -24,13 +23,9 @@ distance.target = mapSpring({ x, y }, ({ x, y }) => Math.hypot(x, y))
 magnitude.target = mapSpring(point, ({ x, y }) => Math.hypot(x, y))
 ```
 
-An optional third argument pins the config the derived source offers
-followers — a `SpringDefinition`, or `null` to offer none. Omitted, the
-config the sources share passes through, changes included: a single
-source's own, a composite's channel-shared config, and for shapes the
-config every leaf offers when they all agree (none while any differ).
-Followers inherit config and detach on dispose through a
-map exactly as if following the spring directly; a derived value is
+A source carries a value, never a config — how a follower moves is the
+follower's own setting. Followers detach on dispose through a map
+exactly as if following the spring directly; a derived value is
 released with the first of its sources. Composition is flat — mapping a
 mapped source extends its pipeline instead of nesting it — so chains of
 any length read iteratively and subscribe at their roots.

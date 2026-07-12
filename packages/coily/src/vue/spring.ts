@@ -60,8 +60,8 @@ function hasSpringInstance(value: unknown): value is SpringRefWithInstance {
 export function useSpring(target: MaybeRefOrGetter<number>, options?: UseSpringOptions): SpringRef
 /**
  * Creates a spring that follows another `useSpring` ref's live value,
- * momentum intact. Without `options` the follower uses the leader's
- * config; with them, its own.
+ * momentum intact. `options` configure the follower's own motion; the
+ * leader's config plays no part.
  *
  * Call it during `setup()` below a provided spring system. The spring is
  * disposed with the component's scope.
@@ -69,8 +69,7 @@ export function useSpring(target: MaybeRefOrGetter<number>, options?: UseSpringO
 export function useSpring(target: SpringRef, options?: UseSpringOptions): SpringRef
 /**
  * Creates a composite spring that follows another `useSpring` object ref
- * channel by channel. Channels animate toward the leader's live values;
- * without `options` each uses its leader channel's config.
+ * channel by channel, animating toward the leader's live values.
  *
  * Call it during `setup()` below a provided spring system. The springs
  * are disposed with the component's scope.

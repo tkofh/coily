@@ -382,29 +382,6 @@ describe('CompositeSpring: coalesced events', () => {
     system.advance(FRAME)
     expect(onUpdate).toHaveBeenCalledTimes(1)
   })
-
-  test('onConfigure fires once per batch of channel config changes', () => {
-    const system = createSpringSystem()
-    const spring = system.createSpring({ x: 0, y: 0 })
-    const onConfigure = vi.fn()
-    spring.onConfigure(onConfigure)
-
-    spring.config = config
-    expect(onConfigure).toHaveBeenCalledTimes(1)
-
-    spring.config = { x: defineSpring({ mass: 1, tension: 300, damping: 30 }) }
-    expect(onConfigure).toHaveBeenCalledTimes(2)
-  })
-
-  test('onConfigure does not fire on no-op config writes', () => {
-    const system = createSpringSystem()
-    const spring = system.createSpring({ x: 0, y: 0 }, config)
-    const onConfigure = vi.fn()
-    spring.onConfigure(onConfigure)
-
-    spring.config = config
-    expect(onConfigure).not.toHaveBeenCalled()
-  })
 })
 
 describe('CompositeSpring: partial jumps and writes', () => {
@@ -477,14 +454,14 @@ describe('CompositeSpring: following', () => {
     expect(c.isResting).toBe(false)
   })
 
-  test('inherits the leader config per channel', () => {
+  test('following a leader leaves channel configs untouched', () => {
     const system = createSpringSystem()
     const leader = system.createSpring({ x: 0, y: 0 }, config)
     const follower = system.createSpring({ x: 0, y: 0 })
 
     follower.target = leader
 
-    expect(follower.config).toBe(config)
+    expect(follower.config).toBe(SpringDefinition.default)
   })
 
   test('a partial numeric target detaches only the channels it names', () => {
@@ -544,14 +521,14 @@ describe('CompositeSpring: following', () => {
     expect(follower.value.tag).toBe(1)
   })
 
-  test('a channel adopts a followed source config without its own', () => {
+  test('a channel keeps its own config when following a source', () => {
     const system = createSpringSystem()
     const leader = system.createSpring(0, config)
     const follower = system.createSpring({ x: 0 })
 
     follower.target = { x: leader }
 
-    expect(follower.config).toBe(config)
+    expect(follower.config).toBe(SpringDefinition.default)
   })
 
   test('a source target detaches only the channels it names', () => {
@@ -583,12 +560,10 @@ describe('CompositeSpring: following', () => {
       get value() {
         return current
       },
-      config: null,
       onUpdate: (callback) => {
         listeners.add(callback)
         return () => listeners.delete(callback)
       },
-      onConfigure: () => () => {},
       onDispose: () => () => {},
     }
     const follower = system.createSpring({ x: 0 }, config)

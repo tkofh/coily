@@ -101,7 +101,7 @@ describe('Spring: following', () => {
     })
 
     test('a follow wired after creation propagates in the same frame', () => {
-      // Regression: config inheritance on follow used to park the resting
+      // Regression: applying a config during follow used to park the resting
       // follower in the motion set, where it consumed its once-per-pass tick
       // before the leader emitted — adding a frame of lag per chain link.
       const system = createSpringSystem()
@@ -161,18 +161,17 @@ describe('Spring: following', () => {
     })
   })
 
-  describe('config inheritance', () => {
-    test('inherits leader config by default', () => {
+  describe('config independence', () => {
+    test("a follower without a config uses the default, not the leader's", () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
       const follower = system.createSpring(leader.value)
       follower.target = leader
 
-      expect(follower.tension).toBe(leader.tension)
-      expect(follower.damping).toBe(leader.damping)
+      expect(follower.config).toBe(SpringDefinition.default)
     })
 
-    test('uses custom config when provided', () => {
+    test('uses its own config when provided', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
       const customConfig = defineSpring({ mass: 1, tension: 300, damping: 10 })
@@ -182,33 +181,29 @@ describe('Spring: following', () => {
       expect(follower.tension).toBe(300)
     })
 
-    test('picks up leader config changes when no override', () => {
+    test('leader reconfiguration does not touch followers', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
       const follower = system.createSpring(leader.value)
       follower.target = leader
 
-      const newConfig = defineSpring({ mass: 1, tension: 300, damping: 30 })
-      leader.config = newConfig
+      leader.config = defineSpring({ mass: 1, tension: 300, damping: 30 })
 
-      expect(follower.tension).toBe(300)
-      expect(follower.damping).toBe(30)
+      expect(follower.config).toBe(SpringDefinition.default)
     })
 
-    test('does not inherit when config is overridden', () => {
+    test('copying the leader config at creation is a snapshot, not a link', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
-      const customConfig = defineSpring({ mass: 1, tension: 300, damping: 10 })
-      const follower = system.createSpring(leader.value, customConfig)
-      follower.target = leader
+      const follower = system.createSpring(leader, leader.config)
 
-      const newConfig = defineSpring({ mass: 1, tension: 500, damping: 50 })
-      leader.config = newConfig
+      expect(follower.config).toBe(config)
 
-      expect(follower.tension).toBe(300)
+      leader.config = defineSpring({ mass: 1, tension: 300, damping: 30 })
+      expect(follower.config).toBe(config)
     })
 
-    test('setting config on follower overrides inheritance', () => {
+    test('reconfiguring a follower mid-follow works in place', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
       const follower = system.createSpring(leader.value)
@@ -223,7 +218,7 @@ describe('Spring: following', () => {
       expect(follower.tension).toBe(400)
     })
 
-    test('setting config to null resumes inheritance', () => {
+    test('setting config to null reverts to the default while following', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
       const follower = system.createSpring(leader.value)
@@ -233,51 +228,7 @@ describe('Spring: following', () => {
       expect(follower.tension).toBe(400)
 
       follower.config = null
-      expect(follower.tension).toBe(leader.tension)
-    })
-
-    test('config changes propagate through a chain of inheriting followers', () => {
-      const system = createSpringSystem()
-      const leader = system.createSpring(0, config)
-      const middle = system.createSpring(leader.value)
-      middle.target = leader
-      const tail = system.createSpring(middle.value)
-      tail.target = middle
-
-      leader.config = defineSpring({ mass: 1, tension: 300, damping: 30 })
-
-      expect(middle.tension).toBe(300)
-      expect(tail.tension).toBe(300)
-    })
-
-    test('an overriding follower stops propagation to itself but keeps its own followers', () => {
-      const system = createSpringSystem()
-      const leader = system.createSpring(0, config)
-      const middle = system.createSpring(
-        leader.value,
-        defineSpring({ mass: 1, tension: 400, damping: 20 }),
-      )
-      middle.target = leader
-      const tail = system.createSpring(middle.value)
-      tail.target = middle
-
-      leader.config = defineSpring({ mass: 1, tension: 300, damping: 30 })
-
-      expect(middle.tension).toBe(400)
-      expect(tail.tension).toBe(400)
-    })
-
-    test('unfollowing keeps the inherited config but stops tracking the ex-leader', () => {
-      const system = createSpringSystem()
-      const leader = system.createSpring(0, config)
-      const follower = system.createSpring(leader.value)
-      follower.target = leader
-
-      follower.target = 50
-      expect(follower.tension).toBe(config.tension)
-
-      leader.config = defineSpring({ mass: 1, tension: 999, damping: 99 })
-      expect(follower.tension).toBe(config.tension)
+      expect(follower.config).toBe(SpringDefinition.default)
     })
   })
 
@@ -379,8 +330,6 @@ describe('Spring: following', () => {
 
       leader.dispose()
 
-      // Follower keeps the inherited config and can be retargeted normally
-      expect(follower.tension).toBe(config.tension)
       follower.target = 100
 
       for (let i = 0; i < 600; i++) {
@@ -407,24 +356,16 @@ describe('Spring: following', () => {
       expect(follower.value).toBeCloseTo(-40, 0)
     })
 
-    test('inherits the leader config through a map', () => {
+    test('a map carries values, not configs', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
       const follower = system.createSpring(0)
       follower.target = mapSpring(leader, (value) => value * 2)
 
-      expect(follower.tension).toBe(config.tension)
-    })
-
-    test('leader config changes cascade through a map', () => {
-      const system = createSpringSystem()
-      const leader = system.createSpring(0, config)
-      const follower = system.createSpring(0)
-      follower.target = mapSpring(leader, (value) => value * 2)
+      expect(follower.config).toBe(SpringDefinition.default)
 
       leader.config = defineSpring({ mass: 1, tension: 300, damping: 30 })
-
-      expect(follower.tension).toBe(300)
+      expect(follower.config).toBe(SpringDefinition.default)
     })
 
     test('leader dispose detaches followers through a map', () => {
@@ -450,12 +391,10 @@ describe('Spring: following', () => {
         get value() {
           return current
         },
-        config: null,
         onUpdate: (callback) => {
           listeners.add(callback)
           return () => listeners.delete(callback)
         },
-        onConfigure: () => () => {},
         onDispose: () => () => {},
       }
 
@@ -537,88 +476,6 @@ describe('Spring: following', () => {
       expect(follower.target).toBe(3)
     })
 
-    test('offers no config when given null', () => {
-      const system = createSpringSystem()
-      const a = system.createSpring(0, config)
-      const b = system.createSpring(0, config)
-      const follower = system.createSpring(0)
-      follower.target = mapSpring({ a, b }, ({ a, b }) => a + b, null)
-
-      expect(follower.config).toBe(SpringDefinition.default)
-    })
-
-    test('offers the given config to followers', () => {
-      const system = createSpringSystem()
-      const a = system.createSpring(0)
-      const b = system.createSpring(0)
-      const follower = system.createSpring(0)
-      follower.target = mapSpring({ a, b }, ({ a, b }) => a + b, config)
-
-      expect(follower.config).toBe(config)
-    })
-
-    test('omitted config passes through the config the sources share', () => {
-      const system = createSpringSystem()
-      const a = system.createSpring(0, config)
-      const b = system.createSpring(0, config)
-      const follower = system.createSpring(0)
-      follower.target = mapSpring({ a, b }, ({ a, b }) => a + b)
-
-      expect(follower.config).toBe(config)
-    })
-
-    test('omitted config offers none while the sources disagree', () => {
-      const stiff = defineSpring({ mass: 1, tension: 300, damping: 30 })
-      const system = createSpringSystem()
-      const a = system.createSpring(0, config)
-      const b = system.createSpring(0, stiff)
-      const follower = system.createSpring(0)
-      follower.target = mapSpring({ a, b }, ({ a, b }) => a + b)
-
-      expect(follower.config).toBe(SpringDefinition.default)
-    })
-
-    test('the shared config tracks source reconfiguration', () => {
-      const stiff = defineSpring({ mass: 1, tension: 300, damping: 30 })
-      const system = createSpringSystem()
-      const a = system.createSpring(0, config)
-      const b = system.createSpring(0, config)
-      const follower = system.createSpring(0)
-      follower.target = mapSpring({ a, b }, ({ a, b }) => a + b)
-      expect(follower.config).toBe(config)
-
-      b.config = stiff
-      expect(follower.config).toBe(SpringDefinition.default)
-
-      a.config = stiff
-      expect(follower.config).toBe(stiff)
-    })
-
-    test('a pinned map participates as a leaf with the config it offers', () => {
-      const stiff = defineSpring({ mass: 1, tension: 300, damping: 30 })
-      const system = createSpringSystem()
-      const x = system.createSpring(0, config)
-      const inverted = mapSpring(x, (value) => -value, stiff)
-      const y = system.createSpring(0, stiff)
-      const follower = system.createSpring(0)
-      follower.target = mapSpring({ inverted, y }, ({ inverted, y }) => inverted + y)
-
-      expect(follower.config).toBe(stiff)
-    })
-
-    test("a single-source map offers its given config instead of the leader's", () => {
-      const stiff = defineSpring({ mass: 1, tension: 300, damping: 30 })
-      const system = createSpringSystem()
-      const leader = system.createSpring(0, config)
-      const follower = system.createSpring(0)
-      follower.target = mapSpring(leader, (value) => value, stiff)
-
-      expect(follower.tension).toBe(300)
-
-      leader.config = defineSpring({ mass: 1, tension: 500, damping: 40 })
-      expect(follower.tension).toBe(300)
-    })
-
     test('disposing any source detaches followers, which stay usable', () => {
       const system = createSpringSystem()
       const a = system.createSpring(10, config)
@@ -646,13 +503,11 @@ describe('Spring: following', () => {
         get value() {
           return current
         },
-        config: null,
         onUpdate: (callback) => {
           subscriptions++
           listeners.add(callback)
           return () => listeners.delete(callback)
         },
-        onConfigure: () => () => {},
         onDispose: () => () => {},
       }
 
@@ -728,25 +583,6 @@ describe('Spring: following', () => {
       expect(slope.value).toBeCloseTo(3, 0)
     })
 
-    test('a composite map offers its given config', () => {
-      const system = createSpringSystem()
-      const lead = system.createSpring({ x: 0, y: 0 })
-      const follower = system.createSpring(mapSpring(lead, ({ x, y }) => x + y, config))
-
-      expect(follower.config).toBe(config)
-    })
-
-    test("omitted config passes the channels' shared config through", () => {
-      const system = createSpringSystem()
-      const lead = system.createSpring({ x: 0, y: 0 }, config)
-      const follower = system.createSpring(mapSpring(lead, ({ x, y }) => x + y))
-
-      expect(follower.config).toBe(config)
-
-      lead.config = { x: defineSpring({ mass: 1, tension: 300, damping: 30 }) }
-      expect(follower.config).toBe(SpringDefinition.default)
-    })
-
     test('disposing the composite detaches followers through a map', () => {
       const system = createSpringSystem()
       const lead = system.createSpring({ x: 5, y: 5 }, config)
@@ -788,21 +624,15 @@ describe('Spring: following', () => {
       expect(follower.value).toBeCloseTo(100, 0)
     })
 
-    test('adopts the source config without one of its own', () => {
-      const system = createSpringSystem()
-      const leader = system.createSpring(0, config)
-      const follower = system.createSpring(leader)
-
-      expect(follower.config).toBe(config)
-    })
-
-    test('keeps its own config when given one', () => {
+    test('uses its own config, not the source config', () => {
       const stiff = defineSpring({ mass: 1, tension: 300, damping: 30 })
       const system = createSpringSystem()
       const leader = system.createSpring(0, config)
       const follower = system.createSpring(leader, stiff)
+      const bare = system.createSpring(leader)
 
       expect(follower.config).toBe(stiff)
+      expect(bare.config).toBe(SpringDefinition.default)
     })
 
     test('accepts a mapped source', () => {

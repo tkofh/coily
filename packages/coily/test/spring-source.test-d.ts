@@ -1,6 +1,6 @@
 /**
- * Type-level tests for `mapSpring` source shapes and the optional
- * config parameter.
+ * Type-level tests for `mapSpring` source shapes and the `SpringSource`
+ * contract surface.
  *
  * This file is compiled by `tsc` but never executed (vitest only picks up
  * `*.spec.ts`, `*.browser.ts`, and `*.bench.ts`). Each `@ts-expect-error`
@@ -21,87 +21,80 @@ declare const custom: SpringSource
 declare const cfg: SpringDefinition
 declare const system: SpringSystem
 
-// ── Single source: config is optional ────────────────────────────────
+// ── Single source ────────────────────────────────────────────────────
 
 mapSpring(a, (value) => value * 2)
+// @ts-expect-error a map derives values only; configure the follower instead
 mapSpring(a, (value) => value * 2, cfg)
-mapSpring(a, (value) => value * 2, null)
 
 // ── Shapes of sources compose, and `map` receives their numbers ─────
 
-mapSpring(
-  { x: a, y: b },
-  (values) => {
-    const x: number = values.x
-    const y: number = values.y
-    return Math.hypot(x, y)
-  },
-  null,
-)
+mapSpring({ x: a, y: b }, (values) => {
+  const x: number = values.x
+  const y: number = values.y
+  return Math.hypot(x, y)
+})
 
-mapSpring({ point: { x: a, y: b }, scale: custom }, ({ point, scale }) => point.x * scale, cfg)
+mapSpring({ point: { x: a, y: b }, scale: custom }, ({ point, scale }) => point.x * scale)
 
-mapSpring([a, b] as const, ([first, second]) => first + second, null)
+mapSpring([a, b] as const, ([first, second]) => first + second)
 
 declare const dynamic: Record<string, SpringSource>
-mapSpring(dynamic, () => 0, null)
+mapSpring(dynamic, () => 0)
 
 // Mapped sources are sources, so they nest as leaves
-mapSpring({ doubled: mapSpring(a, (value) => value * 2), b }, ({ doubled, b }) => doubled + b, null)
+mapSpring({ doubled: mapSpring(a, (value) => value * 2), b }, ({ doubled, b }) => doubled + b)
 
 // The result is a SpringSource and a valid target
 declare const follower: Spring
-follower.target = mapSpring({ x: a, y: b }, ({ x, y }) => Math.max(x, y), null)
+follower.target = mapSpring({ x: a, y: b }, ({ x, y }) => Math.max(x, y))
 
 // ── Composite springs are sources of their value shape ──────────────
 
 declare const composite: CompositeSpring<{ x: number; y: number }>
 
 // Bare: `map` receives the read-only value shape
-mapSpring(composite, ({ x, y }) => Math.hypot(x, y), null)
-mapSpring(
-  composite,
-  (point) => {
-    const px: number = point.x
-    return px
-  },
-  cfg,
-)
+mapSpring(composite, ({ x, y }) => Math.hypot(x, y))
+mapSpring(composite, (point) => {
+  const px: number = point.x
+  return px
+})
 
 // As a leaf, alone or mixed with scalars
-mapSpring({ pos: composite, t: a }, ({ pos, t }) => pos.x * t, null)
+mapSpring({ pos: composite, t: a }, ({ pos, t }) => pos.x * t)
 
 declare const p1: CompositeSpring<{ x: number; y: number }>
 declare const p2: CompositeSpring<{ x: number; y: number }>
 // `const T` infers bare array literals as tuples — no `as const` needed
-mapSpring([p1, p2], ([from, to]) => (to.y - from.y) / (to.x - from.x), null)
+mapSpring([p1, p2], ([from, to]) => (to.y - from.y) / (to.x - from.x))
 
-// Config is optional: the channels' shared config passes through
-mapSpring(composite, ({ x, y }) => x + y)
 // @ts-expect-error a composite is not a scalar source, so it cannot be followed
 follower.target = composite
+
+// ── The contract carries values only — no config surface ────────────
+
+// @ts-expect-error sources offer no config
+void custom.config
+// @ts-expect-error sources fire no configure events
+void custom.onConfigure
 
 // ── createSpring accepts a source: follow at creation ───────────────
 
 system.createSpring(a) satisfies Spring
 system.createSpring(a, cfg)
 system.createSpring(mapSpring(a, (value) => value * 2))
-system.createSpring(mapSpring(composite, ({ x, y }) => Math.hypot(x, y), null))
+system.createSpring(mapSpring(composite, ({ x, y }) => Math.hypot(x, y)))
 // @ts-expect-error a composite cannot be followed at creation; map it first
 system.createSpring(composite, cfg)
-
-// ── Config is optional on shapes: the shared config passes through ──
-
-mapSpring({ x: a, y: b }, ({ x, y }) => x + y)
 
 // ── Invalid leaves are rejected where they are declared ─────────────
 
 // @ts-expect-error number leaves are not sources
-mapSpring({ x: a, y: 5 }, () => 0, null)
+mapSpring({ x: a, y: 5 }, () => 0)
 // @ts-expect-error nested leaves are validated too
-mapSpring({ point: { x: a, y: 'nope' } }, () => 0, null)
+mapSpring({ point: { x: a, y: 'nope' } }, () => 0)
 declare const optional: { x: Spring; y?: Spring }
 // @ts-expect-error optional leaves are rejected
-mapSpring(optional, () => 0, null)
+mapSpring(optional, () => 0)
 // @ts-expect-error a shape must contain at least one source
-mapSpring({}, () => 0, null)
+mapSpring({}, () => 0)
