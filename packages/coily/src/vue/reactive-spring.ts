@@ -14,8 +14,15 @@ import type { SpringSystem } from '../system.ts'
 import { injectLocal } from './local.ts'
 import { SpringSystemKey } from './system.ts'
 
+/**
+ * Options for a scalar `useSpring`: a `SpringConfig`, any option shape
+ * `defineSpring` accepts, or a ref/getter of either. Reactive options
+ * reconfigure the spring in place when they change; `undefined` means
+ * the default config.
+ */
 export type UseSpringOptions = MaybeRefOrGetter<SpringOptions | SpringConfig | undefined>
 
+/** The spring surface the reactive wrapper needs — satisfied by both `Spring` and `SpringObject`. */
 interface SpringLike<V, W, C> {
   get value(): V
   set value(next: W)
@@ -32,14 +39,41 @@ interface SpringLike<V, W, C> {
   onStop(callback: () => void): () => void
 }
 
+/**
+ * The reactive surface `useSpring` returns: a writable ref of the
+ * animated value with the rest of the spring attached. Reads track
+ * reactively and update once per tick while the spring moves.
+ *
+ * Writing the main ref displaces the spring — it springs back toward its
+ * target. To move the spring, drive the target you passed to
+ * `useSpring`.
+ */
 export interface ReactiveSpringRef<V, W = V> extends Ref<V, W> {
+  /**
+   * The current velocity in value units per second, as a writable ref.
+   * Writing flings the spring; it settles back to its target.
+   */
   readonly velocity: Ref<V, W>
+  /**
+   * Estimated milliseconds until the spring rests, as a reactive ref: 0
+   * while resting. Writes are ignored.
+   */
   readonly timeRemaining: Ref<number>
+  /** Whether the spring is resting, as a reactive ref. Writes are ignored. */
   readonly isResting: Ref<boolean>
+  /**
+   * A promise that resolves when the spring next comes to rest — already
+   * resolved while resting. Retargeting mid-flight extends the wait;
+   * disposal resolves it.
+   */
   readonly settled: Promise<void>
+  /** Snaps the spring to `value` with no animation, target included. */
   readonly jumpTo: (value: W) => void
 }
 
+// customRef's public typing fixes get and set to one type; spring refs
+// read composites (deep-readonly) but accept partials on write, so the
+// cast recovers a divergent Ref<G, S>.
 const divergentRef = customRef as unknown as <G, S>(
   factory: (track: () => void, trigger: () => void) => { get(): G; set(value: S): void },
 ) => Ref<G, S>
@@ -75,6 +109,8 @@ export function createReactiveSpringRef<V, W, C>(
     spring.config = config.value ?? null
   })
 
+  // Triggers are captured lazily on first read, so refs nobody reads
+  // never pay for per-tick invalidation.
   let triggerValue: (() => void) | undefined
   let triggerVelocity: (() => void) | undefined
   let triggerTimeRemaining: (() => void) | undefined
@@ -142,6 +178,8 @@ export function createReactiveSpringRef<V, W, C>(
     jumpTo: (next: W) => spring.jumpTo(next),
   }) as ReactiveSpringRef<V, W>
 
+  // A getter so each read returns the spring's current settled promise,
+  // not one captured at creation.
   Object.defineProperty(ref, 'settled', {
     get: () => spring.settled,
   })

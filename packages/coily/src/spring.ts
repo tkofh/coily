@@ -2,18 +2,39 @@ import { SpringConfig } from './config.ts'
 import type { MotionSet } from './motion-set.ts'
 import { Motion } from './motion.ts'
 
+/** A follow target: the spring to track, plus a constant offset. */
 export interface SpringWithOffset {
+  /** The spring whose live value to follow. */
   spring: Spring
+  /**
+   * Constant added to the leader's value, in value units.
+   * @default 0
+   */
   offset?: number | undefined
 }
 
+/**
+ * What a spring can animate toward: a fixed number, another spring to
+ * follow, or a spring plus a constant offset.
+ */
 export type SpringTarget = number | Spring | SpringWithOffset
 
 interface DisplacedSpringPosition {
+  /** The initial target. When omitted, the spring starts at rest at `value`. */
   target?: SpringTarget | undefined
+  /**
+   * The initial value. When omitted, the spring starts at the target.
+   * Provide both `target` and `value` to create a spring already in
+   * motion. Ignored under reduced motion: springs start at their target.
+   */
   value?: number | undefined
 }
 
+/**
+ * Where a spring starts: a plain number for a spring at rest at that
+ * value, or a target/value pair for one created displaced or already
+ * following another spring.
+ */
 export type SpringPosition = number | DisplacedSpringPosition
 
 function normalizeTarget(
@@ -31,8 +52,18 @@ function normalizeTarget(
   return null
 }
 
+// Shared so resting and disposed springs don't allocate a promise per read.
 const RESOLVED = Promise.resolve()
 
+/**
+ * One animated number, driven toward its target with damped spring
+ * motion. Create springs with `SpringSystem.createSpring`; the owning
+ * system advances them, so a spring only moves while its system runs.
+ *
+ * Reads return the exact simulated state; nothing is rounded. See
+ * https://github.com/tkofh/coily/blob/main/PRECISION.md for the
+ * numerical contract.
+ */
 export class Spring {
   #target: number
   #override: SpringConfig | null
@@ -94,6 +125,21 @@ export class Spring {
     }
   }
 
+  /**
+   * The value the spring is animating toward. While following another
+   * spring, reads return the leader's value plus the offset, as of the
+   * leader's last update.
+   *
+   * Assignment accepts any `SpringTarget`:
+   * - A number retargets the spring. The current value and momentum carry
+   *   over, so mid-flight retargets stay smooth. Assigning a number while
+   *   following also stops the following.
+   * - A `Spring` — or `{ spring, offset }` — makes this spring follow the
+   *   leader's live value. Followers without a config of their own adopt
+   *   the leader's.
+   *
+   * Under reduced motion, retargets apply instantly.
+   */
   get target(): number {
     return this.#target
   }
@@ -108,6 +154,15 @@ export class Spring {
     }
   }
 
+  /**
+   * The current animated value: the target plus the remaining
+   * displacement.
+   *
+   * Writing displaces the spring: it keeps its target and springs back
+   * from the written value, notifying update listeners synchronously.
+   * Writing the current value is a no-op. Under reduced motion a write
+   * jumps the spring — target included — to the written value.
+   */
   get value() {
     return this.#target + this.#motion.position
   }
@@ -128,6 +183,13 @@ export class Spring {
     }
   }
 
+  /**
+   * The current velocity, in value units per second.
+   *
+   * Writing flings the spring: motion continues from the current value
+   * with the written velocity, then settles back to the target. Under
+   * reduced motion writes are ignored.
+   */
   get velocity() {
     return this.#motion.velocity
   }
@@ -139,26 +201,45 @@ export class Spring {
     this.#motion.velocity = value
   }
 
+  /**
+   * The spring's resolved `SpringConfig`: its own if one was assigned,
+   * otherwise the leader's while following, otherwise
+   * `SpringConfig.default`.
+   *
+   * Assigning a config reconfigures the spring in place — value and
+   * velocity are preserved, so mid-flight reconfigures stay smooth.
+   * Assigning `null` clears the spring's own config, reverting to the
+   * default (or to the leader's, while following). Reconfiguring a leader
+   * cascades to every follower without a config of its own.
+   *
+   * A follower that stops following keeps the leader config it had been
+   * using as its own.
+   */
   get config() {
     return this.#resolved
   }
 
+  /** The resolved config's mass. */
   get mass() {
     return this.#resolved.mass
   }
 
+  /** The resolved config's tension (stiffness). */
   get tension() {
     return this.#resolved.tension
   }
 
+  /** The resolved config's damping (friction). */
   get damping() {
     return this.#resolved.damping
   }
 
+  /** The resolved config's damping ratio. */
   get dampingRatio() {
     return this.#resolved.dampingRatio
   }
 
+  /** The resolved config's resting precision. */
   get precision() {
     return this.#resolved.precision
   }
@@ -168,14 +249,37 @@ export class Spring {
     this.#applyConfig(value ?? (this.#leader ? this.#leader.#resolved : SpringConfig.default))
   }
 
+  /**
+   * Estimated milliseconds until the spring rests: 0 while resting,
+   * Infinity when undamped. The estimate carries a safety margin, so
+   * actual rest usually lands earlier.
+   */
   get timeRemaining() {
     return this.#motion.timeRemaining
   }
 
+  /**
+   * Whether the spring's remaining motion is inside its resting
+   * threshold. Resting springs cost nothing until the next write. See
+   * https://github.com/tkofh/coily/blob/main/PRECISION.md for the rest
+   * test.
+   */
   get isResting() {
     return this.#motion.isResting
   }
 
+  /**
+   * A promise that resolves when the spring next comes to rest — already
+   * resolved while resting or after dispose. Retargeting mid-flight
+   * extends the wait; disposing resolves it.
+   *
+   * @example
+   * ```ts
+   * spring.target = 300
+   * await spring.settled
+   * // the spring is at 300 and resting
+   * ```
+   */
   get settled(): Promise<void> {
     if (this.#disposed || this.#motion.isResting) return RESOLVED
 
@@ -192,11 +296,23 @@ export class Spring {
     return this.#settled
   }
 
+  /**
+   * Snaps the spring to `value` with no animation: target and value both
+   * become `value` and velocity clears. Listeners are notified
+   * synchronously — `update`, plus `stop` if the spring was moving.
+   */
   jumpTo(value: number) {
     this.#target = value
     this.#motion.finish()
   }
 
+  /**
+   * Releases the spring permanently: stops following, detaches followers
+   * (each keeps its current target and config), resolves `settled`, and
+   * notifies dispose listeners. Calling it again is a no-op.
+   *
+   * A disposed spring keeps its final value readable; writes throw.
+   */
   dispose() {
     if (this.#disposed) return
     this.#disposed = true
@@ -224,18 +340,34 @@ export class Spring {
     this.#motion.dispose()
   }
 
+  /**
+   * Subscribes to value changes: every tick the spring moves, plus
+   * synchronous `value` writes and `jumpTo` calls. Returns an unsubscribe
+   * function.
+   */
   onUpdate(callback: () => void) {
     return this.#motion.onUpdate(callback)
   }
 
+  /**
+   * Subscribes to the spring leaving rest. `start` and `stop` always
+   * alternate; retargeting mid-flight fires neither. Returns an
+   * unsubscribe function.
+   */
   onStart(callback: () => void) {
     return this.#motion.onStart(callback)
   }
 
+  /**
+   * Subscribes to the spring coming to rest, whether by settling or by
+   * `jumpTo`. Always alternates with `start`. Returns an unsubscribe
+   * function.
+   */
   onStop(callback: () => void) {
     return this.#motion.onStop(callback)
   }
 
+  /** Subscribes to `dispose`, which fires once. Returns an unsubscribe function. */
   onDispose(callback: () => void) {
     return this.#motion.onDispose(callback)
   }
@@ -251,6 +383,8 @@ export class Spring {
       const current = this.value
       this.#target = value
       this.#motion.position = current - this.#target
+      // Re-anchor the solver at the rebased displacement without emitting
+      // an update: the spring's value hasn't changed.
       this.#motion.tick(0, false)
     }
   }
@@ -286,6 +420,8 @@ export class Spring {
     this.#offset = 0
 
     if (this.#override === null) {
+      // Adopt the inherited config as our own: unfollowing must not
+      // visibly reconfigure the spring.
       this.#override = this.#resolved
     }
   }

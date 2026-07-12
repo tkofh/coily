@@ -5,7 +5,18 @@ import { type ConfigShape, type Shape, SpringObject } from './spring-object.ts'
 import { Ticker, type TickerOptions } from './ticker.ts'
 
 export interface SpringSystemOptions extends TickerOptions {
+  /**
+   * Log active motion counts to the console whenever they change.
+   * @default false
+   */
   debug?: boolean | undefined
+  /**
+   * When springs snap to their targets instead of animating. `'user'`
+   * follows the OS prefers-reduced-motion setting, including live changes
+   * — switching it on finishes in-flight motion instantly. `'always'` and
+   * `'never'` force one behavior.
+   * @default 'user'
+   */
   reducedMotion?: 'user' | 'always' | 'never' | undefined
 }
 
@@ -96,23 +107,90 @@ class SpringSystemImpl implements SpringSystem {
   }
 }
 
+/**
+ * Owns springs and advances them over time. Create one with
+ * `createSpringSystem`, then either `start()` it to animate on real
+ * frames or call `advance` yourself for manual stepping.
+ */
 export interface SpringSystem {
+  /**
+   * Creates a spring at `position` — a number for a spring at rest, or a
+   * target/value pair for one created displaced or following another
+   * spring. Without `config`, springs use the default: critically damped,
+   * settling in about 500ms.
+   */
   createSpring(position: SpringPosition, config?: SpringConfig): Spring
+  /**
+   * Creates a composite spring over a numeric shape: a plain object or
+   * array, nested arbitrarily, whose leaves are all numbers. Each leaf
+   * becomes an independently sprung channel.
+   *
+   * `config` applies per channel: a single `SpringConfig` for every
+   * channel, or a shape mirroring the value with configs at any level.
+   */
   createSpringObject<T extends object>(
     value: T & Shape<T>,
     config?: ConfigShape<T>,
   ): SpringObject<T>
+  /**
+   * Advances every moving spring by `dt` milliseconds. For manual
+   * stepping in place of `start()` — tests, custom loops, offline
+   * rendering.
+   */
   advance(dt: number): void
 
+  /**
+   * Begins animating on real frames: one tick per displayed frame, via
+   * `requestAnimationFrame` in the browser and a `setTimeout` fallback
+   * elsewhere. An idle system sleeps — no frames are scheduled while
+   * every spring rests.
+   */
   start(): void
+  /** Stops animating. Springs hold their state until `start` or `advance`. */
   stop(): void
+  /**
+   * Whether the system is between `start()` and `stop()`. Sleeping while
+   * idle still counts as running.
+   */
   readonly running: boolean
+  /**
+   * Whether springs currently snap instead of animating, per the
+   * `reducedMotion` option and, in `'user'` mode, the live OS setting.
+   * Read it to gate purely decorative effects of your own.
+   */
   readonly reducedMotion: boolean
+  /**
+   * Frame-rate cap. 0 means uncapped: one tick per displayed frame,
+   * whatever rate the screen runs at. Capped ticks land on whole display
+   * frames and receive the true elapsed time.
+   */
   fps: number
+  /**
+   * Frame gap in milliseconds above which the gap is treated as lag — a
+   * backgrounded tab, a blocking task — and replaced with `adjustedLag`,
+   * so springs don't teleport when frames resume. 0 disables lag
+   * clamping.
+   */
   lagThreshold: number
+  /** The elapsed milliseconds a lagging frame is replaced with. Clamped to at most `lagThreshold`. */
   adjustedLag: number
 }
 
+/**
+ * Creates a spring system: the entry point of the library.
+ *
+ * @example
+ * ```ts
+ * const system = createSpringSystem()
+ * system.start()
+ *
+ * const spring = system.createSpring(0)
+ * spring.onUpdate(() => {
+ *   element.style.translate = `${spring.value}px 0`
+ * })
+ * spring.target = 300
+ * ```
+ */
 export function createSpringSystem(options?: SpringSystemOptions): SpringSystem {
   return new SpringSystemImpl(options)
 }

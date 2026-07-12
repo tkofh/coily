@@ -1,11 +1,42 @@
 import { addComponent, addImports, addPluginTemplate, defineNuxtModule } from '@nuxt/kit'
 import type { NuxtModule } from '@nuxt/schema'
 
+/**
+ * Options for the `coily` key in `nuxt.config`, passed to the app-wide
+ * spring system the module creates.
+ */
 export interface CoilyModuleOptions {
+  /**
+   * Log active motion counts to the console whenever they change.
+   * @default false
+   */
   debug?: boolean
+  /**
+   * Frame-rate cap. 0 means uncapped: one tick per displayed frame.
+   * Capped ticks land on whole display frames and receive the true
+   * elapsed time.
+   * @default 0
+   */
   fps?: number
+  /**
+   * Frame gap in milliseconds above which the gap is treated as lag and
+   * replaced with `adjustedLag`, so springs don't teleport when frames
+   * resume. 0 disables lag clamping.
+   * @default 500
+   */
   lagThreshold?: number
+  /**
+   * The elapsed milliseconds a lagging frame is replaced with. Clamped
+   * to at most `lagThreshold`.
+   * @default 33
+   */
   adjustedLag?: number
+  /**
+   * When springs snap to their targets instead of animating: `'user'`
+   * follows the OS prefers-reduced-motion setting, including live
+   * changes; `'always'` and `'never'` force one behavior.
+   * @default 'user'
+   */
   reducedMotion?: 'user' | 'always' | 'never'
 }
 
@@ -34,6 +65,11 @@ export default defineNuxtPlugin((nuxtApp) => {
 })`
 }
 
+/**
+ * The Nuxt module: creates an app-wide spring system (started on the
+ * client), auto-imports `useSpring`, `useSpringSystem`, `useSpringPool`,
+ * and `defineSpring`, and registers the `SpringValue` component.
+ */
 const coilyModule: NuxtModule = defineNuxtModule<CoilyModuleOptions>({
   meta: {
     name: 'coily',

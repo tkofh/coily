@@ -1,6 +1,11 @@
 import { FlushQueue } from './flush-queue.ts'
 import type { Motion } from './motion.ts'
 
+/**
+ * The set of motions currently moving. Motions leave the set as they
+ * rest and re-enter on any write that disturbs them; `onWake` tells the
+ * ticker the set became non-empty so it can stop sleeping.
+ */
 export class MotionSet {
   reduced = false
   onWake: (() => void) | null = null
@@ -45,6 +50,10 @@ export class MotionSet {
 
     try {
       for (const motion of this.#motions) {
+        // A motion that rested out of the set and was re-added by a
+        // handler in the same pass (a follower disturbed by its leader's
+        // update) reappears later in the Set iteration; the pass marker
+        // keeps it from advancing twice.
         if (motion._pass === this.#pass) continue
         motion._pass = this.#pass
 
