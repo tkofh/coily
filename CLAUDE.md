@@ -4,8 +4,16 @@ Spring animation library with Vue integration.
 
 ## Commands
 
-Use `pnpm` for all commands (this is a pnpm workspace).
+Use `pnpm` for all commands (this is a pnpm workspace). Root scripts are
+read-only unless named `fix`/`:fix`/`format`: `check`, `lint`, and
+`format:check` verify without touching files; `fix`, `lint:fix`, and
+`format` write. Never wire a mutating command into a place that expects
+verification.
 
+- **Typecheck one package:** `pnpm --filter coily check` (the package's
+  own `check` is `tsc`)
+- **Verify everything (typecheck + lint + format, read-only):** `pnpm check`
+- **Autofix lint + format:** `pnpm fix`
 - **Run tests:** `pnpm --filter coily test`
 - **Run benchmarks:** `pnpm --filter coily bench`
 - **Build:** `pnpm build`
