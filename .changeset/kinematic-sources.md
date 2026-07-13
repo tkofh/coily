@@ -13,9 +13,7 @@ motion instead of its position:
 blur.target = velocityOf(motion)
 
 // an impact flash from a sharp change in speed
-flash.target = mapSpring(accelerationOf(motion), (a) =>
-  Math.min(1, Math.abs(a) * 1e-4),
-)
+flash.target = mapSpring(accelerationOf(motion), (a) => Math.min(1, Math.abs(a) * 1e-4))
 ```
 
 Derive from a scalar and you get a scalar to follow; derive from a
