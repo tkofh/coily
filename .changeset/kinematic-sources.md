@@ -2,27 +2,31 @@
 'coily': minor
 ---
 
-`velocityOf` and `accelerationOf` derive a source from another's motion —
-its velocity (the rate its value changes, in value units per second) and
-its acceleration (the rate its velocity changes, per second squared) — so
-motion-driven effects use the same follow and `mapSpring` machinery as
-everything else. A spring can chase another's velocity
-(`blur.target = velocityOf(motion)`), and a map can shape either into
-squash and stretch, trailing, or an impact flash
-(`mapSpring(accelerationOf(motion), (a) => Math.min(1, Math.abs(a) * 1e-4))`).
+`velocityOf` and `accelerationOf` make a source out of a spring's motion:
+its velocity (how fast its value is changing, in value units per second)
+or its acceleration (how fast that velocity is changing). You follow them
+and map them like any other source, so an effect can ride a spring's
+motion instead of its position:
 
-A scalar source yields a scalar derivative a spring can follow; a
-`CompositeSpring` or shape yields a derivative of the same shape, mapped
-to a scalar the way the composite itself is. Each result is a stateless
-view like a `mapSpring`: it holds no subscriptions, needs no disposal,
-and is released with its source.
+```ts
+// a blur that chases how fast something is moving
+blur.target = velocityOf(motion)
 
-`Spring` and `CompositeSpring` gain a read-only `acceleration` (value
-units per second squared) alongside `velocity`; it is exact, following
-from the spring's stiffness and friction acting on its current
-displacement and velocity.
+// an impact flash from a sharp change in speed
+flash.target = mapSpring(accelerationOf(motion), (a) =>
+  Math.min(1, Math.abs(a) * 1e-4),
+)
+```
 
-Only a source in motion qualifies — a `Spring`, a `CompositeSpring`, or a
-source bridging a value whose motion it tracks. A value derived with
-`mapSpring` is not in motion, so both derivations reject it, in the types
-and at runtime.
+Derive from a scalar and you get a scalar to follow; derive from a
+composite and you get the same shape, ready to reduce with `mapSpring`.
+There's nothing to clean up: each derived source lives and dies with the
+spring behind it.
+
+`Spring` and `CompositeSpring` also gain a read-only `acceleration` (value
+units per second squared) next to `velocity`. It is exact, not estimated
+frame to frame.
+
+Only a `Spring` or a `CompositeSpring` is in motion, so only those can be
+derived. A `mapSpring` result isn't, so `velocityOf` and `accelerationOf`
+reject it, in the types and at runtime.
