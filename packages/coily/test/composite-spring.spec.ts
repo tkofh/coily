@@ -1,16 +1,15 @@
-import { describe, expect, test, vi } from 'vitest'
+import { describe, expect, vi } from 'vitest'
 import { SpringDefinition, defineSpring } from '../src/config.ts'
 import { mapSpring } from '../src/spring-source.ts'
 import { createSpringSystem } from '../src/system.ts'
-import { FRAME, advanceUntilResting, flush, makeSource } from './helpers.ts'
+import { FRAME, advanceUntilResting, flush, makeSource, test } from './helpers.ts'
 
 const config = defineSpring({ mass: 1, tension: 170, damping: 26 })
 const stiff = defineSpring({ tension: 1000, dampingRatio: 1 })
 const gentle = defineSpring({ tension: 10, dampingRatio: 1 })
 
 describe('CompositeSpring: creation', () => {
-  test('creates resting at the given value', () => {
-    const system = createSpringSystem()
+  test('creates resting at the given value', ({ system }) => {
     const spring = system.createSpring({ position: { x: 10, y: 20 }, opacity: 1 }, config)
 
     expect(spring.value).toEqual({ position: { x: 10, y: 20 }, opacity: 1 })
@@ -18,23 +17,20 @@ describe('CompositeSpring: creation', () => {
     expect(spring.isResting).toBe(true)
   })
 
-  test('supports arrays as shapes', () => {
-    const system = createSpringSystem()
+  test('supports arrays as shapes', ({ system }) => {
     const spring = system.createSpring({ color: [255, 128, 0] }, config)
 
     expect(spring.value).toEqual({ color: [255, 128, 0] })
     expect(Array.isArray(spring.value.color)).toBe(true)
   })
 
-  test('supports numeric keys', () => {
-    const system = createSpringSystem()
+  test('supports numeric keys', ({ system }) => {
     const spring = system.createSpring({ 0: 5, 1: 10 }, config)
 
     expect(spring.value).toEqual({ 0: 5, 1: 10 })
   })
 
-  test('value, velocity, and target return stable cached objects', () => {
-    const system = createSpringSystem()
+  test('value, velocity, and target return stable cached objects', ({ system }) => {
     const spring = system.createSpring({ position: { x: 0, y: 0 } }, config)
 
     expect(spring.value).toBe(spring.value)
@@ -43,8 +39,7 @@ describe('CompositeSpring: creation', () => {
     expect(spring.target).toBe(spring.target)
   })
 
-  test('does not alias the input object', () => {
-    const system = createSpringSystem()
+  test('does not alias the input object', ({ system }) => {
     const input = { x: 1, y: 2 }
     const spring = system.createSpring(input, config)
 
@@ -53,25 +48,19 @@ describe('CompositeSpring: creation', () => {
     expect(spring.value.x).toBe(1)
   })
 
-  test('throws on non-numeric leaves', () => {
-    const system = createSpringSystem()
-
+  test('throws on non-numeric leaves', ({ system }) => {
     expect(() =>
       system.createSpring({ position: { x: 0, y: 'nope' as unknown as number } }, config),
     ).toThrow("Invalid value at 'position.y'")
   })
 
-  test('throws on non-finite leaves with their path', () => {
-    const system = createSpringSystem()
-
+  test('throws on non-finite leaves with their path', ({ system }) => {
     expect(() => system.createSpring({ position: { x: Number.NaN, y: 0 } })).toThrow(
       "Invalid value at 'position.x': channel values must be finite",
     )
   })
 
-  test('throws on empty shapes and empty subtrees', () => {
-    const system = createSpringSystem()
-
+  test('throws on empty shapes and empty subtrees', ({ system }) => {
     // The `Shape` constraint also rejects these at compile time; the casts
     // keep the runtime backstop covered for untyped callers.
     expect(() => system.createSpring({} as never)).toThrow('at least one channel')
@@ -79,17 +68,13 @@ describe('CompositeSpring: creation', () => {
     expect(() => system.createSpring({ items: [] } as never)).toThrow('at least one channel')
   })
 
-  test('throws on non-plain objects in the shape', () => {
-    const system = createSpringSystem()
-
+  test('throws on non-plain objects in the shape', ({ system }) => {
     expect(() => system.createSpring({ when: new Date() as unknown as number })).toThrow(
       "Invalid value at 'when'",
     )
   })
 
-  test('throws when the whole value is not a plain object or array', () => {
-    const system = createSpringSystem()
-
+  test('throws when the whole value is not a plain object or array', ({ system }) => {
     // The root container check is the composite's own — a non-container
     // value never reaches the shape tree.
     expect(() => system.createSpring(new Date() as unknown as Record<string, number>)).toThrow(
@@ -99,8 +84,7 @@ describe('CompositeSpring: creation', () => {
 })
 
 describe('CompositeSpring: simulation', () => {
-  test('animates every channel toward its target', () => {
-    const system = createSpringSystem()
+  test('animates every channel toward its target', ({ system }) => {
     const spring = system.createSpring({ position: { x: 0, y: 0 }, opacity: 0 }, config)
 
     spring.target = { position: { x: 100, y: 50 }, opacity: 1 }
@@ -112,8 +96,7 @@ describe('CompositeSpring: simulation', () => {
     expect(spring.value.opacity).toBeGreaterThan(0)
   })
 
-  test('settles at the target', () => {
-    const system = createSpringSystem()
+  test('settles at the target', ({ system }) => {
     const spring = system.createSpring({ position: { x: 0, y: 0 }, opacity: 0 }, config)
 
     spring.target = { position: { x: 100, y: 50 }, opacity: 1 }
@@ -125,8 +108,7 @@ describe('CompositeSpring: simulation', () => {
     expect(spring.value).toEqual({ position: { x: 100, y: 50 }, opacity: 1 })
   })
 
-  test('velocity reflects motion per channel', () => {
-    const system = createSpringSystem()
+  test('velocity reflects motion per channel', ({ system }) => {
     const spring = system.createSpring({ x: 0, y: 0 }, config)
 
     spring.target = { x: 100 }
@@ -136,8 +118,7 @@ describe('CompositeSpring: simulation', () => {
     expect(spring.velocity.y).toBe(0)
   })
 
-  test('timeRemaining is the max across channels', () => {
-    const system = createSpringSystem()
+  test('timeRemaining is the max across channels', ({ system }) => {
     const spring = system.createSpring({ near: 0, far: 0 }, config)
 
     spring.target = { near: 1 }
@@ -150,8 +131,7 @@ describe('CompositeSpring: simulation', () => {
 })
 
 describe('CompositeSpring: partial targets', () => {
-  test('retargets only the given channels', () => {
-    const system = createSpringSystem()
+  test('retargets only the given channels', ({ system }) => {
     const spring = system.createSpring({ position: { x: 0, y: 0 }, opacity: 1 }, config)
 
     spring.target = { opacity: 0 }
@@ -162,8 +142,7 @@ describe('CompositeSpring: partial targets', () => {
     expect(spring.value.opacity).toBeLessThan(1)
   })
 
-  test('partial arrays skip missing entries', () => {
-    const system = createSpringSystem()
+  test('partial arrays skip missing entries', ({ system }) => {
     const spring = system.createSpring({ color: [255, 128, 0] }, config)
 
     spring.target = { color: [0, undefined, 255] }
@@ -171,8 +150,7 @@ describe('CompositeSpring: partial targets', () => {
     expect(spring.target).toEqual({ color: [0, 128, 255] })
   })
 
-  test('throws on unknown channels', () => {
-    const system = createSpringSystem()
+  test('throws on unknown channels', ({ system }) => {
     const spring = system.createSpring({ position: { x: 0, y: 0 } }, config)
 
     expect(() => {
@@ -180,8 +158,7 @@ describe('CompositeSpring: partial targets', () => {
     }).toThrow("Unknown channel 'position.z'")
   })
 
-  test('throws on out-of-range array indices', () => {
-    const system = createSpringSystem()
+  test('throws on out-of-range array indices', ({ system }) => {
     const spring = system.createSpring({ color: [0, 0, 0] }, config)
 
     expect(() => {
@@ -189,8 +166,7 @@ describe('CompositeSpring: partial targets', () => {
     }).toThrow("Unknown channel 'color.3'")
   })
 
-  test('throws on structure mismatches', () => {
-    const system = createSpringSystem()
+  test('throws on structure mismatches', ({ system }) => {
     const spring = system.createSpring({ position: { x: 0, y: 0 } }, config)
 
     expect(() => {
@@ -204,8 +180,7 @@ describe('CompositeSpring: partial targets', () => {
     }).toThrow("Expected a finite number for channel 'position.x'")
   })
 
-  test('throws on non-finite channel writes with their path', () => {
-    const system = createSpringSystem()
+  test('throws on non-finite channel writes with their path', ({ system }) => {
     const spring = system.createSpring({ position: { x: 0, y: 0 } }, config)
 
     expect(() => {
@@ -218,16 +193,13 @@ describe('CompositeSpring: partial targets', () => {
 })
 
 describe('CompositeSpring: config shapes', () => {
-  test('a single config applies to every channel', () => {
-    const system = createSpringSystem()
+  test('a single config applies to every channel', ({ system }) => {
     const spring = system.createSpring({ x: 0, y: 0 }, config)
 
     expect(spring.config).toBe(config)
   })
 
-  test('rejects a bare options object as a single config', () => {
-    const system = createSpringSystem()
-
+  test('rejects a bare options object as a single config', ({ system }) => {
     // Configs must be `SpringDefinition` instances (via `defineSpring`); a bare
     // options object reads as a config shape, so its option keys are unknown
     // channels.
@@ -236,8 +208,7 @@ describe('CompositeSpring: config shapes', () => {
     ).toThrow("Unknown channel 'mass'")
   })
 
-  test('per-channel configs animate channels at different speeds', () => {
-    const system = createSpringSystem()
+  test('per-channel configs animate channels at different speeds', ({ system }) => {
     const spring = system.createSpring({ fast: 0, slow: 0 }, { fast: stiff, slow: gentle })
 
     spring.target = { fast: 100, slow: 100 }
@@ -247,8 +218,7 @@ describe('CompositeSpring: config shapes', () => {
     expect(spring.config).toBeNull()
   })
 
-  test('a subtree config applies to every channel below it', () => {
-    const system = createSpringSystem()
+  test('a subtree config applies to every channel below it', ({ system }) => {
     const spring = system.createSpring(
       { position: { x: 0, y: 0 }, opacity: 0 },
       { position: stiff },
@@ -261,8 +231,7 @@ describe('CompositeSpring: config shapes', () => {
     expect(spring.value.position.x).toBeGreaterThan(spring.value.opacity)
   })
 
-  test('setting config to null reverts all channels to the default', () => {
-    const system = createSpringSystem()
+  test('setting config to null reverts all channels to the default', ({ system }) => {
     const spring = system.createSpring({ x: 0, y: 0 }, config)
 
     spring.config = null
@@ -270,8 +239,7 @@ describe('CompositeSpring: config shapes', () => {
     expect(spring.config).toBe(SpringDefinition.default)
   })
 
-  test('a partial config shape leaves unmentioned channels alone', () => {
-    const system = createSpringSystem()
+  test('a partial config shape leaves unmentioned channels alone', ({ system }) => {
     const spring = system.createSpring({ x: 0, y: 0 }, config)
 
     spring.config = { x: stiff }
@@ -282,9 +250,7 @@ describe('CompositeSpring: config shapes', () => {
     expect(spring.value.x).not.toBe(spring.value.y)
   })
 
-  test('rejects a numeric leaf in a config shape', () => {
-    const system = createSpringSystem()
-
+  test('rejects a numeric leaf in a config shape', ({ system }) => {
     // A plain object is a config shape, so its leaves must be configs — a
     // number is not, even when the channel is named like a spring option.
     expect(() =>
@@ -292,9 +258,7 @@ describe('CompositeSpring: config shapes', () => {
     ).toThrow("Invalid config for 'tension'")
   })
 
-  test('throws on config keys that are not channels', () => {
-    const system = createSpringSystem()
-
+  test('throws on config keys that are not channels', ({ system }) => {
     expect(() => system.createSpring({ x: 0 }, { opacityy: config } as never)).toThrow(
       "Unknown channel 'opacityy'",
     )
@@ -302,8 +266,7 @@ describe('CompositeSpring: config shapes', () => {
 })
 
 describe('CompositeSpring: coalesced events', () => {
-  test('onUpdate fires exactly once per frame while several channels move', () => {
-    const system = createSpringSystem()
+  test('onUpdate fires exactly once per frame while several channels move', ({ system }) => {
     const spring = system.createSpring({ position: { x: 0, y: 0 }, opacity: 0 }, config)
     spring.target = { position: { x: 100, y: 100 }, opacity: 1 }
 
@@ -317,8 +280,9 @@ describe('CompositeSpring: coalesced events', () => {
     expect(onUpdate).toHaveBeenCalledTimes(2)
   })
 
-  test('onStart fires synchronously and once when several channels start together', () => {
-    const system = createSpringSystem()
+  test('onStart fires synchronously and once when several channels start together', ({
+    system,
+  }) => {
     const spring = system.createSpring({ x: 0, y: 0 }, config)
 
     const onStart = vi.fn()
@@ -329,8 +293,7 @@ describe('CompositeSpring: coalesced events', () => {
     expect(onStart).toHaveBeenCalledOnce()
   })
 
-  test('onStart does not fire when another channel wakes mid-motion', () => {
-    const system = createSpringSystem()
+  test('onStart does not fire when another channel wakes mid-motion', ({ system }) => {
     const spring = system.createSpring({ x: 0, y: 0 }, config)
 
     const onStart = vi.fn()
@@ -343,8 +306,7 @@ describe('CompositeSpring: coalesced events', () => {
     expect(onStart).toHaveBeenCalledOnce()
   })
 
-  test('stop arrives after the final update of the frame', () => {
-    const system = createSpringSystem()
+  test('stop arrives after the final update of the frame', ({ system }) => {
     const spring = system.createSpring({ x: 1, y: 1 }, config)
     spring.target = { x: 0, y: 0 }
 
@@ -362,8 +324,7 @@ describe('CompositeSpring: coalesced events', () => {
     expect(order.at(-2)).toBe('update')
   })
 
-  test('jumpTo emits a single update synchronously', () => {
-    const system = createSpringSystem()
+  test('jumpTo emits a single update synchronously', ({ system }) => {
     const spring = system.createSpring({ position: { x: 0, y: 0 }, opacity: 1 }, config)
 
     const onUpdate = vi.fn()
@@ -376,8 +337,7 @@ describe('CompositeSpring: coalesced events', () => {
     expect(spring.isResting).toBe(true)
   })
 
-  test('unsubscribe stops composite events', () => {
-    const system = createSpringSystem()
+  test('unsubscribe stops composite events', ({ system }) => {
     const spring = system.createSpring({ x: 0, y: 0 }, config)
     spring.target = { x: 100, y: 100 }
 
@@ -394,8 +354,7 @@ describe('CompositeSpring: coalesced events', () => {
 })
 
 describe('CompositeSpring: partial jumps and writes', () => {
-  test('jumpTo affects only the given channels', () => {
-    const system = createSpringSystem()
+  test('jumpTo affects only the given channels', ({ system }) => {
     const spring = system.createSpring({ position: { x: 0, y: 0 }, opacity: 1 }, config)
     spring.target = { position: { x: 100, y: 100 } }
 
@@ -405,8 +364,7 @@ describe('CompositeSpring: partial jumps and writes', () => {
     expect(spring.isResting).toBe(false)
   })
 
-  test('writing value displaces the given channels', () => {
-    const system = createSpringSystem()
+  test('writing value displaces the given channels', ({ system }) => {
     const spring = system.createSpring({ x: 0, y: 0 }, config)
 
     spring.value = { x: 50 }
@@ -416,8 +374,7 @@ describe('CompositeSpring: partial jumps and writes', () => {
     expect(spring.isResting).toBe(false)
   })
 
-  test('writing velocity injects energy into the given channels', () => {
-    const system = createSpringSystem()
+  test('writing velocity injects energy into the given channels', ({ system }) => {
     const spring = system.createSpring({ x: 0, y: 0 }, config)
 
     spring.velocity = { x: 100 }
@@ -429,8 +386,7 @@ describe('CompositeSpring: partial jumps and writes', () => {
 })
 
 describe('CompositeSpring: following', () => {
-  test('follows another object channel-wise', () => {
-    const system = createSpringSystem()
+  test('follows another object channel-wise', ({ system }) => {
     const leader = system.createSpring({ position: { x: 0, y: 0 }, opacity: 0 }, config)
     const follower = system.createSpring({ position: { x: 0, y: 0 }, opacity: 0 })
 
@@ -447,8 +403,7 @@ describe('CompositeSpring: following', () => {
     expect(follower.value.opacity).toBeCloseTo(1, 1)
   })
 
-  test('chains: a follower of a follower propagates in the same frame', () => {
-    const system = createSpringSystem()
+  test('chains: a follower of a follower propagates in the same frame', ({ system }) => {
     const a = system.createSpring({ x: 0 }, config)
     const b = system.createSpring({ x: 0 })
     const c = system.createSpring({ x: 0 })
@@ -463,8 +418,7 @@ describe('CompositeSpring: following', () => {
     expect(c.isResting).toBe(false)
   })
 
-  test('following a leader leaves channel configs untouched', () => {
-    const system = createSpringSystem()
+  test('following a leader leaves channel configs untouched', ({ system }) => {
     const leader = system.createSpring({ x: 0, y: 0 }, config)
     const follower = system.createSpring({ x: 0, y: 0 })
 
@@ -473,8 +427,7 @@ describe('CompositeSpring: following', () => {
     expect(follower.config).toBe(SpringDefinition.default)
   })
 
-  test('a partial numeric target detaches only the channels it names', () => {
-    const system = createSpringSystem()
+  test('a partial numeric target detaches only the channels it names', ({ system }) => {
     const leader = system.createSpring({ x: 0, y: 0 }, config)
     const follower = system.createSpring({ x: 0, y: 0 })
     follower.target = leader
@@ -490,8 +443,7 @@ describe('CompositeSpring: following', () => {
     expect(follower.value.y).toBeCloseTo(100, 0)
   })
 
-  test('throws on shape mismatches', () => {
-    const system = createSpringSystem()
+  test('throws on shape mismatches', ({ system }) => {
     const a = system.createSpring({ x: 0, y: 0 }, config)
     const b = system.createSpring({ x: 0 }, config)
 
@@ -503,8 +455,7 @@ describe('CompositeSpring: following', () => {
     }).toThrow('Shape mismatch')
   })
 
-  test('a target shape can mix numbers and sources per channel', () => {
-    const system = createSpringSystem()
+  test('a target shape can mix numbers and sources per channel', ({ system }) => {
     const leader = system.createSpring(0, config)
     const follower = system.createSpring({ x: 0, y: 0 }, config)
 
@@ -517,8 +468,7 @@ describe('CompositeSpring: following', () => {
     expect(follower.value.y).toBeCloseTo(100, 0)
   })
 
-  test('a channel can follow a value derived from another composite', () => {
-    const system = createSpringSystem()
+  test('a channel can follow a value derived from another composite', ({ system }) => {
     const point = system.createSpring({ x: 3, y: 4 }, config)
     const follower = system.createSpring({ magnitude: 0, tag: 1 }, config)
 
@@ -530,8 +480,7 @@ describe('CompositeSpring: following', () => {
     expect(follower.value.tag).toBe(1)
   })
 
-  test('a channel keeps its own config when following a source', () => {
-    const system = createSpringSystem()
+  test('a channel keeps its own config when following a source', ({ system }) => {
     const leader = system.createSpring(0, config)
     const follower = system.createSpring({ x: 0 })
 
@@ -540,8 +489,7 @@ describe('CompositeSpring: following', () => {
     expect(follower.config).toBe(SpringDefinition.default)
   })
 
-  test('a source target detaches only the channels it names', () => {
-    const system = createSpringSystem()
+  test('a source target detaches only the channels it names', ({ system }) => {
     const leader = system.createSpring({ x: 0, y: 0 }, config)
     const solo = system.createSpring(0, config)
     const follower = system.createSpring({ x: 0, y: 0 })
@@ -560,8 +508,7 @@ describe('CompositeSpring: following', () => {
     expect(follower.value.y).toBeCloseTo(100, 0)
   })
 
-  test('any SpringSource can sit at a channel', () => {
-    const system = createSpringSystem()
+  test('any SpringSource can sit at a channel', ({ system }) => {
     const leader = makeSource(5)
     const follower = system.createSpring({ x: 0 }, config)
 
@@ -574,8 +521,7 @@ describe('CompositeSpring: following', () => {
     expect(follower.value.x).toBeCloseTo(80, 0)
   })
 
-  test('invalid channel targets throw with their path', () => {
-    const system = createSpringSystem()
+  test('invalid channel targets throw with their path', ({ system }) => {
     const composite = system.createSpring({ x: 0, y: 0 })
     const follower = system.createSpring({ position: { x: 0, y: 0 } })
 
@@ -590,15 +536,13 @@ describe('CompositeSpring: following', () => {
 })
 
 describe('CompositeSpring: settled promise', () => {
-  test('resolves immediately when already resting', async () => {
-    const system = createSpringSystem()
+  test('resolves immediately when already resting', async ({ system }) => {
     const spring = system.createSpring({ x: 0 }, config)
 
     await expect(spring.settled).resolves.toBeUndefined()
   })
 
-  test('resolves only when every channel has come to rest', async () => {
-    const system = createSpringSystem()
+  test('resolves only when every channel has come to rest', async ({ system }) => {
     const spring = system.createSpring({ near: 0, far: 0 }, config)
     spring.target = { near: 1, far: 1000 }
 
@@ -620,8 +564,7 @@ describe('CompositeSpring: settled promise', () => {
     expect(resolved).toBe(true)
   })
 
-  test('dispose resolves a pending promise', async () => {
-    const system = createSpringSystem()
+  test('dispose resolves a pending promise', async ({ system }) => {
     const spring = system.createSpring({ x: 0 }, config)
     spring.target = { x: 100 }
 
@@ -652,8 +595,7 @@ describe('CompositeSpring: reduced motion', () => {
 })
 
 describe('CompositeSpring: dispose', () => {
-  test('dispose stops the spring and its events', () => {
-    const system = createSpringSystem()
+  test('dispose stops the spring and its events', ({ system }) => {
     const spring = system.createSpring({ x: 0, y: 0 }, config)
     spring.target = { x: 100, y: 100 }
 
@@ -666,8 +608,7 @@ describe('CompositeSpring: dispose', () => {
     expect(onUpdate).not.toHaveBeenCalled()
   })
 
-  test('onDispose fires once for all channels', () => {
-    const system = createSpringSystem()
+  test('onDispose fires once for all channels', ({ system }) => {
     const spring = system.createSpring({ position: { x: 0, y: 0 }, opacity: 1 }, config)
 
     const onDispose = vi.fn()
@@ -677,8 +618,7 @@ describe('CompositeSpring: dispose', () => {
     expect(onDispose).toHaveBeenCalledOnce()
   })
 
-  test('double dispose is a no-op', () => {
-    const system = createSpringSystem()
+  test('double dispose is a no-op', ({ system }) => {
     const spring = system.createSpring({ x: 0 }, config)
 
     const onDispose = vi.fn()
@@ -689,8 +629,7 @@ describe('CompositeSpring: dispose', () => {
     expect(onDispose).toHaveBeenCalledOnce()
   })
 
-  test('followers detach when the leader is disposed', () => {
-    const system = createSpringSystem()
+  test('followers detach when the leader is disposed', ({ system }) => {
     const leader = system.createSpring({ x: 0 }, config)
     const follower = system.createSpring({ x: 0 })
     follower.target = leader

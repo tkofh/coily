@@ -1,12 +1,30 @@
-import type { createSpringSystem } from '../src/index.ts'
+import { test as base } from 'vitest'
+import { createSpringSystem, type SpringSystem } from '../src/index.ts'
 import { type SpringSource, SpringSourceSymbol } from '../src/spring-source.ts'
 
 /** One 60fps frame in milliseconds — the step most specs advance by. */
 export const FRAME = 1000 / 60
 
+interface CoilyFixtures {
+  system: SpringSystem
+}
+
+/**
+ * `test` with a fresh, default `SpringSystem` per test: destructure `{ system }`
+ * to drop the `const system = createSpringSystem()` line. The fixture is lazy —
+ * tests that need constructor options ignore it and create their own.
+ */
+export const test = base.extend<CoilyFixtures>({
+  // vitest requires the first fixture argument to be a destructuring pattern.
+  // eslint-disable-next-line no-empty-pattern
+  system: async ({}, use) => {
+    await use(createSpringSystem())
+  },
+})
+
 /** Advances the system a frame at a time until `spring` rests or `maxFrames` elapse. */
 export function advanceUntilResting(
-  system: ReturnType<typeof createSpringSystem>,
+  system: SpringSystem,
   spring: { isResting: boolean },
   maxFrames = 600,
 ): void {

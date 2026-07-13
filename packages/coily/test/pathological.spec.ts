@@ -1,8 +1,7 @@
-import { describe, expect, test } from 'vitest'
+import { describe, expect } from 'vitest'
 import { defineSpring } from '../src/config.ts'
 import { type SpringSource, mapSpring } from '../src/spring-source.ts'
-import { createSpringSystem } from '../src/system.ts'
-import { FRAME, advanceUntilResting } from './helpers.ts'
+import { FRAME, advanceUntilResting, test } from './helpers.ts'
 
 /**
  * Adversarial graphs and listeners: self-reference, cycles, thrown user
@@ -16,8 +15,7 @@ const config = defineSpring({ mass: 1, tension: 170, damping: 26 })
 const stiff = defineSpring({ tension: 1000, dampingRatio: 1 })
 
 describe('pathological graphs: self-reference', () => {
-  test('a resting spring following itself stays put', () => {
-    const system = createSpringSystem()
+  test('a resting spring following itself stays put', ({ system }) => {
     const spring = system.createSpring(50, config)
 
     spring.target = spring
@@ -28,8 +26,7 @@ describe('pathological graphs: self-reference', () => {
     expect(spring.isResting).toBe(true)
   })
 
-  test('a moving spring following itself decays to rest', () => {
-    const system = createSpringSystem()
+  test('a moving spring following itself decays to rest', ({ system }) => {
     const spring = system.createSpring(0, config)
     spring.target = 100
     for (let i = 0; i < 5; i++) system.advance(FRAME)
@@ -41,8 +38,7 @@ describe('pathological graphs: self-reference', () => {
     expect(Number.isFinite(spring.value)).toBe(true)
   })
 
-  test('a contracting self-map converges to its fixpoint', () => {
-    const system = createSpringSystem()
+  test('a contracting self-map converges to its fixpoint', ({ system }) => {
     const spring = system.createSpring(100, config)
 
     spring.target = mapSpring(spring, (value) => value / 2)
@@ -52,8 +48,7 @@ describe('pathological graphs: self-reference', () => {
     expect(spring.value).toBeCloseTo(0, 0)
   })
 
-  test('an expanding self-map chases forever without blowing up', () => {
-    const system = createSpringSystem()
+  test('an expanding self-map chases forever without blowing up', ({ system }) => {
     const spring = system.createSpring(0, config)
 
     spring.target = mapSpring(spring, (value) => value + 10)
@@ -67,8 +62,7 @@ describe('pathological graphs: self-reference', () => {
 })
 
 describe('pathological graphs: cycles', () => {
-  test('mutual followers converge to a shared value', () => {
-    const system = createSpringSystem()
+  test('mutual followers converge to a shared value', ({ system }) => {
     const a = system.createSpring(0, config)
     const b = system.createSpring(100, config)
 
@@ -85,8 +79,7 @@ describe('pathological graphs: cycles', () => {
     expect(a.value).toBeCloseTo(b.value, 1)
   })
 
-  test('mutually expanding maps run away without crashing', () => {
-    const system = createSpringSystem()
+  test('mutually expanding maps run away without crashing', ({ system }) => {
     const a = system.createSpring(0, config)
     const b = system.createSpring(0, config)
 
@@ -101,8 +94,7 @@ describe('pathological graphs: cycles', () => {
     expect(Number.isFinite(b.value)).toBe(true)
   })
 
-  test('disposing inside a follow cycle detaches cleanly', () => {
-    const system = createSpringSystem()
+  test('disposing inside a follow cycle detaches cleanly', ({ system }) => {
     const a = system.createSpring(0, config)
     const b = system.createSpring(100, config)
     a.target = b
@@ -115,8 +107,7 @@ describe('pathological graphs: cycles', () => {
     expect(b.value).toBeCloseTo(5, 0)
   })
 
-  test('mutual composite followers converge channel-wise', () => {
-    const system = createSpringSystem()
+  test('mutual composite followers converge channel-wise', ({ system }) => {
     const a = system.createSpring({ x: 0, y: 0 }, config)
     const b = system.createSpring({ x: 100, y: 200 }, config)
 
@@ -134,8 +125,7 @@ describe('pathological graphs: cycles', () => {
     expect(a.value.y).toBeCloseTo(b.value.y, 1)
   })
 
-  test('a channel following a map of its own composite converges', () => {
-    const system = createSpringSystem()
+  test('a channel following a map of its own composite converges', ({ system }) => {
     const spring = system.createSpring({ x: 0, y: 0 }, config)
 
     spring.target = { y: 100 }
@@ -151,8 +141,7 @@ describe('pathological graphs: cycles', () => {
     expect(spring.value.y).toBeCloseTo(100, 0)
   })
 
-  test('a channel chasing an expanding map of itself stays contained', () => {
-    const system = createSpringSystem()
+  test('a channel chasing an expanding map of itself stays contained', ({ system }) => {
     const spring = system.createSpring({ x: 0, y: 0 }, config)
 
     spring.target = { x: mapSpring(spring, ({ x }) => x + 10) }
@@ -166,8 +155,7 @@ describe('pathological graphs: cycles', () => {
 })
 
 describe('pathological listeners: thrown user code', () => {
-  test('a map that throws surfaces at assignment', () => {
-    const system = createSpringSystem()
+  test('a map that throws surfaces at assignment', ({ system }) => {
     const leader = system.createSpring(0, config)
     const follower = system.createSpring(0)
 
@@ -178,8 +166,9 @@ describe('pathological listeners: thrown user code', () => {
     }).toThrow('boom')
   })
 
-  test('a map that throws mid-flight surfaces from advance, and the pass recovers', () => {
-    const system = createSpringSystem()
+  test('a map that throws mid-flight surfaces from advance, and the pass recovers', ({
+    system,
+  }) => {
     const leader = system.createSpring(0, config)
     const follower = system.createSpring(0)
 
@@ -200,8 +189,9 @@ describe('pathological listeners: thrown user code', () => {
     expect(follower.value).toBeCloseTo(100, 0)
   })
 
-  test('a composite update listener that throws delays nothing past the next frame', () => {
-    const system = createSpringSystem()
+  test('a composite update listener that throws delays nothing past the next frame', ({
+    system,
+  }) => {
     const spring = system.createSpring({ x: 0 }, config)
 
     let boom = true
@@ -226,8 +216,7 @@ describe('pathological listeners: thrown user code', () => {
 })
 
 describe('pathological values', () => {
-  test('a source that produces a non-finite value throws at the retarget', () => {
-    const system = createSpringSystem()
+  test('a source that produces a non-finite value throws at the retarget', ({ system }) => {
     const leader = system.createSpring(0, config)
     const follower = system.createSpring(0)
 
@@ -243,8 +232,7 @@ describe('pathological values', () => {
 })
 
 describe('pathological listeners: reentrant writes', () => {
-  test('a follower can retarget itself from its own update listener', () => {
-    const system = createSpringSystem()
+  test('a follower can retarget itself from its own update listener', ({ system }) => {
     const leader = system.createSpring(0, config)
     const follower = system.createSpring(leader)
 
@@ -262,8 +250,7 @@ describe('pathological listeners: reentrant writes', () => {
     expect(leader.value).toBeCloseTo(100, 0)
   })
 
-  test('disposing the leader from an update listener mid-flight detaches cleanly', () => {
-    const system = createSpringSystem()
+  test('disposing the leader from an update listener mid-flight detaches cleanly', ({ system }) => {
     const leader = system.createSpring(0, config)
     const follower = system.createSpring(leader)
 
@@ -284,8 +271,7 @@ describe('pathological listeners: reentrant writes', () => {
 })
 
 describe('pathological depth', () => {
-  test('a 100-link follow chain settles end to end', () => {
-    const system = createSpringSystem()
+  test('a 100-link follow chain settles end to end', ({ system }) => {
     const head = system.createSpring(0, stiff)
     const links = [head]
     for (let i = 0; i < 99; i++) {
@@ -305,10 +291,9 @@ describe('pathological depth', () => {
     expect(tail.value).toBeCloseTo(100, 0)
   })
 
-  test('a 5000-deep map chain reads and follows without overflowing', () => {
+  test('a 5000-deep map chain reads and follows without overflowing', ({ system }) => {
     // Nesting getters would overflow the call stack near 600 maps; flat
     // composition keeps reads iterative at any depth.
-    const system = createSpringSystem()
     const leader = system.createSpring(0, config)
 
     let source: SpringSource = leader

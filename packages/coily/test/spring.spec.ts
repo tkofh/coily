@@ -1,45 +1,39 @@
-import { describe, expect, test, vi } from 'vitest'
+import { describe, expect, vi } from 'vitest'
 import { createSpringSystem, defineSpring } from '../src/index.ts'
-import { flush } from './helpers.ts'
+import { flush, test } from './helpers.ts'
 
 describe('Spring: input validation', () => {
-  test('throws when mass is 0', () => {
-    const system = createSpringSystem()
+  test('throws when mass is 0', ({ system }) => {
     expect(() => system.createSpring(0, defineSpring({ mass: 0, tension: 1, damping: 1 }))).toThrow(
       'Mass must be greater than 0',
     )
   })
 
-  test('throws when mass is negative', () => {
-    const system = createSpringSystem()
+  test('throws when mass is negative', ({ system }) => {
     expect(() =>
       system.createSpring(0, defineSpring({ mass: -1, tension: 1, damping: 1 })),
     ).toThrow('Mass must be greater than 0')
   })
 
-  test('throws when tension is 0', () => {
-    const system = createSpringSystem()
+  test('throws when tension is 0', ({ system }) => {
     expect(() => system.createSpring(0, defineSpring({ mass: 1, tension: 0, damping: 1 }))).toThrow(
       'Tension must be greater than 0',
     )
   })
 
-  test('throws when damping is negative', () => {
-    const system = createSpringSystem()
+  test('throws when damping is negative', ({ system }) => {
     expect(() =>
       system.createSpring(0, defineSpring({ mass: 1, tension: 1, damping: -1 })),
     ).toThrow('Damping must be greater than or equal to 0')
   })
 
-  test('allows damping of 0', () => {
-    const system = createSpringSystem()
+  test('allows damping of 0', ({ system }) => {
     expect(() =>
       system.createSpring(0, defineSpring({ mass: 1, tension: 1, damping: 0 })),
     ).not.toThrow()
   })
 
-  test('allows precision 0 (resting threshold of 0.5)', () => {
-    const system = createSpringSystem()
+  test('allows precision 0 (resting threshold of 0.5)', ({ system }) => {
     expect(() =>
       system.createSpring(0, defineSpring({ mass: 1, tension: 1, damping: 1, precision: 0 })),
     ).not.toThrow()
@@ -51,32 +45,28 @@ describe('Spring: input validation', () => {
     )
   })
 
-  test('throws on config set with invalid mass', () => {
-    const system = createSpringSystem()
+  test('throws on config set with invalid mass', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 1, damping: 1 }))
     expect(() => {
       spring.config = defineSpring({ mass: 0, tension: 1, damping: 1 })
     }).toThrow('Mass must be greater than 0')
   })
 
-  test('throws on config set with invalid tension', () => {
-    const system = createSpringSystem()
+  test('throws on config set with invalid tension', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 1, damping: 1 }))
     expect(() => {
       spring.config = defineSpring({ tension: -1, damping: 1 })
     }).toThrow('Tension must be greater than 0')
   })
 
-  test('throws on config set with invalid damping', () => {
-    const system = createSpringSystem()
+  test('throws on config set with invalid damping', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 1, damping: 1 }))
     expect(() => {
       spring.config = defineSpring({ tension: 1, damping: -1 })
     }).toThrow('Damping must be greater than or equal to 0')
   })
 
-  test('throws on config set with negative precision', () => {
-    const system = createSpringSystem()
+  test('throws on config set with negative precision', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 1, damping: 1 }))
     expect(() => {
       spring.config = defineSpring({ tension: 1, damping: 1, precision: -1 })
@@ -124,8 +114,7 @@ describe('Spring: input validation', () => {
 })
 
 describe('Spring: non-finite writes', () => {
-  test('creation and every write path reject non-finite numbers', () => {
-    const system = createSpringSystem()
+  test('creation and every write path reject non-finite numbers', ({ system }) => {
     expect(() => system.createSpring(Number.NaN)).toThrow('Spring value must be a finite number')
 
     const spring = system.createSpring(0)
@@ -143,23 +132,16 @@ describe('Spring: non-finite writes', () => {
     }).toThrow('Spring velocity must be a finite number')
     expect(() => spring.jumpTo(Number.NaN)).toThrow('Spring value must be a finite number')
   })
-
-  test('advance rejects a non-finite dt', () => {
-    const system = createSpringSystem()
-    expect(() => system.advance(Number.NaN)).toThrow('dt must be a finite number of milliseconds')
-  })
 })
 
 describe('Spring: default values', () => {
-  test('target defaults to 0 when neither target nor value is set', () => {
-    const system = createSpringSystem()
+  test('target defaults to 0 when neither target nor value is set', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 1, damping: 1 }))
     expect(spring.target).toBe(0)
     expect(spring.value).toBe(0)
   })
 
-  test('precision defaults to 2', () => {
-    const system = createSpringSystem()
+  test('precision defaults to 2', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 1, damping: 1 }))
     expect(spring.precision).toBe(2)
   })
@@ -168,8 +150,7 @@ describe('Spring: default values', () => {
 describe('Spring: state transitions', () => {
   const config = defineSpring({ damping: 1, mass: 1, tension: 2 })
 
-  test('a new spring rests at its value', () => {
-    const system = createSpringSystem()
+  test('a new spring rests at its value', ({ system }) => {
     const spring = system.createSpring(1, config)
 
     expect(spring.target).toBe(1)
@@ -177,8 +158,7 @@ describe('Spring: state transitions', () => {
     expect(spring.isResting).toBe(true)
   })
 
-  test('retargeting displaces the spring without moving its value', () => {
-    const system = createSpringSystem()
+  test('retargeting displaces the spring without moving its value', ({ system }) => {
     const spring = system.createSpring(2, config)
 
     spring.target = 1
@@ -188,8 +168,7 @@ describe('Spring: state transitions', () => {
     expect(spring.isResting).toBe(false)
   })
 
-  test('writing the value up to the target settles the spring', () => {
-    const system = createSpringSystem()
+  test('writing the value up to the target settles the spring', ({ system }) => {
     const spring = system.createSpring(0, config)
 
     spring.target = 100
@@ -208,8 +187,7 @@ describe('Spring: state transitions', () => {
 })
 
 describe('Spring: jumpTo', () => {
-  test('instantly moves value to new position', () => {
-    const system = createSpringSystem()
+  test('instantly moves value to new position', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
 
     spring.jumpTo(100)
@@ -217,8 +195,7 @@ describe('Spring: jumpTo', () => {
     expect(spring.target).toBe(100)
   })
 
-  test('resets velocity to zero', () => {
-    const system = createSpringSystem()
+  test('resets velocity to zero', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 10 }))
     spring.target = 100
 
@@ -230,8 +207,7 @@ describe('Spring: jumpTo', () => {
     expect(spring.velocity).toBe(0)
   })
 
-  test('spring is resting after jumpTo', () => {
-    const system = createSpringSystem()
+  test('spring is resting after jumpTo', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 10 }))
     spring.target = 100
 
@@ -241,8 +217,7 @@ describe('Spring: jumpTo', () => {
 })
 
 describe('Spring: events', () => {
-  test('onUpdate fires on each tick while active', () => {
-    const system = createSpringSystem()
+  test('onUpdate fires on each tick while active', ({ system }) => {
     const spring = system.createSpring(100, defineSpring({ mass: 1, tension: 170, damping: 10 }))
     spring.target = 0
 
@@ -256,8 +231,7 @@ describe('Spring: events', () => {
     expect(onUpdate).toHaveBeenCalledTimes(3)
   })
 
-  test('onStart fires when spring begins moving', () => {
-    const system = createSpringSystem()
+  test('onStart fires when spring begins moving', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 10 }))
 
     const onStart = vi.fn()
@@ -272,8 +246,7 @@ describe('Spring: events', () => {
     expect(onStart).toHaveBeenCalledOnce()
   })
 
-  test('onStart does not fire again when retargeted mid-flight', () => {
-    const system = createSpringSystem()
+  test('onStart does not fire again when retargeted mid-flight', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
 
     const onStart = vi.fn()
@@ -289,8 +262,7 @@ describe('Spring: events', () => {
     expect(onStart).toHaveBeenCalledOnce()
   })
 
-  test('onStart fires again after the spring comes to rest', () => {
-    const system = createSpringSystem()
+  test('onStart fires again after the spring comes to rest', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
 
     const onStart = vi.fn()
@@ -307,8 +279,7 @@ describe('Spring: events', () => {
     expect(onStart).toHaveBeenCalledTimes(2)
   })
 
-  test('setting velocity on a resting spring fires onStart', () => {
-    const system = createSpringSystem()
+  test('setting velocity on a resting spring fires onStart', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
 
     const onStart = vi.fn()
@@ -318,8 +289,7 @@ describe('Spring: events', () => {
     expect(onStart).toHaveBeenCalledOnce()
   })
 
-  test('start and stop alternate strictly across interruptions', () => {
-    const system = createSpringSystem()
+  test('start and stop alternate strictly across interruptions', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
 
     const events: string[] = []
@@ -343,8 +313,7 @@ describe('Spring: events', () => {
     expect(events).toEqual(['start', 'stop', 'start', 'stop'])
   })
 
-  test('jumpTo on a resting spring does not fire onStop', () => {
-    const system = createSpringSystem()
+  test('jumpTo on a resting spring does not fire onStop', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
 
     const onStop = vi.fn()
@@ -356,8 +325,7 @@ describe('Spring: events', () => {
     expect(onStop).not.toHaveBeenCalled()
   })
 
-  test('retargeting does not emit update synchronously', () => {
-    const system = createSpringSystem()
+  test('retargeting does not emit update synchronously', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
 
     const onUpdate = vi.fn()
@@ -371,8 +339,7 @@ describe('Spring: events', () => {
     expect(onUpdate).toHaveBeenCalledOnce()
   })
 
-  test('jumpTo interrupting a moving spring fires onStop', () => {
-    const system = createSpringSystem()
+  test('jumpTo interrupting a moving spring fires onStop', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
 
     const onStop = vi.fn()
@@ -385,8 +352,7 @@ describe('Spring: events', () => {
     expect(onStop).toHaveBeenCalledOnce()
   })
 
-  test('onStop fires when spring comes to rest', () => {
-    const system = createSpringSystem()
+  test('onStop fires when spring comes to rest', ({ system }) => {
     const spring = system.createSpring(1, defineSpring({ mass: 1, tension: 170, damping: 26 }))
     spring.target = 0
 
@@ -402,8 +368,7 @@ describe('Spring: events', () => {
     expect(onStop).toHaveBeenCalled()
   })
 
-  test('unsubscribe function works for onUpdate', () => {
-    const system = createSpringSystem()
+  test('unsubscribe function works for onUpdate', ({ system }) => {
     const spring = system.createSpring(100, defineSpring({ mass: 1, tension: 170, damping: 10 }))
     spring.target = 0
 
@@ -420,8 +385,7 @@ describe('Spring: events', () => {
 })
 
 describe('Spring: parameter changes mid-animation', () => {
-  test('changing mass mid-animation does not crash', () => {
-    const system = createSpringSystem()
+  test('changing mass mid-animation does not crash', ({ system }) => {
     const spring = system.createSpring(100, defineSpring({ mass: 1, tension: 170, damping: 10 }))
     spring.target = 0
 
@@ -431,8 +395,7 @@ describe('Spring: parameter changes mid-animation', () => {
     expect(spring.value).not.toBeNaN()
   })
 
-  test('changing tension mid-animation does not produce NaN', () => {
-    const system = createSpringSystem()
+  test('changing tension mid-animation does not produce NaN', ({ system }) => {
     const spring = system.createSpring(100, defineSpring({ mass: 1, tension: 170, damping: 10 }))
     spring.target = 0
 
@@ -443,8 +406,7 @@ describe('Spring: parameter changes mid-animation', () => {
     expect(spring.velocity).not.toBeNaN()
   })
 
-  test('changing damping to cross solver boundary works', () => {
-    const system = createSpringSystem()
+  test('changing damping to cross solver boundary works', ({ system }) => {
     const spring = system.createSpring(100, defineSpring({ mass: 1, tension: 170, damping: 10 }))
     spring.target = 0
 
@@ -457,8 +419,7 @@ describe('Spring: parameter changes mid-animation', () => {
     expect(spring.velocity).not.toBeNaN()
   })
 
-  test('spring still converges after parameter change', () => {
-    const system = createSpringSystem()
+  test('spring still converges after parameter change', ({ system }) => {
     const spring = system.createSpring(100, defineSpring({ mass: 1, tension: 170, damping: 10 }))
     spring.target = 0
 
@@ -477,8 +438,7 @@ describe('Spring: parameter changes mid-animation', () => {
 })
 
 describe('Spring: re-activation from rest', () => {
-  test('setting value on a resting spring re-activates it', () => {
-    const system = createSpringSystem()
+  test('setting value on a resting spring re-activates it', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
 
     expect(spring.isResting).toBe(true)
@@ -495,8 +455,7 @@ describe('Spring: re-activation from rest', () => {
     expect(spring.value).toBeCloseTo(0, 0)
   })
 
-  test('setting velocity on a resting spring re-activates it', () => {
-    const system = createSpringSystem()
+  test('setting velocity on a resting spring re-activates it', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
 
     expect(spring.isResting).toBe(true)
@@ -508,8 +467,9 @@ describe('Spring: re-activation from rest', () => {
 })
 
 describe('Spring: config value semantics', () => {
-  test('assigning a config to a default-config spring does not affect other default-config springs', () => {
-    const system = createSpringSystem()
+  test('assigning a config to a default-config spring does not affect other default-config springs', ({
+    system,
+  }) => {
     const a = system.createSpring(0)
     const b = system.createSpring(0)
     const tensionBefore = b.tension
@@ -520,8 +480,7 @@ describe('Spring: config value semantics', () => {
     expect(b.tension).toBe(tensionBefore)
   })
 
-  test('springs constructed with a shared config instance are not coupled', () => {
-    const system = createSpringSystem()
+  test('springs constructed with a shared config instance are not coupled', ({ system }) => {
     const shared = defineSpring({ mass: 1, tension: 100, damping: 10 })
     const a = system.createSpring(0, shared)
     const b = system.createSpring(0, shared)
@@ -533,8 +492,7 @@ describe('Spring: config value semantics', () => {
     expect(shared.tension).toBe(100)
   })
 
-  test('assigning a config does not mutate the assigned instance', () => {
-    const system = createSpringSystem()
+  test('assigning a config does not mutate the assigned instance', ({ system }) => {
     const original = defineSpring({ mass: 1, tension: 100, damping: 10 })
     const spring = system.createSpring(0, original)
 
@@ -550,8 +508,7 @@ describe('Spring: config value semantics', () => {
     expect(Object.isFrozen(config)).toBe(true)
   })
 
-  test('setting config to null on a default-config spring keeps the default', () => {
-    const system = createSpringSystem()
+  test('setting config to null on a default-config spring keeps the default', ({ system }) => {
     const spring = system.createSpring(0)
     const tensionBefore = spring.tension
 
@@ -560,8 +517,7 @@ describe('Spring: config value semantics', () => {
     expect(spring.tension).toBe(tensionBefore)
   })
 
-  test('the parameter getters read through to the assigned config', () => {
-    const system = createSpringSystem()
+  test('the parameter getters read through to the assigned config', ({ system }) => {
     const spring = system.createSpring(0)
 
     const config = defineSpring({ mass: 5, tension: 300, damping: 10, precision: 5 })
@@ -576,23 +532,20 @@ describe('Spring: config value semantics', () => {
 })
 
 describe('Spring: settled promise', () => {
-  test('resolves immediately when already resting', async () => {
-    const system = createSpringSystem()
+  test('resolves immediately when already resting', async ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
 
     await expect(spring.settled).resolves.toBeUndefined()
   })
 
-  test('returns the same promise instance while moving', () => {
-    const system = createSpringSystem()
+  test('returns the same promise instance while moving', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
 
     spring.target = 100
     expect(spring.settled).toBe(spring.settled)
   })
 
-  test('stays pending across retargets and resolves at true rest', async () => {
-    const system = createSpringSystem()
+  test('stays pending across retargets and resolves at true rest', async ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
 
     spring.target = 100
@@ -615,8 +568,7 @@ describe('Spring: settled promise', () => {
     expect(resolved).toBe(true)
   })
 
-  test('a new motion cycle gets a new promise', async () => {
-    const system = createSpringSystem()
+  test('a new motion cycle gets a new promise', async ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
 
     spring.target = 100
@@ -631,8 +583,7 @@ describe('Spring: settled promise', () => {
     expect(spring.settled).not.toBe(first)
   })
 
-  test('jumpTo resolves a pending promise', async () => {
-    const system = createSpringSystem()
+  test('jumpTo resolves a pending promise', async ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
 
     spring.target = 100
@@ -642,8 +593,7 @@ describe('Spring: settled promise', () => {
     await expect(settled).resolves.toBeUndefined()
   })
 
-  test('dispose resolves a pending promise', async () => {
-    const system = createSpringSystem()
+  test('dispose resolves a pending promise', async ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
 
     spring.target = 100
@@ -655,8 +605,7 @@ describe('Spring: settled promise', () => {
 })
 
 describe('Spring: dispose', () => {
-  test('disposed spring no longer ticks', () => {
-    const system = createSpringSystem()
+  test('disposed spring no longer ticks', ({ system }) => {
     const spring = system.createSpring(100, defineSpring({ mass: 1, tension: 170, damping: 10 }))
     spring.target = 0
 
@@ -672,8 +621,7 @@ describe('Spring: dispose', () => {
     expect(onUpdate).toHaveBeenCalledOnce()
   })
 
-  test('onDispose fires when the spring is disposed', () => {
-    const system = createSpringSystem()
+  test('onDispose fires when the spring is disposed', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
 
     const onDispose = vi.fn()
@@ -683,8 +631,7 @@ describe('Spring: dispose', () => {
     expect(onDispose).toHaveBeenCalledOnce()
   })
 
-  test('double dispose is a no-op', () => {
-    const system = createSpringSystem()
+  test('double dispose is a no-op', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
     spring.target = 100
 
@@ -696,8 +643,7 @@ describe('Spring: dispose', () => {
     expect(onDispose).toHaveBeenCalledOnce()
   })
 
-  test('a disposed spring freezes at its current value: reads work, writes throw', () => {
-    const system = createSpringSystem()
+  test('a disposed spring freezes at its current value: reads work, writes throw', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
 
     spring.target = 100

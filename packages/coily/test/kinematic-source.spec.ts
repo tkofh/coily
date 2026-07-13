@@ -1,15 +1,13 @@
-import { describe, expect, test, vi } from 'vitest'
-import { createSpringSystem } from '../src/system.ts'
+import { describe, expect, vi } from 'vitest'
 import { defineSpring } from '../src/config.ts'
 import { SpringSourceSymbol, mapSpring } from '../src/spring-source.ts'
 import { accelerationOf, velocityOf } from '../src/kinematic-source.ts'
-import { advanceUntilResting } from './helpers.ts'
+import { advanceUntilResting, test } from './helpers.ts'
 
 const config = defineSpring({ mass: 1, tension: 170, damping: 26 })
 
 describe('velocityOf', () => {
-  test('reads the source velocity exactly', () => {
-    const system = createSpringSystem()
+  test('reads the source velocity exactly', ({ system }) => {
     const motion = system.createSpring(0, config)
     const source = velocityOf(motion)
 
@@ -20,8 +18,7 @@ describe('velocityOf', () => {
     expect(source[SpringSourceSymbol].value).toBe(motion.velocity)
   })
 
-  test('a spring can follow another spring velocity', () => {
-    const system = createSpringSystem()
+  test('a spring can follow another spring velocity', ({ system }) => {
     const motion = system.createSpring(0, config)
     const follower = system.createSpring(0)
     follower.target = velocityOf(motion)
@@ -42,8 +39,7 @@ describe('velocityOf', () => {
     expect(follower.isResting).toBe(true)
   })
 
-  test('mapSpring composes over a velocity source', () => {
-    const system = createSpringSystem()
+  test('mapSpring composes over a velocity source', ({ system }) => {
     const motion = system.createSpring(0, config)
     const speed = mapSpring(velocityOf(motion), (v) => Math.abs(v))
 
@@ -53,8 +49,7 @@ describe('velocityOf', () => {
     expect(speed[SpringSourceSymbol].value).toBe(Math.abs(motion.velocity))
   })
 
-  test('updates when the source updates', () => {
-    const system = createSpringSystem()
+  test('updates when the source updates', ({ system }) => {
     const motion = system.createSpring(0, config)
     const source = velocityOf(motion)
 
@@ -67,8 +62,7 @@ describe('velocityOf', () => {
     expect(seen).toHaveBeenCalled()
   })
 
-  test('releases with the source, detaching followers', () => {
-    const system = createSpringSystem()
+  test('releases with the source, detaching followers', ({ system }) => {
     const motion = system.createSpring(0, config)
     const follower = system.createSpring(0)
     follower.target = velocityOf(motion)
@@ -88,8 +82,7 @@ describe('velocityOf', () => {
 })
 
 describe('accelerationOf', () => {
-  test('reads the source acceleration exactly, matching the spring ODE', () => {
-    const system = createSpringSystem()
+  test('reads the source acceleration exactly, matching the spring ODE', ({ system }) => {
     const motion = system.createSpring(0, config)
     const source = accelerationOf(motion)
 
@@ -106,8 +99,7 @@ describe('accelerationOf', () => {
     expect(motion.acceleration).toBeCloseTo(expected, 6)
   })
 
-  test('is zero at rest', () => {
-    const system = createSpringSystem()
+  test('is zero at rest', ({ system }) => {
     const motion = system.createSpring(0, config)
     const source = accelerationOf(motion)
 
@@ -119,8 +111,7 @@ describe('accelerationOf', () => {
     expect(Math.abs(source[SpringSourceSymbol].value)).toBe(0)
   })
 
-  test('a spring can follow another spring acceleration, settling to rest', () => {
-    const system = createSpringSystem()
+  test('a spring can follow another spring acceleration, settling to rest', ({ system }) => {
     const motion = system.createSpring(0, config)
     const follower = system.createSpring(0)
     follower.target = accelerationOf(motion)
@@ -139,8 +130,7 @@ describe('accelerationOf', () => {
     expect(follower.isResting).toBe(true)
   })
 
-  test('mapSpring composes over an acceleration source', () => {
-    const system = createSpringSystem()
+  test('mapSpring composes over an acceleration source', ({ system }) => {
     const motion = system.createSpring(0, config)
     const impact = mapSpring(accelerationOf(motion), (a) => Math.abs(a))
 
@@ -152,8 +142,7 @@ describe('accelerationOf', () => {
 })
 
 describe('kinematic sources: composites', () => {
-  test('velocityOf yields a velocity of the same shape, mappable to a scalar', () => {
-    const system = createSpringSystem()
+  test('velocityOf yields a velocity of the same shape, mappable to a scalar', ({ system }) => {
     const point = system.createSpring({ x: 0, y: 0 }, config)
     const follower = system.createSpring(
       mapSpring(velocityOf(point), ({ x, y }) => Math.hypot(x, y)),
@@ -165,8 +154,9 @@ describe('kinematic sources: composites', () => {
     expect(follower.target).toBeCloseTo(Math.hypot(point.velocity.x, point.velocity.y), 6)
   })
 
-  test('accelerationOf yields an acceleration of the same shape, mappable to a scalar', () => {
-    const system = createSpringSystem()
+  test('accelerationOf yields an acceleration of the same shape, mappable to a scalar', ({
+    system,
+  }) => {
     const point = system.createSpring({ x: 0, y: 0 }, config)
     const follower = system.createSpring(
       mapSpring(accelerationOf(point), ({ x, y }) => Math.hypot(x, y)),
@@ -178,8 +168,7 @@ describe('kinematic sources: composites', () => {
     expect(follower.target).toBeCloseTo(Math.hypot(point.acceleration.x, point.acceleration.y), 6)
   })
 
-  test('a derivative source is a valid shape leaf alongside the value', () => {
-    const system = createSpringSystem()
+  test('a derivative source is a valid shape leaf alongside the value', ({ system }) => {
     const motion = system.createSpring(0, config)
     const follower = system.createSpring(
       mapSpring({ pos: motion, vel: velocityOf(motion) }, ({ pos, vel }) => pos + vel),
@@ -193,24 +182,21 @@ describe('kinematic sources: composites', () => {
 })
 
 describe('kinematic sources: rejection', () => {
-  test('velocityOf throws on a mapped source, which is not in motion', () => {
-    const system = createSpringSystem()
+  test('velocityOf throws on a mapped source, which is not in motion', ({ system }) => {
     const motion = system.createSpring(0, config)
     const mapped = mapSpring(motion, (v) => v * 2)
 
     expect(() => velocityOf(mapped as never)).toThrow(/in motion/)
   })
 
-  test('accelerationOf throws on a mapped source, which is not in motion', () => {
-    const system = createSpringSystem()
+  test('accelerationOf throws on a mapped source, which is not in motion', ({ system }) => {
     const motion = system.createSpring(0, config)
     const mapped = mapSpring(motion, (v) => v * 2)
 
     expect(() => accelerationOf(mapped as never)).toThrow(/in motion/)
   })
 
-  test('a derived velocity source has no motion of its own', () => {
-    const system = createSpringSystem()
+  test('a derived velocity source has no motion of its own', ({ system }) => {
     const motion = system.createSpring(0, config)
     const source = velocityOf(motion)
 

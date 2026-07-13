@@ -1,9 +1,9 @@
-import { describe, expect, test, vi } from 'vitest'
+import { describe, expect, vi } from 'vitest'
 import { createSpringSystem, defineSpring } from '../src/index.ts'
+import { test } from './helpers.ts'
 
 describe('SpringSystem', () => {
-  test('single tick() updates all active springs', () => {
-    const system = createSpringSystem()
+  test('single tick() updates all active springs', ({ system }) => {
     const config = defineSpring({ mass: 1, tension: 170, damping: 10 })
 
     const a = system.createSpring(0, config)
@@ -18,8 +18,7 @@ describe('SpringSystem', () => {
     expect(b.value).not.toBe(0)
   })
 
-  test('resting springs are not ticked', () => {
-    const system = createSpringSystem()
+  test('resting springs are not ticked', ({ system }) => {
     const config = defineSpring({ mass: 1, tension: 170, damping: 10 })
 
     const resting = system.createSpring(0, config)
@@ -37,8 +36,7 @@ describe('SpringSystem', () => {
     expect(activeUpdate).toHaveBeenCalled()
   })
 
-  test('springs that come to rest are removed from scheduler', () => {
-    const system = createSpringSystem()
+  test('springs that come to rest are removed from scheduler', ({ system }) => {
     const spring = system.createSpring(1, defineSpring({ mass: 1, tension: 170, damping: 26 }))
     spring.target = 0
 
@@ -60,8 +58,7 @@ describe('SpringSystem', () => {
     expect(onUpdate).not.toHaveBeenCalled()
   })
 
-  test('setting target re-adds a resting spring to the scheduler', () => {
-    const system = createSpringSystem()
+  test('setting target re-adds a resting spring to the scheduler', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
 
     expect(spring.isResting).toBe(true)
@@ -79,8 +76,7 @@ describe('SpringSystem', () => {
     expect(onUpdate).toHaveBeenCalled()
   })
 
-  test('multiple springs reach their different targets independently', () => {
-    const system = createSpringSystem()
+  test('multiple springs reach their different targets independently', ({ system }) => {
     const config = defineSpring({ mass: 1, tension: 170, damping: 26 })
 
     const a = system.createSpring(0, config)
@@ -100,36 +96,56 @@ describe('SpringSystem', () => {
   })
 })
 
+describe('SpringSystem: advance', () => {
+  test('rejects a non-finite dt', ({ system }) => {
+    expect(() => system.advance(Number.NaN)).toThrow('dt must be a finite number of milliseconds')
+    expect(() => system.advance(Number.POSITIVE_INFINITY)).toThrow(
+      'dt must be a finite number of milliseconds',
+    )
+  })
+
+  test('a negative dt steps the simulation backward and reversibly', ({ system }) => {
+    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 10 }))
+    spring.target = 100
+
+    system.advance(1000 / 60)
+    const forward = spring.value
+    expect(forward).toBeGreaterThan(0)
+
+    // The closed-form solver evaluates at absolute time, so reversing the exact
+    // step lands back on the same trajectory point — no drift, no NaN.
+    system.advance(-1000 / 60)
+    expect(spring.value).toBeCloseTo(0, 6)
+    expect(spring.value).toBeLessThan(forward)
+    expect(Number.isFinite(spring.velocity)).toBe(true)
+  })
+})
+
 describe('SpringSystem: transport controls', () => {
-  test('not running by default', () => {
-    const system = createSpringSystem()
+  test('not running by default', ({ system }) => {
     expect(system.running).toBe(false)
   })
 
-  test('running is true after start()', () => {
-    const system = createSpringSystem()
+  test('running is true after start()', ({ system }) => {
     system.start()
     expect(system.running).toBe(true)
     system.stop()
   })
 
-  test('running is false after stop()', () => {
-    const system = createSpringSystem()
+  test('running is false after stop()', ({ system }) => {
     system.start()
     system.stop()
     expect(system.running).toBe(false)
   })
 
-  test('start() is idempotent', () => {
-    const system = createSpringSystem()
+  test('start() is idempotent', ({ system }) => {
     system.start()
     system.start()
     expect(system.running).toBe(true)
     system.stop()
   })
 
-  test('stop() is idempotent', () => {
-    const system = createSpringSystem()
+  test('stop() is idempotent', ({ system }) => {
     system.stop()
     expect(system.running).toBe(false)
   })
@@ -139,8 +155,7 @@ describe('SpringSystem: ticker options', () => {
   // The Ticker's own behavior (capping, lag clamping, validation) is covered
   // exhaustively in ticker.spec.ts; here we only confirm the system exposes
   // and forwards the options.
-  test('defaults match the ticker defaults', () => {
-    const system = createSpringSystem()
+  test('defaults match the ticker defaults', ({ system }) => {
     expect(system.fps).toBe(0)
     expect(system.lagThreshold).toBe(500)
     expect(system.adjustedLag).toBe(33)
