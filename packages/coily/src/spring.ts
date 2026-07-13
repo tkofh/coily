@@ -13,6 +13,17 @@ import { invariant, RESOLVED } from './util.ts'
 export type SpringTarget = number | SpringSource
 
 /**
+ * What a spring animates, which decides whether reduced motion applies to
+ * it. `'motion'` moves something on screen — position, scale, rotation —
+ * and snaps to its target under reduced motion. `'appearance'` changes
+ * how something looks without moving it — a cross-fade, a color, a blur —
+ * and keeps animating under reduced motion, since it carries no motion to
+ * reduce. Fixed when the spring is created; read it back from
+ * `Spring.purpose`.
+ */
+export type Purpose = 'motion' | 'appearance'
+
+/**
  * One animated number, driven toward its target with damped spring
  * motion. Create springs with `SpringSystem.createSpring`; the owning
  * system advances them, so a spring only moves while its system runs.
@@ -32,6 +43,7 @@ export class Spring implements KinematicSource {
 
   #target: number
   #config: SpringDefinition
+  readonly #purpose: Purpose
   readonly #motion: Motion
   readonly #motions: MotionSet
 
@@ -42,12 +54,25 @@ export class Spring implements KinematicSource {
   #resolveSettled: (() => void) | null = null
   #disposed = false
 
-  constructor(motions: MotionSet, value: number, config?: SpringDefinition) {
+  constructor(
+    motions: MotionSet,
+    value: number,
+    config?: SpringDefinition,
+    purpose: Purpose = 'motion',
+  ) {
     invariant(Number.isFinite(value), 'Spring value must be a finite number')
+    invariant(
+      purpose === 'motion' || purpose === 'appearance',
+      "Spring purpose must be 'motion' or 'appearance'",
+    )
     this.#motions = motions
     this.#config = config ?? SpringDefinition.default
     this.#target = value
+    this.#purpose = purpose
     this.#motion = new Motion(this.#config, 0, 0)
+    // An 'appearance' spring opts out of reduced motion: its own writes
+    // stay animated (below), and MotionSet.finishAll leaves it running.
+    this.#motion.respectsReducedMotion = purpose === 'motion'
   }
 
   /**
@@ -61,7 +86,8 @@ export class Spring implements KinematicSource {
    * - A `SpringSource` — a `Spring`, or a value derived with `mapSpring` —
    *   makes this spring follow the source's live value.
    *
-   * Under reduced motion, retargets apply instantly.
+   * Under reduced motion, retargets apply instantly — unless `purpose` is
+   * `'appearance'`, in which case they animate as normal.
    */
   get target(): number {
     return this.#target
@@ -88,7 +114,8 @@ export class Spring implements KinematicSource {
    * Writing displaces the spring: it keeps its target and springs back
    * from the written value, notifying update listeners synchronously.
    * Writing the current value is a no-op. Under reduced motion a write
-   * jumps the spring — target included — to the written value.
+   * jumps the spring — target included — to the written value, unless
+   * `purpose` is `'appearance'`, in which case it displaces as normal.
    */
   get value() {
     return this.#target + this.#motion.position
@@ -96,7 +123,7 @@ export class Spring implements KinematicSource {
 
   set value(value: number) {
     invariant(Number.isFinite(value), 'Spring value must be a finite number')
-    if (this.#motions.reduced) {
+    if (this.#motions.reduced && this.#purpose === 'motion') {
       if (value !== this.value) {
         this.jumpTo(value)
       }
@@ -116,7 +143,8 @@ export class Spring implements KinematicSource {
    *
    * Writing flings the spring: motion continues from the current value
    * with the written velocity, then settles back to the target. Under
-   * reduced motion writes are ignored.
+   * reduced motion writes are ignored, unless `purpose` is `'appearance'`,
+   * in which case the fling applies as normal.
    */
   get velocity() {
     return this.#motion.velocity
@@ -124,7 +152,7 @@ export class Spring implements KinematicSource {
 
   set velocity(value: number) {
     invariant(Number.isFinite(value), 'Spring velocity must be a finite number')
-    if (this.#motions.reduced) return
+    if (this.#motions.reduced && this.#purpose === 'motion') return
 
     this.#motions.add(this.#motion)
     this.#motion.velocity = value
@@ -143,6 +171,16 @@ export class Spring implements KinematicSource {
     // config, like value and velocity.
     const { tension, damping, mass } = this.#config
     return -(tension * this.#motion.position + damping * this.#motion.velocity) / mass
+  }
+
+  /**
+   * What the spring animates — `'motion'` or `'appearance'` — fixed when
+   * it was created. An `'appearance'` spring opts out of reduced motion:
+   * it keeps animating where a `'motion'` spring snaps to its target. See
+   * `Purpose`.
+   */
+  get purpose(): Purpose {
+    return this.#purpose
   }
 
   /**
@@ -318,7 +356,7 @@ export class Spring implements KinematicSource {
     // throws here, at the moment of the poisoned retarget.
     invariant(Number.isFinite(value), 'Spring target must be a finite number')
     if (value !== this.#target) {
-      if (this.#motions.reduced) {
+      if (this.#motions.reduced && this.#purpose === 'motion') {
         this.jumpTo(value)
         return
       }

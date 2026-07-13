@@ -7,6 +7,7 @@
  * is self-validating: tsc fails if the line stops erroring.
  */
 import type {
+  Purpose,
   ReadonlyShape,
   Spring,
   SpringDefinition,
@@ -189,6 +190,35 @@ const composite: CompositeSpring<{ target: number; value: number }> = system.cre
 })
 void scalar
 void composite
+
+// ── Purpose shapes ───────────────────────────────────────────────────
+
+// A single purpose covers every channel; a shape sets it per channel, at
+// any level. Purposes ride in the third options argument, past `config`.
+system.createSpring({ x: 0, y: 0 }, cfg, { purpose: 'appearance' })
+system.createSpring({ x: 0, y: 0 }, undefined, { purpose: { x: 'appearance' } })
+system.createSpring({ x: 0, y: 0 }, undefined, { purpose: { x: 'motion', y: 'appearance' } })
+system.createSpring({ position: { x: 0, y: 0 }, opacity: 1 }, undefined, {
+  purpose: { position: 'motion', opacity: 'appearance' },
+})
+const scalarAppearance: Spring = system.createSpring(5, undefined, { purpose: 'appearance' })
+void scalarAppearance
+
+// @ts-expect-error a purpose is 'motion' or 'appearance', nothing else
+system.createSpring({ x: 0, y: 0 }, undefined, { purpose: 'wiggle' })
+// @ts-expect-error unknown channels in purpose shapes are rejected
+system.createSpring({ x: 0, y: 0 }, undefined, { purpose: { z: 'motion' } })
+// @ts-expect-error invalid purpose values are rejected at the leaf
+system.createSpring({ x: 0, y: 0 }, undefined, { purpose: { x: 'wiggle' } })
+// @ts-expect-error scalar purposes are 'motion' or 'appearance', nothing else
+system.createSpring(5, undefined, { purpose: 'wiggle' })
+
+// `purpose` reads back per spring: scalar is a `Purpose`, composite is
+// `Purpose | null` (null when channels differ).
+const scalarPurpose: Purpose = scalar.purpose
+const compositePurpose: Purpose | null = obj.purpose
+void scalarPurpose
+void compositePurpose
 
 // ── Mixed targets: channels take numbers or scalar sources ──────────
 

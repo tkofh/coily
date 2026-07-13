@@ -10,7 +10,7 @@ import {
   channelParser,
   describePath,
 } from './shape-tree.ts'
-import { Spring } from './spring.ts'
+import { Spring, type Purpose } from './spring.ts'
 import { type SpringSource, SpringSourceSymbol, isSpringSource } from './spring-source.ts'
 import type { KinematicSource, KinematicSourceApi } from './kinematic-source.ts'
 import { invariant, isNumber, isRecordOrArray, RESOLVED } from './util.ts'
@@ -77,6 +77,17 @@ export type ConfigShape<T> =
   | (T extends number ? never : { readonly [K in keyof T]?: ConfigShape<T[K]> | undefined })
 
 /**
+ * What each channel of a composite spring animates: a single `Purpose`
+ * for every channel, or a shape mirroring the value with purposes at any
+ * level. A purpose at a subtree covers every channel below it, and any
+ * channel it doesn't reach defaults to `'motion'`. Fixed when the spring
+ * is created. See `Purpose`.
+ */
+export type PurposeShape<T> =
+  | Purpose
+  | (T extends number ? never : { readonly [K in keyof T]?: PurposeShape<T[K]> | undefined })
+
+/**
  * A partial target shape: the same nesting as the value with any subset
  * of the channels present, each taking a number to animate toward or a
  * scalar `SpringSource` to follow. Absent (or `undefined`) channels are
@@ -110,6 +121,23 @@ function resolveConfigNode(node: unknown, path: string): Coverage<SpringDefiniti
   if (node instanceof SpringDefinition) return node
   if (isRecordOrArray(node)) return BRANCH
   throw new Error(invalidConfig(path))
+}
+
+// ── Purpose resolution ──────────────────────────────────────────────
+
+function invalidPurpose(path: string): string {
+  return `Invalid purpose for ${describePath(path)}: expected 'motion', 'appearance', or a purpose shape matching the value`
+}
+
+/**
+ * Decides what a purpose node means: a `Purpose` string covers the whole
+ * subtree, any object or array is a purpose shape to descend into, and
+ * anything else is invalid.
+ */
+function resolvePurposeNode(node: unknown, path: string): Coverage<Purpose> {
+  if (node === 'motion' || node === 'appearance') return node
+  if (isRecordOrArray(node)) return BRANCH
+  throw new Error(invalidPurpose(path))
 }
 
 // ── Channel operations ──────────────────────────────────────────────
@@ -214,7 +242,12 @@ export class CompositeSpring<in out T extends object> implements KinematicSource
     }
   }
 
-  constructor(motions: MotionSet, value: T & Shape<T>, config?: ConfigShape<T>) {
+  constructor(
+    motions: MotionSet,
+    value: T & Shape<T>,
+    config?: ConfigShape<T>,
+    purpose?: PurposeShape<T>,
+  ) {
     this.#motions = motions
 
     invariant(
@@ -222,9 +255,27 @@ export class CompositeSpring<in out T extends object> implements KinematicSource
       'Composite spring value must be a plain object or an array of numeric channels',
     )
 
+    // A channel spring's purpose is fixed at birth (no setter), so resolve
+    // the shape to a per-channel purpose before the springs exist. A
+    // throwaway tree of channel paths reuses `broadcast`'s cover/descend
+    // and validation; skipped when no purpose is given.
+    let purposeByPath: Map<string, Purpose> | null = null
+    if (purpose !== undefined) {
+      const byPath = new Map<string, Purpose>()
+      const paths = new ShapeTree(
+        value,
+        channelParser((_leafValue, path) => path),
+      )
+      paths.root.broadcast(purpose, resolvePurposeNode, (path, p) => byPath.set(path, p), 'purpose')
+      purposeByPath = byPath
+    }
+
     this.#tree = new ShapeTree(
       value,
-      channelParser((leafValue) => new Spring(motions, leafValue)),
+      channelParser(
+        (leafValue, path) =>
+          new Spring(motions, leafValue, undefined, purposeByPath?.get(path) ?? 'motion'),
+      ),
     )
     if (config !== undefined) {
       this.#tree.root.broadcast(config, resolveConfigNode, assignConfig, 'config')
@@ -288,7 +339,8 @@ export class CompositeSpring<in out T extends object> implements KinematicSource
    * Assignment takes a partial shape and displaces the channels it names:
    * each keeps its target and springs back from the written value, with
    * one coalesced `update` fired synchronously. Under reduced motion a
-   * write jumps the named channels — targets included.
+   * write jumps the named channels — targets included — except channels
+   * whose `purpose` is `'appearance'`, which displace as normal.
    */
   get value(): ReadonlyShape<T> {
     this.#valueView.refresh()
@@ -307,7 +359,8 @@ export class CompositeSpring<in out T extends object> implements KinematicSource
    * read.
    *
    * Assignment takes a partial shape and flings the channels it names;
-   * the rest are untouched. Under reduced motion writes are ignored.
+   * the rest are untouched. Under reduced motion writes are ignored,
+   * except on channels whose `purpose` is `'appearance'`.
    */
   get velocity(): ReadonlyShape<T> {
     const view = (this.#velocityView ??= new ShapeView(this.#tree.root, readVelocity))
@@ -355,6 +408,20 @@ export class CompositeSpring<in out T extends object> implements KinematicSource
     this.#motions.flushes.batch(() => {
       this.#tree.root.broadcast(value ?? null, resolveConfigNode, assignConfig, 'config')
     })
+  }
+
+  /**
+   * The shared purpose when every channel resolves to the same `Purpose`,
+   * and `null` when they differ. Fixed when the spring is created — an
+   * `'appearance'` channel opts out of reduced motion. See `Purpose`.
+   */
+  get purpose(): Purpose | null {
+    const channels = this.#tree.leaves
+    const first = channels[0]!.purpose
+    for (let i = 1; i < channels.length; i++) {
+      if (channels[i]!.purpose !== first) return null
+    }
+    return first
   }
 
   /** The largest `timeRemaining` across channels, in milliseconds. */

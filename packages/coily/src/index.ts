@@ -1,5 +1,11 @@
-export { createSpringSystem, type SpringSystem, type SpringSystemOptions } from './system.ts'
-export type { Spring, SpringTarget } from './spring.ts'
+export {
+  createSpringSystem,
+  type SpringSystem,
+  type SpringSystemOptions,
+  type SpringOptions,
+  type CompositeSpringOptions,
+} from './system.ts'
+export type { Spring, SpringTarget, Purpose } from './spring.ts'
 export {
   mapSpring,
   type SourceShape,
@@ -16,6 +22,7 @@ export {
 } from './kinematic-source.ts'
 export type {
   ConfigShape,
+  PurposeShape,
   PartialShape,
   ReadonlyShape,
   Shape,

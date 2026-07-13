@@ -14,6 +14,11 @@ export class Motion {
   /** Tick-pass marker written by `MotionSet` so a motion re-added mid-pass isn't ticked twice. */
   _pass = 0
 
+  // Set by the owning Spring from its `purpose`; `MotionSet.finishAll`
+  // leaves motions that don't respect reduced motion running, so
+  // 'appearance' springs keep animating when it turns on.
+  respectsReducedMotion = true
+
   #config: SpringDefinition
   readonly #state: State
 

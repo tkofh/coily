@@ -1,7 +1,26 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { createSpringSystem, defineSpring } from '../src/index.ts'
+import { advanceUntilResting } from './helpers.ts'
 
 const config = defineSpring({ mass: 1, tension: 170, damping: 26 })
+
+function stubMatchMedia(initialMatches: boolean) {
+  let listener: ((event: { matches: boolean }) => void) | undefined
+  const query = {
+    matches: initialMatches,
+    addEventListener: (_type: string, callback: (event: { matches: boolean }) => void) => {
+      listener = callback
+    },
+  }
+  vi.stubGlobal('window', {
+    matchMedia: vi.fn().mockReturnValue(query),
+  })
+  return {
+    setMatches(matches: boolean) {
+      listener?.({ matches })
+    },
+  }
+}
 
 describe('reduced motion: always', () => {
   test('retargets jump instantly to the target', () => {
@@ -110,6 +129,113 @@ describe('reduced motion: always', () => {
   })
 })
 
+describe("reduced motion: purpose 'appearance'", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  test('an appearance spring animates a retarget under reduced motion', () => {
+    const system = createSpringSystem({ reducedMotion: 'always' })
+    const spring = system.createSpring(0, config, { purpose: 'appearance' })
+
+    spring.target = 100
+    expect(spring.isResting).toBe(false)
+
+    system.advance(1000 / 60)
+    expect(spring.value).toBeGreaterThan(0)
+    expect(spring.value).toBeLessThan(100)
+  })
+
+  test('value and velocity writes apply on an appearance spring under reduced motion', () => {
+    const system = createSpringSystem({ reducedMotion: 'always' })
+
+    const displaced = system.createSpring(0, config, { purpose: 'appearance' })
+    displaced.value = 50
+    expect(displaced.value).toBe(50)
+    expect(displaced.target).toBe(0)
+    system.advance(1000 / 60)
+    expect(displaced.value).toBeLessThan(50)
+
+    const flung = system.createSpring(0, config, { purpose: 'appearance' })
+    flung.velocity = 500
+    system.advance(1000 / 60)
+    expect(flung.value).toBeGreaterThan(0)
+  })
+
+  test('appearance springs keep animating when the preference changes to reduce', () => {
+    const media = stubMatchMedia(false)
+    const system = createSpringSystem()
+    const motion = system.createSpring(0, config)
+    const appearance = system.createSpring(0, config, { purpose: 'appearance' })
+    motion.target = 100
+    appearance.target = 100
+
+    system.advance(1000 / 60)
+    expect(appearance.isResting).toBe(false)
+
+    media.setMatches(true)
+
+    // The motion spring snapped; the appearance spring is untouched.
+    expect(motion.value).toBe(100)
+    expect(motion.isResting).toBe(true)
+    expect(appearance.isResting).toBe(false)
+    expect(appearance.value).toBeLessThan(100)
+
+    advanceUntilResting(system, appearance)
+    expect(appearance.value).toBeCloseTo(100)
+    expect(appearance.isResting).toBe(true)
+  })
+
+  test('purpose reads back from the spring', () => {
+    const system = createSpringSystem()
+    expect(system.createSpring(0).purpose).toBe('motion')
+    expect(system.createSpring(0, config, { purpose: 'appearance' }).purpose).toBe('appearance')
+  })
+
+  test('a purpose shape exempts named channels only', () => {
+    const system = createSpringSystem({ reducedMotion: 'always' })
+    const spring = system.createSpring({ x: 0, y: 0, opacity: 1 }, config, {
+      purpose: { opacity: 'appearance' },
+    })
+
+    spring.target = { x: 100, y: 200, opacity: 0 }
+    // x and y snapped synchronously; advance one frame to let opacity fade.
+    system.advance(1000 / 60)
+
+    const value = spring.value
+    // Motion channels snapped; the appearance channel is still fading.
+    expect(value.x).toBe(100)
+    expect(value.y).toBe(200)
+    expect(value.opacity).toBeLessThan(1)
+    expect(value.opacity).toBeGreaterThan(0)
+    expect(spring.isResting).toBe(false)
+    expect(spring.purpose).toBe(null)
+  })
+
+  test('a single purpose covers every channel', () => {
+    const system = createSpringSystem({ reducedMotion: 'always' })
+    const spring = system.createSpring({ x: 0, y: 0 }, config, { purpose: 'appearance' })
+
+    spring.target = { x: 100, y: 200 }
+    system.advance(1000 / 60)
+
+    const value = spring.value
+    expect(value.x).toBeGreaterThan(0)
+    expect(value.x).toBeLessThan(100)
+    expect(value.y).toBeGreaterThan(0)
+    expect(value.y).toBeLessThan(200)
+    expect(spring.purpose).toBe('appearance')
+  })
+
+  test('an invalid purpose in a shape throws with the channel path', () => {
+    const system = createSpringSystem()
+    expect(() =>
+      // @ts-expect-error — 'wiggle' is not a Purpose
+      system.createSpring({ x: 0 }, config, { purpose: { x: 'wiggle' } }),
+    ).toThrow(/purpose.*'x'/)
+  })
+})
+
 describe('reduced motion: never and default', () => {
   test("'never' animates normally", () => {
     const system = createSpringSystem({ reducedMotion: 'never' })
@@ -140,24 +266,6 @@ describe("reduced motion: 'user' media query", () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
-
-  function stubMatchMedia(initialMatches: boolean) {
-    let listener: ((event: { matches: boolean }) => void) | undefined
-    const query = {
-      matches: initialMatches,
-      addEventListener: (_type: string, callback: (event: { matches: boolean }) => void) => {
-        listener = callback
-      },
-    }
-    vi.stubGlobal('window', {
-      matchMedia: vi.fn().mockReturnValue(query),
-    })
-    return {
-      setMatches(matches: boolean) {
-        listener?.({ matches })
-      },
-    }
-  }
 
   test('adopts the initial preference', () => {
     stubMatchMedia(true)
