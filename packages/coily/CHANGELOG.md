@@ -1,5 +1,245 @@
 # Change Log
 
+## 0.14.0
+
+### Minor Changes
+
+- 0a22ad4: Followers no longer inherit their leader's config. A spring always moves
+  by its own config: the one it was created with or last assigned, or the
+  default. Following a source sets only what the spring chases, so
+  reconfiguring a leader no longer reaches its followers, a scalar follower
+  no longer adopts its leader's config, and a composite channel no longer
+  adopts its leader channel's. `Spring.onConfigure` and
+  `CompositeSpring.onConfigure` are gone with the old cascade, and assigning
+  `null` to `config` now always reverts to the default. In Vue,
+  `useSpring(leaderRef)` with no options animates with the default config.
+
+  To give a follower the leader's feel, pass a config when you create it,
+  either a shared `defineSpring` constant or a snapshot of the leader's:
+
+  ```ts
+  const follower = system.createSpring(leader, leader.config)
+  ```
+
+  That snapshot is one-time: reconfigure the leader afterward and the
+  follower keeps the feel it was born with.
+
+- 0a22ad4: `velocityOf` and `accelerationOf` make a source out of a spring's motion:
+  its velocity (how fast its value is changing, in value units per second)
+  or its acceleration (how fast that velocity is changing). You follow them
+  and map them like any other source, so an effect can ride a spring's
+  motion instead of its position:
+
+  ```ts
+  // a blur that chases how fast something is moving
+  blur.target = velocityOf(motion)
+
+  // an impact flash from a sharp change in speed
+  flash.target = mapSpring(accelerationOf(motion), (a) => Math.min(1, Math.abs(a) * 1e-4))
+  ```
+
+  Derive from a scalar and you get a scalar to follow; derive from a
+  composite and you get the same shape, ready to reduce with `mapSpring`.
+  There's nothing to clean up: each derived source lives and dies with the
+  spring behind it.
+
+  `Spring` and `CompositeSpring` also gain a read-only `acceleration` (value
+  units per second squared) next to `velocity`. It is exact, not estimated
+  frame to frame.
+
+  Only a `Spring` or a `CompositeSpring` is in motion, so only those can be
+  derived. A `mapSpring` result isn't, so `velocityOf` and `accelerationOf`
+  reject it, in the types and at runtime.
+
+- 0a22ad4: `createSpring` now creates both scalar and composite springs, and
+  `createCompositeSpring` is gone: pass a number for a `Spring`, a numeric
+  shape for a `CompositeSpring`, on `SpringSystem` and `useSpringPool()`
+  alike.
+
+  To make the two forms unambiguous, `createSpring` no longer takes a
+  target/value pair (the `SpringPosition` type is gone; a literal like
+  `{ target: 100, value: 0 }` is now a two-channel shape). Displaced
+  creation was sugar for create-then-write, and the two stay exactly
+  equivalent, since retargets and follows preserve the spring's value and
+  momentum:
+
+  ```ts
+  // before                                              // after
+  system.createSpring({ target: 100, value: 0 })         const spring = system.createSpring(0)
+                                                         spring.target = 100
+
+  system.createSpring({ target: leader })                const follower = system.createSpring(leader.value)
+                                                         follower.target = leader
+  ```
+
+  Passing a source directly, `system.createSpring(leader)`, is the same
+  create-then-follow in one call.
+
+- 0a22ad4: Finalized the public type surface for 1.0: renamed the types whose old
+  names undersold them, and dropped the ones you never needed to name.
+
+  Two renames, types-only:
+
+  - `SpringObject` is now `CompositeSpring`: the docs already called it "a
+    composite spring over a fixed numeric shape," and now the name says so.
+    The family renames with it: `SpringObjectTarget` is now
+    `CompositeSpringTarget`, and in the Vue layer `SpringObjectRef` is now
+    `CompositeSpringRef`.
+  - `SpringConfig` is now `SpringDefinition`, and `SpringOptions` is now
+    `SpringDefinitionOptions`, completing the `defineSpring` story: options
+    are the plain objects you write inline, and a definition is the immutable
+    artifact `defineSpring` builds from them.
+
+  Everything describing the value rather than the spring keeps its name
+  (channels, `ConfigShape`), and so do `spring.config` and the `config`
+  parameters, since "config" is the role a definition plays on a spring.
+
+  Types that only ever appeared inferred, or as constraints on coily's own
+  signatures, are no longer exported. You had no reason to write their names,
+  and every one left public is a type we'd have to keep.
+
+  - Shape utilities `Shape`, `PartialShape`, `ReadonlyShape`, `TargetShape`,
+    `SourceShape`, and `SourceValues` are gone from the public API. They
+    shaped `createSpring` and `mapSpring`'s own parameters and returns; the
+    values you pass and receive are unchanged, you just can't name the
+    helper.
+  - The source api slots `SpringSourceApi` and `KinematicSourceApi` are now
+    internal. `SpringSource` and `KinematicSource` stay: supplying your own
+    source isn't a supported pattern for now, so the shape under the symbol
+    is no longer part of the contract.
+  - `TickerOptions` folds into `SpringSystemOptions`, which already carried
+    its `fps`, `lagThreshold`, and `adjustedLag` fields.
+  - The Vue reactive config-input types (`UseSpringObjectOptions` and its
+    scalar counterpart) are no longer exported; pass config inline through
+    `useSpring`'s second argument.
+
+  What remains is deliberate: the values, the objects you hold (`Spring`,
+  `CompositeSpring`, `SpringSystem`, `SpringDefinition`, the Vue refs,
+  `SpringPool`), the source types (`SpringSource`, `KinematicSource`,
+  `SpringSourceSymbol`), the inputs you build (`SpringSystemOptions`,
+  `SpringOptions`, `CompositeSpringOptions`, `ConfigShape`, `PurposeShape`,
+  `SpringDefinitionOptions`), and the named concepts (`Purpose`,
+  `SpringTarget`, `CompositeSpringTarget`).
+
+- 0a22ad4: Springs can follow a live value, not just a fixed number. Assign a source
+  to a spring's `target` and it chases that source as the source moves,
+  momentum intact. Every `Spring` and `CompositeSpring` is itself a source,
+  so one spring leads another with a plain assignment:
+
+  ```ts
+  follower.target = leader
+  ```
+
+  `SpringTarget` widens from `number` to `number | SpringSource` to carry
+  this.
+
+  `mapSpring` transforms and combines sources. A follower can offset,
+  mirror, clamp, or fuse several leaders into a single value:
+
+  ```ts
+  // offset one spring
+  follower.target = mapSpring(leader, (v) => v + 20)
+
+  // fuse several into a distance
+  distance.target = mapSpring({ x, y }, ({ x, y }) => Math.hypot(x, y))
+  ```
+
+  A composite spring follows per channel. Name a channel to hand it a number
+  or a source; leave a channel out and it keeps following its leader:
+
+  ```ts
+  follower.target = { x: 5, y: mapSpring(lead, ({ x }) => -x) }
+  ```
+
+  `createSpring` takes a source too, on `SpringSystem` and pools alike: the
+  spring starts at the source's current value and follows from birth.
+
+  A source carries a value, never a config, so following changes what a
+  spring chases and never how it moves. Cleanup stays automatic: a follower
+  detaches when its leader is disposed, and a mapped source is released with
+  the leaders behind it.
+
+  A composite can't be a target on its own: assign one to `Spring.target`
+  and it throws, pointing you at `mapSpring` to reduce it to a number. The
+  object passed to a shape map is reused between reads, so read what you need
+  and don't keep a reference to it.
+
+  `SpringWithOffset` and `CompositeSpringWithOffset` are gone; a map is the
+  general form of an offset. To follow a composite channel-for-channel, pass
+  the leader bare.
+
+- 0a22ad4: Under reduced motion a spring snaps straight to its target. That's right
+  for the motion springs usually drive, a translate or a scale, but wrong
+  for one animating a cross-fade or a color, where there's no motion to
+  reduce. `createSpring` now takes a third `options` argument carrying a
+  `purpose`:
+
+  ```ts
+  // snaps to its target under reduced motion (the default)
+  system.createSpring(0, config)
+
+  // keeps animating under reduced motion: it changes how something looks,
+  // not where it is
+  system.createSpring(0, config, { purpose: 'appearance' })
+  ```
+
+  `'appearance'` opts a spring out of reduced motion: its retargets and its
+  value and velocity writes animate as normal, and turning reduced motion on
+  leaves it running. `'motion'` is the default, so every existing spring
+  still snaps.
+
+  A composite takes a purpose per channel: one `Purpose` for the whole
+  spring, or a shape that sets a purpose on any channel or subtree. One
+  spring can then move and fade at once:
+
+  ```ts
+  // x and y snap; opacity keeps fading
+  system.createSpring({ x: 0, y: 0, opacity: 1 }, config, {
+    purpose: { opacity: 'appearance' },
+  })
+  ```
+
+  Read it back from `spring.purpose`: a `Purpose` on a `Spring`, or
+  `Purpose | null` on a `CompositeSpring`, which is `null` when its channels
+  disagree. In Vue it rides a non-reactive third argument:
+  `useSpring(target, config, { purpose: 'appearance' })`. `<SpringValue>`
+  gains a `purpose` prop, and `useSpringPool().createSpring` matches the
+  system signature.
+
+- 0a22ad4: A `useSpring` ref is now a source, and `useSpring` follows sources. Hand a
+  `SpringRef` or `CompositeSpringRef` anywhere a source is accepted (a
+  `mapSpring` input, a composite channel target, a pool's `createSpring`),
+  and give `useSpring` a source, or a ref or getter of one, as its target. A
+  getter switches leaders live, momentum intact:
+
+  ```ts
+  useSpring(() => (split.value ? left : right))
+  ```
+
+  Following a ref doesn't drag Vue's reactivity along with it. Reading a
+  leader through a follow never registers as a dependency, so an effect that
+  moves a leader, or a getter that picks one, re-runs only when its own data
+  changes, never once per animation frame.
+
+### Patch Changes
+
+- 0a22ad4: A `NaN` or infinity used to slip in and corrupt the simulation with no
+  warning: one bad number, and every value it touched read `NaN` from then
+  on. Now the bad value throws where you introduce it: assigning it to
+  `target`, `value`, or `velocity`, or passing it to `jumpTo`,
+  `createSpring`, `advance`, or a composite write. A composite write names
+  the offending channel in the error. `defineSpring` rejects non-finite
+  options the same way, and a followed source that produces a non-finite
+  value throws as the follower retargets, surfacing from `advance` or your
+  frame callback.
+- 0a22ad4: A listener that throws during a frame no longer kills the animation loop.
+  The error still surfaces from the frame callback, so you see it, and the
+  loop keeps stepping the other springs instead of stopping dead at the
+  first exception. A listener that calls `stop()` mid-frame now stops
+  cleanly, with no stray frame scheduled behind it. Manual `advance()` loops
+  are unchanged: the exception reaches the caller, and your next `advance()`
+  picks up where the pass left off.
+
 ## 0.13.1
 
 ### Patch Changes
