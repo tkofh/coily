@@ -11,12 +11,8 @@ import {
   describePath,
 } from './shape-tree.ts'
 import { Spring } from './spring.ts'
-import {
-  type SpringSource,
-  type SpringSourceApi,
-  SpringSourceSymbol,
-  isSpringSource,
-} from './spring-source.ts'
+import { type SpringSource, SpringSourceSymbol, isSpringSource } from './spring-source.ts'
+import type { KinematicSource, KinematicSourceApi } from './kinematic-source.ts'
 import { invariant, isNumber, isRecordOrArray } from './util.ts'
 
 /**
@@ -59,8 +55,8 @@ export type PartialShape<T> = T extends number
 
 /**
  * A deep-readonly view of a value shape. Composite reads (`target`, `value`,
- * `velocity`) return the spring's live mirror objects — refreshed in place
- * on every read — so their channels are typed read-only.
+ * `velocity`, `acceleration`) return the spring's live mirror objects —
+ * refreshed in place on every read — so their channels are typed read-only.
  */
 export type ReadonlyShape<T> = T extends number
   ? number
@@ -121,6 +117,7 @@ function resolveConfigNode(node: unknown, path: string): Coverage<SpringDefiniti
 const readTarget = (spring: Spring) => spring.target
 const readValue = (spring: Spring) => spring.value
 const readVelocity = (spring: Spring) => spring.velocity
+const readAcceleration = (spring: Spring) => spring.acceleration
 
 /**
  * The target scatter's leaf guard: a channel animates toward a number,
@@ -175,17 +172,21 @@ const RESOLVED = Promise.resolve()
  * throw with the channel's path (`position.z`), and so do non-finite
  * channel values.
  */
-export class CompositeSpring<in out T extends object> implements SpringSource<ReadonlyShape<T>> {
-  /** Brands the composite as a `SpringSource` whose api is the composite itself. */
-  get [SpringSourceSymbol](): SpringSourceApi<ReadonlyShape<T>> {
+export class CompositeSpring<in out T extends object> implements KinematicSource<ReadonlyShape<T>> {
+  /** Brands the composite as a `KinematicSource` whose api is the composite itself. */
+  get [SpringSourceSymbol](): KinematicSourceApi<ReadonlyShape<T>> {
     return this
   }
 
   readonly #motions: MotionSet
   readonly #tree: ShapeTree<Spring>
-  readonly #targetView: ShapeView<Spring>
   readonly #valueView: ShapeView<Spring>
-  readonly #velocityView: ShapeView<Spring>
+  // Built on first read: `value` is the hot read (one per frame), so it
+  // alone is eager; a composite that never reads its target, velocity, or
+  // acceleration never allocates those mirrors.
+  #targetView: ShapeView<Spring> | null = null
+  #velocityView: ShapeView<Spring> | null = null
+  #accelerationView: ShapeView<Spring> | null = null
 
   readonly #emitter = new Emitter()
   #running = false
@@ -232,9 +233,7 @@ export class CompositeSpring<in out T extends object> implements SpringSource<Re
       this.#tree.root.broadcast(config, resolveConfigNode, assignConfig, 'config')
     }
 
-    this.#targetView = new ShapeView(this.#tree.root, readTarget)
     this.#valueView = new ShapeView(this.#tree.root, readValue)
-    this.#velocityView = new ShapeView(this.#tree.root, readVelocity)
 
     const markDirty = () => {
       this.#dirty = true
@@ -268,8 +267,9 @@ export class CompositeSpring<in out T extends object> implements SpringSource<Re
    * Unknown channels throw with their path.
    */
   get target(): ReadonlyShape<T> {
-    this.#targetView.refresh()
-    return this.#targetView.root as ReadonlyShape<T>
+    const view = (this.#targetView ??= new ShapeView(this.#tree.root, readTarget))
+    view.refresh()
+    return view.root as ReadonlyShape<T>
   }
 
   set target(value: CompositeSpringTarget<T>) {
@@ -313,14 +313,27 @@ export class CompositeSpring<in out T extends object> implements SpringSource<Re
    * the rest are untouched. Under reduced motion writes are ignored.
    */
   get velocity(): ReadonlyShape<T> {
-    this.#velocityView.refresh()
-    return this.#velocityView.root as ReadonlyShape<T>
+    const view = (this.#velocityView ??= new ShapeView(this.#tree.root, readVelocity))
+    view.refresh()
+    return view.root as ReadonlyShape<T>
   }
 
   set velocity(value: PartialShape<T>) {
     this.#motions.flushes.batch(() => {
       this.#tree.root.scatter(value, acceptNumber, assignVelocity)
     })
+  }
+
+  /**
+   * The current acceleration of every channel in value units per second
+   * squared, as a read-only mirror of the shape — reused and refreshed in
+   * place on each read. Read-only, like each channel's: acceleration
+   * follows from the motion. To fling channels, write `velocity`.
+   */
+  get acceleration(): ReadonlyShape<T> {
+    const view = (this.#accelerationView ??= new ShapeView(this.#tree.root, readAcceleration))
+    view.refresh()
+    return view.root as ReadonlyShape<T>
   }
 
   /**

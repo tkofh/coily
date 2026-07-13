@@ -8,12 +8,15 @@
  */
 import {
   mapSpring,
+  velocityOf,
+  accelerationOf,
   type Spring,
   type SpringDefinition,
   type SpringSystem,
   type CompositeSpring,
   type SpringSource,
   SpringSourceSymbol,
+  type KinematicSource,
 } from '../src/index.ts'
 
 declare const a: Spring
@@ -87,6 +90,44 @@ const bridged: SpringSource = {
   },
 }
 follower.target = bridged
+
+// ── velocityOf and accelerationOf derive sources from a source's motion
+
+// A scalar spring yields a scalar derivative a spring can follow
+velocityOf(a) satisfies SpringSource<number>
+accelerationOf(a) satisfies SpringSource<number>
+follower.target = velocityOf(a)
+follower.target = accelerationOf(a)
+mapSpring(velocityOf(a), (v) => 1 + Math.abs(v) * 0.001)
+mapSpring(accelerationOf(a), (acc) => Math.min(1, Math.abs(acc) * 1e-4))
+
+// A composite yields a derivative of the same shape: map it like the composite
+velocityOf(composite) satisfies SpringSource<{ readonly x: number; readonly y: number }>
+accelerationOf(composite) satisfies SpringSource<{ readonly x: number; readonly y: number }>
+mapSpring(velocityOf(composite), ({ x, y }) => Math.hypot(x, y))
+mapSpring(accelerationOf(composite), ({ x, y }) => Math.hypot(x, y))
+// @ts-expect-error a velocity shape is not a scalar source, so it cannot be followed
+follower.target = velocityOf(composite)
+
+// A bridged source in motion carries both derivatives, and then it qualifies
+const bridgedKinematic: KinematicSource = {
+  [SpringSourceSymbol]: {
+    value: 0,
+    velocity: 0,
+    acceleration: 0,
+    onUpdate: () => () => {},
+    onDispose: () => () => {},
+  },
+}
+velocityOf(bridgedKinematic) satisfies SpringSource<number>
+accelerationOf(bridgedKinematic) satisfies SpringSource<number>
+
+// @ts-expect-error a plain source is not in motion
+velocityOf(bridged)
+// @ts-expect-error a mapped source is a value derivation, so it is not in motion
+velocityOf(mapSpring(a, (value) => value * 2))
+// @ts-expect-error the derived velocity source has no motion of its own
+accelerationOf(velocityOf(a))
 
 // Followers read through the slot, and its value is read-only
 const api = custom[SpringSourceSymbol]

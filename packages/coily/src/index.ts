@@ -8,6 +8,12 @@ export {
   type SpringSourceApi,
   SpringSourceSymbol,
 } from './spring-source.ts'
+export {
+  velocityOf,
+  accelerationOf,
+  type KinematicSource,
+  type KinematicSourceApi,
+} from './kinematic-source.ts'
 export type {
   ConfigShape,
   PartialShape,

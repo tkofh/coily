@@ -1,12 +1,8 @@
 import { SpringDefinition } from './config.ts'
 import type { MotionSet } from './motion-set.ts'
 import { Motion } from './motion.ts'
-import {
-  type SpringSource,
-  type SpringSourceApi,
-  SpringSourceSymbol,
-  isSpringSource,
-} from './spring-source.ts'
+import { type SpringSource, SpringSourceSymbol, isSpringSource } from './spring-source.ts'
+import type { KinematicSource, KinematicSourceApi } from './kinematic-source.ts'
 import { invariant } from './util.ts'
 
 /**
@@ -31,9 +27,9 @@ const RESOLVED = Promise.resolve()
  * https://github.com/tkofh/coily/blob/main/PRECISION.md for the
  * numerical contract.
  */
-export class Spring implements SpringSource {
-  /** Brands the spring as a `SpringSource` whose api is the spring itself. */
-  get [SpringSourceSymbol](): SpringSourceApi<number> {
+export class Spring implements KinematicSource {
+  /** Brands the spring as a `KinematicSource` whose api is the spring itself. */
+  get [SpringSourceSymbol](): KinematicSourceApi<number> {
     return this
   }
 
@@ -135,6 +131,21 @@ export class Spring implements SpringSource {
 
     this.#motions.add(this.#motion)
     this.#motion.velocity = value
+  }
+
+  /**
+   * The current acceleration, in value units per second squared — how
+   * fast the velocity is changing. Read-only: acceleration is the
+   * spring's stiffness and friction acting on its current displacement
+   * and velocity, so it follows from the motion rather than being set.
+   * To fling the spring, write `velocity` instead.
+   */
+  get acceleration() {
+    // Newton's second law for the damped spring, a = -(k*x + c*v) / m,
+    // with x the displacement from the target. Exact from state and
+    // config, like value and velocity.
+    const { tension, damping, mass } = this.#config
+    return -(tension * this.#motion.position + damping * this.#motion.velocity) / mass
   }
 
   /**
