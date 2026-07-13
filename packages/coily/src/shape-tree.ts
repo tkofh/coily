@@ -23,7 +23,45 @@ export function acceptNumber(input: unknown, path: string): number {
   return input
 }
 
-type Read<L> = (leaf: L) => number
+/**
+ * What a shape's leaves are, for `ShapeTree`: `match` recognizes a leaf
+ * value and constructs the leaf object — returning `undefined` declines,
+ * and the node is parsed as a nested shape instead. `match` may
+ * throw for a value it recognizes but rejects (a non-finite number). The
+ * message builders name the leaf kind in structural errors, keeping the
+ * tree machinery ignorant of what it holds.
+ */
+export interface LeafParser<L> {
+  match(value: unknown, path: string): L | undefined
+  /** The error for a node that is neither a leaf nor a plain object or array. */
+  mismatch(path: string): string
+  /** The error for an object or array with nothing in it. */
+  empty(path: string): string
+}
+
+/**
+ * The canonical numeric `LeafParser`: finite-number leaves built through
+ * `factory`, named "channels" in structural errors. The default for value
+ * shapes, whose leaves are all numbers.
+ */
+export function channelParser<L>(factory: (value: number, path: string) => L): LeafParser<L> {
+  return {
+    match(value, path) {
+      if (!isNumber(value)) return undefined
+      invariant(
+        Number.isFinite(value),
+        () => `Invalid value at '${path}': channel values must be finite`,
+      )
+      return factory(value, path)
+    },
+    mismatch: (path) =>
+      `Invalid value at '${path}': expected a number or a nested shape of numbers`,
+    empty: (path) =>
+      `Invalid value at ${describePath(path)}: a shape must contain at least one channel`,
+  }
+}
+
+type Read<L> = (leaf: L) => unknown
 
 /** One mirror position a view rewrites on refresh: `carrier[key] = read(leaf)`. */
 interface ViewSlot<L> {
@@ -33,67 +71,19 @@ interface ViewSlot<L> {
 }
 
 /**
- * One node of a shape's tree: a `LeafNode` wraps a single channel's leaf
- * object, `ListNode` and `RecordNode` carry the nesting. Every traversal is
- * an ordinary method each kind implements for itself, so call sites dispatch
- * without inspecting nodes; errors keep their dot paths because each node
- * stores the `path` it was built at.
+ * One node of a shape's tree: a `LeafNode` wraps a single leaf object,
+ * `ListNode` and `RecordNode` carry the nesting. What a leaf is comes from
+ * the `LeafParser` given to `ShapeTree` — a channel spring, a source
+ * reader. Every traversal is an ordinary method each kind implements for
+ * itself, so call sites dispatch without inspecting nodes; errors keep
+ * their dot paths because each node stores the `path` it was built at.
  */
-export abstract class ChannelTreeNode<L> {
+export interface ShapeTreeNode<L> {
   /** This node's dot path from the root (`position.x`), fixed at construction. */
   readonly path: string
 
-  protected constructor(path: string) {
-    this.path = path
-  }
-
-  /** Parses a numeric shape into a node tree, appending each created leaf to `leaves`. */
-  static build<L>(
-    shape: Record<string, unknown> | unknown[],
-    path: string,
-    factory: (value: number, path: string) => L,
-    leaves: L[],
-  ): ChannelTreeNode<L> {
-    if (isArray(shape)) {
-      invariant(shape.length > 0, () => emptyShape(path))
-      return new ListNode(
-        shape.map((child, i) => ChannelTreeNode.#child(child, joinPath(path, i), factory, leaves)),
-        path,
-      )
-    }
-    const keys = Object.keys(shape)
-    invariant(keys.length > 0, () => emptyShape(path))
-    const children = new Map<string, ChannelTreeNode<L>>()
-    for (const key of keys) {
-      children.set(key, ChannelTreeNode.#child(shape[key], joinPath(path, key), factory, leaves))
-    }
-    return new RecordNode(children, path)
-  }
-
-  static #child<L>(
-    value: unknown,
-    path: string,
-    factory: (value: number, path: string) => L,
-    leaves: L[],
-  ): ChannelTreeNode<L> {
-    if (isNumber(value)) {
-      invariant(
-        Number.isFinite(value),
-        () => `Invalid value at '${path}': channel values must be finite`,
-      )
-      const leaf = factory(value, path)
-      leaves.push(leaf)
-      return new LeafNode(leaf, path)
-    }
-    invariant(
-      isRecordOrArray(value),
-      `Invalid value at '${path}': expected a number or a nested shape of numbers`,
-    )
-    return ChannelTreeNode.build(value, path, factory, leaves)
-  }
-
   /** Writes this node's mirror into `carrier[key]`, recording a slot per leaf for refresh. */
-  abstract mirror(
+  mirror(
     read: Read<L>,
     slots: ViewSlot<L>[],
     carrier: Record<string | number, unknown>,
@@ -104,21 +94,21 @@ export abstract class ChannelTreeNode<L> {
    * Scatters a partial shape into the leaves the input mentions; `accept`
    * validates (and narrows) the value named at each leaf.
    */
-  abstract scatter<V>(
+  scatter<V>(
     input: unknown,
     accept: (input: unknown, path: string) => V,
     apply: (leaf: L, value: V) => void,
   ): void
 
   /** Pairs this subtree's leaves with a structurally identical one's. */
-  abstract zip(theirs: ChannelTreeNode<L>, fn: (mine: L, theirs: L) => void): void
+  zip(theirs: ShapeTreeNode<L>, fn: (mine: L, theirs: L) => void): void
 
   /**
    * Broadcasts a covering shape: `resolve` decides value-for-subtree vs
    * descend, `apply` runs per covered leaf, and `label` names the input shape
    * (`config`, …) in error messages.
    */
-  abstract broadcast<V>(
+  broadcast<V>(
     input: unknown,
     resolve: (input: unknown, path: string) => Coverage<V>,
     apply: (leaf: L, value: V) => void,
@@ -126,18 +116,15 @@ export abstract class ChannelTreeNode<L> {
   ): void
 
   /** Applies one value to every leaf at or below this node. */
-  abstract cover<V>(value: V, apply: (leaf: L, value: V) => void): void
+  cover<V>(value: V, apply: (leaf: L, value: V) => void): void
 }
 
-function emptyShape(path: string): string {
-  return `Invalid value at ${describePath(path)}: a shape must contain at least one channel`
-}
-
-export class LeafNode<L> extends ChannelTreeNode<L> {
+export class LeafNode<L> implements ShapeTreeNode<L> {
+  readonly path: string
   readonly leaf: L
 
   constructor(leaf: L, path: string) {
-    super(path)
+    this.path = path
     this.leaf = leaf
   }
 
@@ -159,7 +146,7 @@ export class LeafNode<L> extends ChannelTreeNode<L> {
     apply(this.leaf, accept(input, this.path))
   }
 
-  zip(theirs: ChannelTreeNode<L>, fn: (mine: L, theirs: L) => void): void {
+  zip(theirs: ShapeTreeNode<L>, fn: (mine: L, theirs: L) => void): void {
     invariant(theirs instanceof LeafNode, () => `Shape mismatch at ${describePath(this.path)}`)
     fn(this.leaf, theirs.leaf)
   }
@@ -180,11 +167,12 @@ export class LeafNode<L> extends ChannelTreeNode<L> {
   }
 }
 
-export class ListNode<L> extends ChannelTreeNode<L> {
-  readonly children: readonly ChannelTreeNode<L>[]
+export class ListNode<L> implements ShapeTreeNode<L> {
+  readonly path: string
+  readonly children: readonly ShapeTreeNode<L>[]
 
-  constructor(children: readonly ChannelTreeNode<L>[], path: string) {
-    super(path)
+  constructor(children: readonly ShapeTreeNode<L>[], path: string) {
+    this.path = path
     this.children = children
   }
 
@@ -220,7 +208,7 @@ export class ListNode<L> extends ChannelTreeNode<L> {
     }
   }
 
-  zip(theirs: ChannelTreeNode<L>, fn: (mine: L, theirs: L) => void): void {
+  zip(theirs: ShapeTreeNode<L>, fn: (mine: L, theirs: L) => void): void {
     invariant(
       theirs instanceof ListNode && theirs.children.length === this.children.length,
       () => `Shape mismatch at ${describePath(this.path)}`,
@@ -257,11 +245,12 @@ export class ListNode<L> extends ChannelTreeNode<L> {
   }
 }
 
-export class RecordNode<L> extends ChannelTreeNode<L> {
-  readonly children: ReadonlyMap<string, ChannelTreeNode<L>>
+export class RecordNode<L> implements ShapeTreeNode<L> {
+  readonly path: string
+  readonly children: ReadonlyMap<string, ShapeTreeNode<L>>
 
-  constructor(children: ReadonlyMap<string, ChannelTreeNode<L>>, path: string) {
-    super(path)
+  constructor(children: ReadonlyMap<string, ShapeTreeNode<L>>, path: string) {
+    this.path = path
     this.children = children
   }
 
@@ -293,7 +282,7 @@ export class RecordNode<L> extends ChannelTreeNode<L> {
     }
   }
 
-  zip(theirs: ChannelTreeNode<L>, fn: (mine: L, theirs: L) => void): void {
+  zip(theirs: ShapeTreeNode<L>, fn: (mine: L, theirs: L) => void): void {
     invariant(
       theirs instanceof RecordNode && theirs.children.size === this.children.size,
       () => `Shape mismatch at ${describePath(this.path)}`,
@@ -335,19 +324,77 @@ export class RecordNode<L> extends ChannelTreeNode<L> {
 }
 
 /**
+ * A shape parsed into a node tree, paired with its leaves flattened in
+ * depth-first shape order. `parser.match` decides leaf vs branch at every
+ * position; the root must already be a container — callers validate that
+ * (with their own message) before building. Nested non-containers and
+ * empty nodes throw through `parser.mismatch`/`parser.empty`.
+ *
+ * Holds no behavior of its own: traversals run through `root`, and a live
+ * view comes from `new ShapeView(root, read)`.
+ */
+export class ShapeTree<L> {
+  readonly root: ShapeTreeNode<L>
+  readonly leaves: readonly L[]
+
+  constructor(shape: Record<string, unknown> | unknown[], parser: LeafParser<L>) {
+    const leaves: L[] = []
+    this.root = buildContainer(shape, '', parser, leaves)
+    this.leaves = leaves
+  }
+}
+
+function buildContainer<L>(
+  shape: Record<string, unknown> | unknown[],
+  path: string,
+  parser: LeafParser<L>,
+  leaves: L[],
+): ShapeTreeNode<L> {
+  if (isArray(shape)) {
+    invariant(shape.length > 0, () => parser.empty(path))
+    return new ListNode(
+      shape.map((child, i) => buildChild(child, joinPath(path, i), parser, leaves)),
+      path,
+    )
+  }
+  const keys = Object.keys(shape)
+  invariant(keys.length > 0, () => parser.empty(path))
+  const children = new Map<string, ShapeTreeNode<L>>()
+  for (const key of keys) {
+    children.set(key, buildChild(shape[key], joinPath(path, key), parser, leaves))
+  }
+  return new RecordNode(children, path)
+}
+
+function buildChild<L>(
+  value: unknown,
+  path: string,
+  parser: LeafParser<L>,
+  leaves: L[],
+): ShapeTreeNode<L> {
+  const leaf = parser.match(value, path)
+  if (leaf !== undefined) {
+    leaves.push(leaf)
+    return new LeafNode(leaf, path)
+  }
+  invariant(isRecordOrArray(value), () => parser.mismatch(path))
+  return buildContainer(value, path, parser, leaves)
+}
+
+/**
  * A live view of a shape: `read(leaf)` at every leaf, mirrored into a stable
- * object — `refresh` rewrites the numbers in place through slots recorded at
+ * object — `refresh` rewrites the values in place through slots recorded at
  * construction, so per-frame reads do no traversal or allocation.
  */
-export class ChannelView<L> {
+export class ShapeView<L> {
   readonly root: object
   readonly #read: Read<L>
   readonly #slots: ViewSlot<L>[] = []
 
-  constructor(root: ChannelTreeNode<L>, read: Read<L>) {
+  constructor(root: ShapeTreeNode<L>, read: Read<L>) {
     this.#read = read
-    // The root is always a container (ChannelTree validates it), so mirroring
-    // through a scratch carrier always lands an object here.
+    // The root is always a container (callers validate it before build),
+    // so mirroring through a scratch carrier always lands an object here.
     const scratch: Record<string, unknown> = {}
     root.mirror(read, this.#slots, scratch, 'root')
     this.root = scratch['root'] as object

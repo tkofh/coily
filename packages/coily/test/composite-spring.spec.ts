@@ -87,6 +87,16 @@ describe('CompositeSpring: creation', () => {
       "Invalid value at 'when'",
     )
   })
+
+  test('throws when the whole value is not a plain object or array', () => {
+    const system = createSpringSystem()
+
+    // The root container check is the composite's own — a non-container
+    // value never reaches the shape tree.
+    expect(() => system.createSpring(new Date() as unknown as Record<string, number>)).toThrow(
+      'Composite spring value must be a plain object or an array of numeric channels',
+    )
+  })
 })
 
 describe('CompositeSpring: simulation', () => {

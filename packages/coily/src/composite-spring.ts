@@ -3,12 +3,13 @@ import { Emitter } from './emitter.ts'
 import type { MotionSet } from './motion-set.ts'
 import {
   BRANCH,
-  ChannelTree,
-  type ChannelView,
+  ShapeTree,
+  ShapeView,
   type Coverage,
   acceptNumber,
+  channelParser,
   describePath,
-} from './channel-tree.ts'
+} from './shape-tree.ts'
 import { Spring } from './spring.ts'
 import {
   type SpringSource,
@@ -127,15 +128,9 @@ const readVelocity = (spring: Spring) => spring.velocity
  * channel's path.
  */
 function acceptChannelTarget(input: unknown, path: string): number | SpringSource {
-  if (isNumber(input)) {
-    invariant(
-      Number.isFinite(input),
-      () => `Invalid value at '${path}': expected a finite number or a scalar SpringSource`,
-    )
-    return input
-  }
   invariant(
-    isSpringSource(input) && typeof input[SpringSourceSymbol].value === 'number',
+    (isNumber(input) && Number.isFinite(input)) ||
+      (isSpringSource(input) && typeof input[SpringSourceSymbol].value === 'number'),
     () => `Invalid value at '${path}': expected a finite number or a scalar SpringSource`,
   )
   return input as SpringSource
@@ -187,10 +182,10 @@ export class CompositeSpring<in out T extends object> implements SpringSource<Re
   }
 
   readonly #motions: MotionSet
-  readonly #map: ChannelTree<Spring>
-  readonly #targetView: ChannelView<Spring>
-  readonly #valueView: ChannelView<Spring>
-  readonly #velocityView: ChannelView<Spring>
+  readonly #tree: ShapeTree<Spring>
+  readonly #targetView: ShapeView<Spring>
+  readonly #valueView: ShapeView<Spring>
+  readonly #velocityView: ShapeView<Spring>
 
   readonly #emitter = new Emitter()
   #running = false
@@ -229,14 +224,17 @@ export class CompositeSpring<in out T extends object> implements SpringSource<Re
       'Composite spring value must be a plain object or an array of numeric channels',
     )
 
-    this.#map = new ChannelTree(value, (leafValue) => new Spring(motions, leafValue))
+    this.#tree = new ShapeTree(
+      value,
+      channelParser((leafValue) => new Spring(motions, leafValue)),
+    )
     if (config !== undefined) {
-      this.#map.broadcast(config, resolveConfigNode, assignConfig, 'config')
+      this.#tree.root.broadcast(config, resolveConfigNode, assignConfig, 'config')
     }
 
-    this.#targetView = this.#map.createView(readTarget)
-    this.#valueView = this.#map.createView(readValue)
-    this.#velocityView = this.#map.createView(readVelocity)
+    this.#targetView = new ShapeView(this.#tree.root, readTarget)
+    this.#valueView = new ShapeView(this.#tree.root, readValue)
+    this.#velocityView = new ShapeView(this.#tree.root, readVelocity)
 
     const markDirty = () => {
       this.#dirty = true
@@ -245,7 +243,7 @@ export class CompositeSpring<in out T extends object> implements SpringSource<Re
     const schedule = () => {
       this.#motions.flushes.request(this.#flush)
     }
-    for (const channel of this.#map.leaves) {
+    for (const channel of this.#tree.leaves) {
       channel.onUpdate(markDirty)
       channel.onStart(schedule)
       channel.onStop(schedule)
@@ -279,7 +277,7 @@ export class CompositeSpring<in out T extends object> implements SpringSource<Re
       this.#follow(value)
     } else {
       this.#motions.flushes.batch(() => {
-        this.#map.scatter(value, acceptChannelTarget, assignTarget)
+        this.#tree.root.scatter(value, acceptChannelTarget, assignTarget)
       })
     }
   }
@@ -302,7 +300,7 @@ export class CompositeSpring<in out T extends object> implements SpringSource<Re
 
   set value(value: PartialShape<T>) {
     this.#motions.flushes.batch(() => {
-      this.#map.scatter(value, acceptNumber, assignValue)
+      this.#tree.root.scatter(value, acceptNumber, assignValue)
     })
   }
 
@@ -321,7 +319,7 @@ export class CompositeSpring<in out T extends object> implements SpringSource<Re
 
   set velocity(value: PartialShape<T>) {
     this.#motions.flushes.batch(() => {
-      this.#map.scatter(value, acceptNumber, assignVelocity)
+      this.#tree.root.scatter(value, acceptNumber, assignVelocity)
     })
   }
 
@@ -335,7 +333,7 @@ export class CompositeSpring<in out T extends object> implements SpringSource<Re
    * every channel below it. Non-config leaves throw with their path.
    */
   get config(): SpringDefinition | null {
-    const channels = this.#map.leaves
+    const channels = this.#tree.leaves
     const first = channels[0]!.config
     for (let i = 1; i < channels.length; i++) {
       if (channels[i]!.config !== first) return null
@@ -345,14 +343,14 @@ export class CompositeSpring<in out T extends object> implements SpringSource<Re
 
   set config(value: ConfigShape<T>) {
     this.#motions.flushes.batch(() => {
-      this.#map.broadcast(value ?? null, resolveConfigNode, assignConfig, 'config')
+      this.#tree.root.broadcast(value ?? null, resolveConfigNode, assignConfig, 'config')
     })
   }
 
   /** The largest `timeRemaining` across channels, in milliseconds. */
   get timeRemaining(): number {
     let max = 0
-    for (const channel of this.#map.leaves) {
+    for (const channel of this.#tree.leaves) {
       const remaining = channel.timeRemaining
       if (remaining > max) max = remaining
     }
@@ -361,7 +359,7 @@ export class CompositeSpring<in out T extends object> implements SpringSource<Re
 
   /** Whether every channel is resting. */
   get isResting(): boolean {
-    for (const channel of this.#map.leaves) {
+    for (const channel of this.#tree.leaves) {
       if (!channel.isResting) return false
     }
     return true
@@ -395,7 +393,7 @@ export class CompositeSpring<in out T extends object> implements SpringSource<Re
    */
   jumpTo(value: PartialShape<T>) {
     this.#motions.flushes.batch(() => {
-      this.#map.scatter(value, acceptNumber, applyJump)
+      this.#tree.root.scatter(value, acceptNumber, applyJump)
     })
   }
 
@@ -416,7 +414,7 @@ export class CompositeSpring<in out T extends object> implements SpringSource<Re
       this.#resolveSettled = null
     }
 
-    for (const channel of this.#map.leaves) {
+    for (const channel of this.#tree.leaves) {
       channel.dispose()
     }
     this.#emitter.clear()
@@ -453,12 +451,12 @@ export class CompositeSpring<in out T extends object> implements SpringSource<Re
   onDispose(callback: () => void) {
     // Channels dispose together, so the first channel's dispose event
     // stands in for the composite's.
-    return this.#map.leaves[0]!.onDispose(callback)
+    return this.#tree.leaves[0]!.onDispose(callback)
   }
 
   #follow(leader: CompositeSpring<T>) {
     this.#motions.flushes.batch(() => {
-      this.#map.zip(leader.#map, followChannel)
+      this.#tree.root.zip(leader.#tree.root, followChannel)
     })
   }
 }

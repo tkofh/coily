@@ -1,45 +1,54 @@
 import { describe, expect, test, vi } from 'vitest'
-import { BRANCH, ChannelTree, type Coverage, acceptNumber } from '../src/channel-tree.ts'
+import {
+  BRANCH,
+  type Coverage,
+  ShapeTree,
+  ShapeView,
+  acceptNumber,
+  channelParser,
+} from '../src/shape-tree.ts'
 
 interface Leaf {
   path: string
   value: number
 }
 
-function createMap(shape: object) {
-  return new ChannelTree<Leaf>(shape, (value, path) => ({ path, value }))
+function createTree(shape: Record<string, unknown> | unknown[]) {
+  return new ShapeTree<Leaf>(
+    shape,
+    channelParser((value, path) => ({ path, value })),
+  )
 }
 
-describe('ChannelTree: construction', () => {
+describe('shape tree: construction', () => {
   test('collects leaves in depth-first shape order with dot paths', () => {
-    const map = createMap({ position: { x: 1, y: 2 }, color: [3, 4], opacity: 5 })
+    const { leaves } = createTree({ position: { x: 1, y: 2 }, color: [3, 4], opacity: 5 })
 
-    expect(map.leaves.map((leaf) => leaf.path)).toEqual([
+    expect(leaves.map((leaf) => leaf.path)).toEqual([
       'position.x',
       'position.y',
       'color.0',
       'color.1',
       'opacity',
     ])
-    expect(map.leaves.map((leaf) => leaf.value)).toEqual([1, 2, 3, 4, 5])
+    expect(leaves.map((leaf) => leaf.value)).toEqual([1, 2, 3, 4, 5])
   })
 
-  test('throws on non-numeric leaves, empty nodes, and non-shape roots', () => {
-    expect(() => createMap({ x: 'no' })).toThrow("Invalid value at 'x'")
-    expect(() => createMap({})).toThrow('at least one channel')
-    expect(() => createMap({ nested: [] })).toThrow('at least one channel')
-    expect(() => createMap(new Date())).toThrow('plain object or an array')
+  test('throws on non-numeric leaves and empty nodes', () => {
+    expect(() => createTree({ x: 'no' })).toThrow("Invalid value at 'x'")
+    expect(() => createTree({})).toThrow('at least one channel')
+    expect(() => createTree({ nested: [] })).toThrow('at least one channel')
   })
 })
 
-describe('ChannelTree: views', () => {
+describe('shape tree: views', () => {
   test('mirrors the shape and refreshes leaf values in place', () => {
-    const map = createMap({ position: { x: 1, y: 2 }, color: [3, 4] })
-    const view = map.createView((leaf) => leaf.value * 10)
+    const { root, leaves } = createTree({ position: { x: 1, y: 2 }, color: [3, 4] })
+    const view = new ShapeView(root, (leaf) => leaf.value * 10)
 
     expect(view.root).toEqual({ position: { x: 10, y: 20 }, color: [30, 40] })
 
-    map.leaves[0]!.value = 7
+    leaves[0]!.value = 7
     const before = view.root
     view.refresh()
 
@@ -48,12 +57,12 @@ describe('ChannelTree: views', () => {
   })
 })
 
-describe('ChannelTree: scatter', () => {
+describe('shape tree: scatter', () => {
   test('applies only the mentioned channels, skipping undefined and holes', () => {
-    const map = createMap({ position: { x: 0, y: 0 }, color: [0, 0, 0] })
+    const { root } = createTree({ position: { x: 0, y: 0 }, color: [0, 0, 0] })
     const seen: [string, number][] = []
 
-    map.scatter(
+    root.scatter(
       { position: { x: 5, y: undefined }, color: [undefined, 6] },
       acceptNumber,
       (leaf, value) => seen.push([leaf.path, value]),
@@ -66,29 +75,29 @@ describe('ChannelTree: scatter', () => {
   })
 
   test('throws on unknown channels and structure mismatches', () => {
-    const map = createMap({ position: { x: 0 }, color: [0] })
+    const { root } = createTree({ position: { x: 0 }, color: [0] })
     const apply = vi.fn()
 
-    expect(() => map.scatter({ z: 1 }, acceptNumber, apply)).toThrow("Unknown channel 'z'")
-    expect(() => map.scatter({ color: [1, 2] }, acceptNumber, apply)).toThrow(
+    expect(() => root.scatter({ z: 1 }, acceptNumber, apply)).toThrow("Unknown channel 'z'")
+    expect(() => root.scatter({ color: [1, 2] }, acceptNumber, apply)).toThrow(
       "Unknown channel 'color.1'",
     )
-    expect(() => map.scatter({ position: 1 }, acceptNumber, apply)).toThrow(
+    expect(() => root.scatter({ position: 1 }, acceptNumber, apply)).toThrow(
       "Expected an object at 'position'",
     )
-    expect(() => map.scatter({ position: { x: {} } }, acceptNumber, apply)).toThrow(
+    expect(() => root.scatter({ position: { x: {} } }, acceptNumber, apply)).toThrow(
       "Expected a finite number for channel 'position.x'",
     )
-    expect(() => map.scatter({ color: { 0: 1 } }, acceptNumber, apply)).toThrow(
+    expect(() => root.scatter({ color: { 0: 1 } }, acceptNumber, apply)).toThrow(
       "Expected an array at 'color'",
     )
   })
 
   test('accept narrows leaf values for the caller', () => {
-    const map = createMap({ x: 0, label: 0 })
+    const { root } = createTree({ x: 0, label: 0 })
     const seen: [string, string][] = []
 
-    map.scatter(
+    root.scatter(
       { x: 'wide', label: 'ok' },
       (input, path) => `${String(input)}@${path}`,
       (leaf, value) => seen.push([leaf.path, value]),
@@ -101,13 +110,13 @@ describe('ChannelTree: scatter', () => {
   })
 })
 
-describe('ChannelTree: zip', () => {
+describe('shape tree: zip', () => {
   test('pairs leaves by position', () => {
-    const a = createMap({ position: { x: 1, y: 2 }, opacity: 3 })
-    const b = createMap({ position: { x: 4, y: 5 }, opacity: 6 })
+    const a = createTree({ position: { x: 1, y: 2 }, opacity: 3 })
+    const b = createTree({ position: { x: 4, y: 5 }, opacity: 6 })
     const seen: [number, number][] = []
 
-    a.zip(b, (mine, theirs) => seen.push([mine.value, theirs.value]))
+    a.root.zip(b.root, (mine, theirs) => seen.push([mine.value, theirs.value]))
 
     expect(seen).toEqual([
       [1, 4],
@@ -117,26 +126,26 @@ describe('ChannelTree: zip', () => {
   })
 
   test('throws on shape mismatches in either direction', () => {
-    const wide = createMap({ x: 0, y: 0 })
-    const narrow = createMap({ x: 0 })
-    const list = createMap({ x: [0, 0], y: 0 })
+    const wide = createTree({ x: 0, y: 0 })
+    const narrow = createTree({ x: 0 })
+    const list = createTree({ x: [0, 0], y: 0 })
     const fn = vi.fn()
 
-    expect(() => wide.zip(narrow, fn)).toThrow('Shape mismatch at the root')
-    expect(() => narrow.zip(wide, fn)).toThrow('Shape mismatch at the root')
-    expect(() => wide.zip(list, fn)).toThrow("Shape mismatch at 'x'")
+    expect(() => wide.root.zip(narrow.root, fn)).toThrow('Shape mismatch at the root')
+    expect(() => narrow.root.zip(wide.root, fn)).toThrow('Shape mismatch at the root')
+    expect(() => wide.root.zip(list.root, fn)).toThrow("Shape mismatch at 'x'")
   })
 })
 
-describe('ChannelTree: broadcast', () => {
+describe('shape tree: broadcast', () => {
   const resolveNumbers = (input: unknown): Coverage<number> =>
     typeof input === 'number' ? input : BRANCH
 
   test('a value at a subtree covers every leaf below it', () => {
-    const map = createMap({ position: { x: 0, y: 0 }, opacity: 0 })
+    const { root } = createTree({ position: { x: 0, y: 0 }, opacity: 0 })
     const seen: [string, number][] = []
 
-    map.broadcast(
+    root.broadcast(
       { position: 9 },
       resolveNumbers,
       (leaf, value) => seen.push([leaf.path, value]),
@@ -150,10 +159,10 @@ describe('ChannelTree: broadcast', () => {
   })
 
   test('branches descend and skip undefined entries', () => {
-    const map = createMap({ position: { x: 0, y: 0 }, color: [0, 0] })
+    const { root } = createTree({ position: { x: 0, y: 0 }, color: [0, 0] })
     const seen: [string, number][] = []
 
-    map.broadcast(
+    root.broadcast(
       { position: { y: 1 }, color: [undefined, 2] },
       resolveNumbers,
       (leaf, value) => seen.push([leaf.path, value]),
@@ -167,18 +176,18 @@ describe('ChannelTree: broadcast', () => {
   })
 
   test('reports unknown channels with the given label', () => {
-    const map = createMap({ x: 0 })
+    const { root } = createTree({ x: 0 })
 
-    expect(() => map.broadcast({ z: 1 }, resolveNumbers, vi.fn(), 'config')).toThrow(
+    expect(() => root.broadcast({ z: 1 }, resolveNumbers, vi.fn(), 'config')).toThrow(
       "Unknown channel 'z' in config",
     )
   })
 
   test('passes the traversal path to the resolver', () => {
-    const map = createMap({ position: { x: 0 }, color: [0] })
+    const { root } = createTree({ position: { x: 0 }, color: [0] })
     const paths: string[] = []
 
-    map.broadcast(
+    root.broadcast(
       { position: { x: 1 }, color: [2] },
       (input, path): Coverage<number> => {
         paths.push(path)

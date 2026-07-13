@@ -32,7 +32,9 @@ follower's own setting. Followers detach on dispose through a map
 exactly as if following the spring directly; a derived value is
 released with the first of its sources. Composition is flat — mapping a
 mapped source extends its pipeline instead of nesting it — so chains of
-any length read iteratively and subscribe at their roots.
+any length read iteratively and subscribe at their roots. A shape map
+hands `map` one live mirror of the values, refreshed in place per read
+— `map` must not retain it.
 
 Only scalar sources can be followed directly: assigning a composite to
 `Spring.target` throws, pointing at `mapSpring`.

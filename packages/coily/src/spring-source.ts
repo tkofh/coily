@@ -1,5 +1,5 @@
-import { describePath } from './channel-tree.ts'
-import { invariant, isArray, isRecordOrArray } from './util.ts'
+import { type LeafParser, ShapeTree, ShapeView, describePath } from './shape-tree.ts'
+import { invariant, isRecordOrArray } from './util.ts'
 
 /**
  * The key under which a `SpringSource` carries its `SpringSourceApi`.
@@ -86,17 +86,11 @@ export type SourceShape<T> = 0 extends 1 & T
 export type SourceValues<T> =
   T extends SpringSource<infer V> ? V : { readonly [K in keyof T]: SourceValues<T[K]> }
 
-const joinPath = (path: string, key: string) => (path ? `${path}.${key}` : key)
-
-function emptyShape(path: string): string {
-  return `Invalid value at ${describePath(path)}: a shape must contain at least one source`
-}
-
 /** A mapped source's flattened recipe: read the base, run the pipeline. */
 interface MappedRecipe {
   /** Deduplicated subscription targets — the chain's true roots. */
   readonly sources: readonly SpringSource<unknown>[]
-  /** Reads the value the pipeline starts from. */
+  /** Reads the value the pipeline starts from — for a shape, a live mirror reused across reads. */
   readonly read: () => unknown
   /** The composed maps, applied in order. */
   readonly fns: readonly ((value: unknown) => unknown)[]
@@ -116,52 +110,41 @@ function applyFns(fns: readonly ((value: unknown) => unknown)[], value: unknown)
   return result
 }
 
+function sourceMismatch(path: string): string {
+  return `Invalid value at ${describePath(path)}: expected a SpringSource or a nested shape of SpringSources`
+}
+
 /**
- * Validates one node of a source shape and compiles its reader,
- * collecting the leaves along the way (a mapped leaf contributes its
- * recipe's roots). Structure is fixed at creation, so reads walk
- * precompiled readers instead of re-validating.
+ * Parses a shape of sources into a live view, collecting subscription
+ * roots along the way (a mapped leaf contributes its recipe's roots and
+ * reads through its pipeline). Structure is validated once at creation;
+ * reads refresh a stable mirror through the view's slots, so per-update
+ * reads do no traversal or allocation.
  */
-function compileNode(node: unknown, path: string, leaves: SpringSource<unknown>[]): () => unknown {
-  if (isSpringSource(node)) {
-    const recipe = RECIPES.get(node)
-    if (recipe) {
-      leaves.push(...recipe.sources)
-      return () => applyFns(recipe.fns, recipe.read())
-    }
-    leaves.push(node)
-    const api = node[SpringSourceSymbol]
-    return () => api.value
+function compileShape(
+  shape: Record<string, unknown> | unknown[],
+  roots: SpringSource<unknown>[],
+): ShapeView<() => unknown> {
+  const parser: LeafParser<() => unknown> = {
+    match(value) {
+      if (!isSpringSource(value)) return undefined
+      const recipe = RECIPES.get(value)
+      if (recipe) {
+        roots.push(...recipe.sources)
+        return () => applyFns(recipe.fns, recipe.read())
+      }
+      roots.push(value)
+      const api = value[SpringSourceSymbol]
+      return () => api.value
+    },
+    mismatch: sourceMismatch,
+    empty: (path) =>
+      `Invalid value at ${describePath(path)}: a shape must contain at least one source`,
   }
-
-  invariant(
-    isRecordOrArray(node),
-    () =>
-      `Invalid value at ${describePath(path)}: expected a SpringSource or a nested shape of SpringSources`,
-  )
-
-  if (isArray(node)) {
-    invariant(node.length > 0, () => emptyShape(path))
-    const readers: (() => unknown)[] = []
-    for (let index = 0; index < node.length; index++) {
-      readers.push(compileNode(node[index], joinPath(path, String(index)), leaves))
-    }
-    return () => readers.map((read) => read())
-  }
-
-  const keys = Object.keys(node)
-  invariant(keys.length > 0, () => emptyShape(path))
-  const readers: [string, () => unknown][] = []
-  for (const key of keys) {
-    readers.push([key, compileNode(node[key], joinPath(path, key), leaves)])
-  }
-  return () => {
-    const values: Record<string, unknown> = {}
-    for (const [key, read] of readers) {
-      values[key] = read()
-    }
-    return values
-  }
+  // Leaves are discarded — the roots collected through the parser closure
+  // are what followers subscribe to, not the per-leaf read functions.
+  const { root } = new ShapeTree(shape, parser)
+  return new ShapeView(root, (leaf) => leaf())
 }
 
 /**
@@ -195,10 +178,10 @@ export function mapSpring(source: SpringSource, map: (value: number) => number):
  * subscriptions and needs no disposal, and reads compute `map` over the
  * sources' values on the fly. `map` must be pure — it runs on every
  * read and every source update — and must not retain what it receives:
- * a composite hands it the same live mirror its `value` returns. The
- * mapped source is released with the first of its sources: followers
- * detach then, keeping their current target, as they would from a
- * disposed spring.
+ * every call hands it the same live mirror of the values, refreshed in
+ * place. The mapped source is released with the first of its sources:
+ * followers detach then, keeping their current target, as they would
+ * from a disposed spring.
  */
 export function mapSpring<const T extends object>(
   sources: T & SourceShape<T>,
@@ -217,12 +200,16 @@ export function mapSpring(source: object, map: (value: never) => number): Spring
       recipe = { sources: [source], read: () => api.value, fns: [compute] }
     }
   } else {
-    const leaves: SpringSource<unknown>[] = []
-    const read = compileNode(source, '', leaves)
+    invariant(isRecordOrArray(source), () => sourceMismatch(''))
+    const roots: SpringSource<unknown>[] = []
+    const view = compileShape(source, roots)
     recipe = {
       // The same source can sit at several leaves; subscribe to it once.
-      sources: [...new Set(leaves)],
-      read,
+      sources: [...new Set(roots)],
+      read: () => {
+        view.refresh()
+        return view.root
+      },
       fns: [compute],
     }
   }

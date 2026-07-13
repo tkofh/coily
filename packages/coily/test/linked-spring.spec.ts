@@ -477,6 +477,33 @@ describe('Spring: following', () => {
       expect(follower.target).toBe(3)
     })
 
+    test('a shape map hands its map the same live mirror every call', () => {
+      const system = createSpringSystem()
+      const x = system.createSpring(1, config)
+      const y = system.createSpring(2, config)
+
+      const roots: unknown[] = []
+      const points: unknown[] = []
+      const follower = system.createSpring(
+        mapSpring({ point: { x, y } }, (values) => {
+          roots.push(values)
+          points.push(values.point)
+          return values.point.x + values.point.y
+        }),
+      )
+      expect(follower.target).toBe(3)
+
+      x.target = 10
+      advanceUntilResting(system, follower)
+      expect(follower.value).toBeCloseTo(12, 0)
+
+      // The mirror refreshes in place: every call sees one object, at
+      // every level, so per-update reads allocate nothing.
+      expect(roots.length).toBeGreaterThan(2)
+      for (const seen of roots) expect(seen).toBe(roots[0])
+      for (const seen of points) expect(seen).toBe(points[0])
+    })
+
     test('disposing any source detaches followers, which stay usable', () => {
       const system = createSpringSystem()
       const a = system.createSpring(10, config)

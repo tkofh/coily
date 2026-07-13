@@ -51,4 +51,4 @@ constraint from elsewhere, an invariant the code relies on.
 - Units are milliseconds unless a doc says otherwise; say "ms" at every
   time-valued parameter, property, and return.
 - Exemplar docs to imitate: `Shape` and `ConfigShape` in
-  `src/spring-object.ts`, `ChannelView` in `src/channel-tree-node.ts`.
+  `src/composite-spring.ts`, `ShapeView` in `src/shape-tree-node.ts`.
