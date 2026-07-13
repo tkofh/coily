@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from 'vitest'
 import { createSpringSystem, defineSpring } from '../src/index.ts'
+import { flush } from './helpers.ts'
 
 describe('Spring: input validation', () => {
   test('throws when mass is 0', () => {
@@ -161,6 +162,48 @@ describe('Spring: default values', () => {
     const system = createSpringSystem()
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 1, damping: 1 }))
     expect(spring.precision).toBe(2)
+  })
+})
+
+describe('Spring: state transitions', () => {
+  const config = defineSpring({ damping: 1, mass: 1, tension: 2 })
+
+  test('a new spring rests at its value', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(1, config)
+
+    expect(spring.target).toBe(1)
+    expect(spring.value).toBe(1)
+    expect(spring.isResting).toBe(true)
+  })
+
+  test('retargeting displaces the spring without moving its value', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(2, config)
+
+    spring.target = 1
+
+    expect(spring.target).toBe(1)
+    expect(spring.value).toBe(2)
+    expect(spring.isResting).toBe(false)
+  })
+
+  test('writing the value up to the target settles the spring', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(0, config)
+
+    spring.target = 100
+    expect(spring.isResting).toBe(false)
+
+    spring.value = 100
+    system.advance(0)
+    expect(spring.value).toBe(100)
+    expect(spring.target).toBe(100)
+    expect(spring.isResting).toBe(true)
+
+    // ...and displacing it again re-activates it.
+    spring.value = 0
+    expect(spring.isResting).toBe(false)
   })
 })
 
@@ -462,93 +505,6 @@ describe('Spring: re-activation from rest', () => {
     system.advance(1000 / 60)
     expect(spring.value).not.toBe(0)
   })
-
-  test('setting mass on a resting spring re-activates it', () => {
-    const system = createSpringSystem()
-    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
-    spring.target = 50
-
-    // Settle first
-    for (let i = 0; i < 600; i++) {
-      system.advance(1000 / 60)
-      if (spring.isResting) break
-    }
-    expect(spring.isResting).toBe(true)
-    void spring.value
-
-    spring.config = defineSpring({ mass: 5, tension: 170, damping: 26 })
-    system.advance(1000 / 60)
-
-    expect(spring.mass).toBe(5)
-    // Spring is re-enrolled in ticker (advance didn't skip it)
-    expect(spring.isResting).toBeDefined()
-  })
-
-  test('setting tension on a resting spring re-activates it', () => {
-    const system = createSpringSystem()
-    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
-    spring.target = 50
-
-    for (let i = 0; i < 600; i++) {
-      system.advance(1000 / 60)
-      if (spring.isResting) break
-    }
-    expect(spring.isResting).toBe(true)
-
-    spring.config = defineSpring({ tension: 300, damping: 26 })
-    system.advance(1000 / 60)
-
-    expect(spring.tension).toBe(300)
-  })
-
-  test('setting damping on a resting spring re-activates it', () => {
-    const system = createSpringSystem()
-    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
-    spring.target = 50
-
-    for (let i = 0; i < 600; i++) {
-      system.advance(1000 / 60)
-      if (spring.isResting) break
-    }
-    expect(spring.isResting).toBe(true)
-
-    spring.config = defineSpring({ tension: 170, damping: 10 })
-    expect(spring.damping).toBe(10)
-  })
-
-  test('setting precision on a resting spring re-activates it', () => {
-    const system = createSpringSystem()
-    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
-    spring.target = 50
-
-    for (let i = 0; i < 600; i++) {
-      system.advance(1000 / 60)
-      if (spring.isResting) break
-    }
-    expect(spring.isResting).toBe(true)
-
-    spring.config = defineSpring({ tension: 170, damping: 26, precision: 5 })
-    expect(spring.precision).toBe(5)
-  })
-})
-
-describe('Spring: dispose', () => {
-  test('disposed spring no longer ticks', () => {
-    const system = createSpringSystem()
-    const spring = system.createSpring(100, defineSpring({ mass: 1, tension: 170, damping: 10 }))
-    spring.target = 0
-
-    const onUpdate = vi.fn()
-    spring.onUpdate(onUpdate)
-
-    system.advance(1000 / 60)
-    expect(onUpdate).toHaveBeenCalledOnce()
-
-    spring.dispose()
-    system.advance(1000 / 60)
-    // onUpdate should not fire again — emitter was cleared
-    expect(onUpdate).toHaveBeenCalledOnce()
-  })
 })
 
 describe('Spring: config value semantics', () => {
@@ -603,11 +559,23 @@ describe('Spring: config value semantics', () => {
 
     expect(spring.tension).toBe(tensionBefore)
   })
+
+  test('the parameter getters read through to the assigned config', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(0)
+
+    const config = defineSpring({ mass: 5, tension: 300, damping: 10, precision: 5 })
+    spring.config = config
+
+    expect(spring.mass).toBe(config.mass)
+    expect(spring.tension).toBe(config.tension)
+    expect(spring.damping).toBe(config.damping)
+    expect(spring.dampingRatio).toBe(config.dampingRatio)
+    expect(spring.precision).toBe(config.precision)
+  })
 })
 
 describe('Spring: settled promise', () => {
-  const flush = () => new Promise((resolve) => setTimeout(resolve))
-
   test('resolves immediately when already resting', async () => {
     const system = createSpringSystem()
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
@@ -687,6 +655,23 @@ describe('Spring: settled promise', () => {
 })
 
 describe('Spring: dispose', () => {
+  test('disposed spring no longer ticks', () => {
+    const system = createSpringSystem()
+    const spring = system.createSpring(100, defineSpring({ mass: 1, tension: 170, damping: 10 }))
+    spring.target = 0
+
+    const onUpdate = vi.fn()
+    spring.onUpdate(onUpdate)
+
+    system.advance(1000 / 60)
+    expect(onUpdate).toHaveBeenCalledOnce()
+
+    spring.dispose()
+    system.advance(1000 / 60)
+    // onUpdate should not fire again — emitter was cleared
+    expect(onUpdate).toHaveBeenCalledOnce()
+  })
+
   test('onDispose fires when the spring is disposed', () => {
     const system = createSpringSystem()
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))

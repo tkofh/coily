@@ -1,20 +1,10 @@
 import { describe, expect, test, vi } from 'vitest'
 import { createSpringSystem } from '../src/system.ts'
 import { SpringDefinition, defineSpring } from '../src/config.ts'
-import { type SpringSource, SpringSourceSymbol, mapSpring } from '../src/spring-source.ts'
+import { mapSpring } from '../src/spring-source.ts'
+import { advanceUntilResting, makeSource } from './helpers.ts'
 
 const config = defineSpring({ mass: 1, tension: 170, damping: 26 })
-
-function advanceUntilResting(
-  system: ReturnType<typeof createSpringSystem>,
-  spring: { isResting: boolean },
-  maxFrames = 600,
-) {
-  for (let i = 0; i < maxFrames; i++) {
-    system.advance(1000 / 60)
-    if (spring.isResting) return
-  }
-}
 
 describe('Spring: following', () => {
   describe('creation', () => {
@@ -384,27 +374,13 @@ describe('Spring: following', () => {
 
     test('any object honoring the SpringSource contract can be followed', () => {
       const system = createSpringSystem()
-      const listeners = new Set<() => void>()
-      let current = 5
-      const source: SpringSource = {
-        [SpringSourceSymbol]: {
-          get value() {
-            return current
-          },
-          onUpdate: (callback) => {
-            listeners.add(callback)
-            return () => listeners.delete(callback)
-          },
-          onDispose: () => () => {},
-        },
-      }
+      const leader = makeSource(5)
 
       const follower = system.createSpring(0)
-      follower.target = source
+      follower.target = leader.source
       expect(follower.target).toBe(5)
 
-      current = 80
-      for (const callback of listeners) callback()
+      leader.set(80)
       advanceUntilResting(system, follower)
 
       expect(follower.value).toBeCloseTo(80, 0)
@@ -523,31 +499,15 @@ describe('Spring: following', () => {
 
     test('a source at several leaves subscribes once', () => {
       const system = createSpringSystem()
-      const listeners = new Set<() => void>()
-      let subscriptions = 0
-      let current = 5
-      const source: SpringSource = {
-        [SpringSourceSymbol]: {
-          get value() {
-            return current
-          },
-          onUpdate: (callback) => {
-            subscriptions++
-            listeners.add(callback)
-            return () => listeners.delete(callback)
-          },
-          onDispose: () => () => {},
-        },
-      }
+      const leaf = makeSource(5)
 
       const follower = system.createSpring(0)
-      follower.target = mapSpring({ a: source, b: source }, ({ a, b }) => a + b)
+      follower.target = mapSpring({ a: leaf.source, b: leaf.source }, ({ a, b }) => a + b)
 
-      expect(subscriptions).toBe(1)
+      expect(leaf.subscriptions).toBe(1)
       expect(follower.target).toBe(10)
 
-      current = 40
-      for (const callback of listeners) callback()
+      leaf.set(40)
       advanceUntilResting(system, follower)
 
       expect(follower.value).toBeCloseTo(80, 0)

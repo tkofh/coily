@@ -136,54 +136,27 @@ describe('SpringSystem: transport controls', () => {
 })
 
 describe('SpringSystem: ticker options', () => {
-  test('defaults fps to 0 (uncapped)', () => {
+  // The Ticker's own behavior (capping, lag clamping, validation) is covered
+  // exhaustively in ticker.spec.ts; here we only confirm the system exposes
+  // and forwards the options.
+  test('defaults match the ticker defaults', () => {
     const system = createSpringSystem()
     expect(system.fps).toBe(0)
-  })
-
-  test('accepts fps via constructor options', () => {
-    const system = createSpringSystem({ fps: 30 })
-    expect(system.fps).toBe(30)
-  })
-
-  test('fps is writable at runtime', () => {
-    const system = createSpringSystem()
-    system.fps = 120
-    expect(system.fps).toBe(120)
-  })
-
-  test('assigning 0 to fps removes the cap', () => {
-    const system = createSpringSystem({ fps: 30 })
-    system.fps = 0
-    expect(system.fps).toBe(0)
-  })
-
-  test('lagThreshold defaults to 500', () => {
-    const system = createSpringSystem()
     expect(system.lagThreshold).toBe(500)
-  })
-
-  test('lagThreshold is writable at runtime', () => {
-    const system = createSpringSystem()
-    system.lagThreshold = 1000
-    expect(system.lagThreshold).toBe(1000)
-  })
-
-  test('adjustedLag defaults to 33', () => {
-    const system = createSpringSystem()
     expect(system.adjustedLag).toBe(33)
   })
 
-  test('adjustedLag is writable at runtime', () => {
-    const system = createSpringSystem()
-    system.adjustedLag = 16
-    expect(system.adjustedLag).toBe(16)
-  })
-
-  test('accepts all ticker options via constructor', () => {
+  test('threads options through the constructor and exposes them read/write', () => {
     const system = createSpringSystem({ fps: 30, lagThreshold: 1000, adjustedLag: 50 })
     expect(system.fps).toBe(30)
     expect(system.lagThreshold).toBe(1000)
     expect(system.adjustedLag).toBe(50)
+
+    system.fps = 120
+    system.lagThreshold = 250
+    system.adjustedLag = 16
+    expect(system.fps).toBe(120)
+    expect(system.lagThreshold).toBe(250)
+    expect(system.adjustedLag).toBe(16)
   })
 })

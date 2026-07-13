@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { defineSpring } from '../src/config.ts'
 import { type SpringSource, mapSpring } from '../src/spring-source.ts'
 import { createSpringSystem } from '../src/system.ts'
+import { FRAME, advanceUntilResting } from './helpers.ts'
 
 /**
  * Adversarial graphs and listeners: self-reference, cycles, thrown user
@@ -13,19 +14,6 @@ import { createSpringSystem } from '../src/system.ts'
 
 const config = defineSpring({ mass: 1, tension: 170, damping: 26 })
 const stiff = defineSpring({ tension: 1000, dampingRatio: 1 })
-
-const FRAME = 1000 / 60
-
-function advanceUntilResting(
-  system: ReturnType<typeof createSpringSystem>,
-  spring: { isResting: boolean },
-  maxFrames = 600,
-) {
-  for (let i = 0; i < maxFrames; i++) {
-    system.advance(FRAME)
-    if (spring.isResting) return
-  }
-}
 
 describe('pathological graphs: self-reference', () => {
   test('a resting spring following itself stays put', () => {

@@ -1,13 +1,12 @@
 import { describe, expect, test, vi } from 'vitest'
 import { SpringDefinition, defineSpring } from '../src/config.ts'
-import { type SpringSource, SpringSourceSymbol, mapSpring } from '../src/spring-source.ts'
+import { mapSpring } from '../src/spring-source.ts'
 import { createSpringSystem } from '../src/system.ts'
+import { FRAME, advanceUntilResting, flush, makeSource } from './helpers.ts'
 
 const config = defineSpring({ mass: 1, tension: 170, damping: 26 })
 const stiff = defineSpring({ tension: 1000, dampingRatio: 1 })
 const gentle = defineSpring({ tension: 10, dampingRatio: 1 })
-
-const FRAME = 1000 / 60
 
 describe('CompositeSpring: creation', () => {
   test('creates resting at the given value', () => {
@@ -563,28 +562,14 @@ describe('CompositeSpring: following', () => {
 
   test('any SpringSource can sit at a channel', () => {
     const system = createSpringSystem()
-    const listeners = new Set<() => void>()
-    let current = 5
-    const source: SpringSource = {
-      [SpringSourceSymbol]: {
-        get value() {
-          return current
-        },
-        onUpdate: (callback) => {
-          listeners.add(callback)
-          return () => listeners.delete(callback)
-        },
-        onDispose: () => () => {},
-      },
-    }
+    const leader = makeSource(5)
     const follower = system.createSpring({ x: 0 }, config)
 
-    follower.target = { x: source }
+    follower.target = { x: leader.source }
     expect(follower.target.x).toBe(5)
 
-    current = 80
-    for (const callback of listeners) callback()
-    for (let i = 0; i < 600 && !follower.isResting; i++) system.advance(FRAME)
+    leader.set(80)
+    advanceUntilResting(system, follower)
 
     expect(follower.value.x).toBeCloseTo(80, 0)
   })
@@ -605,8 +590,6 @@ describe('CompositeSpring: following', () => {
 })
 
 describe('CompositeSpring: settled promise', () => {
-  const flush = () => new Promise((resolve) => setTimeout(resolve))
-
   test('resolves immediately when already resting', async () => {
     const system = createSpringSystem()
     const spring = system.createSpring({ x: 0 }, config)

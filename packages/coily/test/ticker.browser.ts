@@ -25,13 +25,6 @@ function frames(n: number) {
   })
 }
 
-function blockMainThread(ms: number) {
-  const end = performance.now() + ms
-  while (performance.now() < end) {
-    /* busy wait */
-  }
-}
-
 const defaultConfig = defineSpring({ mass: 1, tension: 170, damping: 26 })
 
 describe('ticker with requestAnimationFrame', () => {
@@ -154,74 +147,5 @@ describe('ticker with requestAnimationFrame', () => {
 
     expect(updateCount).toBeGreaterThan(1)
     spring.dispose()
-  })
-
-  test('lag spike is clamped to adjustedLag', async () => {
-    const springOpts = defineSpring({ mass: 1, tension: 170, damping: 26 })
-
-    // System with a low lagThreshold so our busy-wait triggers clamping
-    const clamped = createSpringSystem({
-      lagThreshold: 30,
-      adjustedLag: 16,
-      reducedMotion: 'never',
-    })
-    const clampedSpring = clamped.createSpring(100, springOpts)
-    clampedSpring.target = 0
-
-    // Reference system: manually advanced by exactly adjustedLag
-    const reference = createSpringSystem({ reducedMotion: 'never' })
-    const refSpring = reference.createSpring(100, springOpts)
-    refSpring.target = 0
-
-    // Let the clamped system run a few normal frames to establish timing
-    clamped.start()
-    await frames(3)
-
-    // Record value before the spike
-    const valueBeforeSpike = clampedSpring.value
-
-    // Block the main thread for well over the lagThreshold.
-    // The next rAF callback will see a wallElapsed of ~200ms,
-    // but the ticker should clamp it to adjustedLag (16ms).
-    blockMainThread(200)
-
-    // Let the rAF fire after the block
-    await frames(2)
-    clamped.stop()
-
-    const clampedValue = clampedSpring.value
-
-    // Advance the reference spring by the same number of frames
-    // as if no clamping occurred (i.e., with the full 200ms elapsed).
-    // If lag was NOT clamped, the spring would have jumped much further.
-    const unclamped = createSpringSystem({ reducedMotion: 'never' })
-    const unclampedSpring = unclamped.createSpring(valueBeforeSpike, springOpts)
-    unclampedSpring.target = 0
-    unclamped.advance(200)
-    const unclampedValue = unclampedSpring.value
-
-    // The clamped spring should be closer to its pre-spike value
-    // than a spring that received the full 200ms of elapsed time
-    const clampedDistance = Math.abs(clampedValue - valueBeforeSpike)
-    const unclampedDistance = Math.abs(unclampedValue - valueBeforeSpike)
-
-    expect(clampedDistance).toBeLessThan(unclampedDistance)
-
-    clampedSpring.dispose()
-    refSpring.dispose()
-    unclampedSpring.dispose()
-  })
-
-  test('system.running reflects start/stop state', async () => {
-    const system = createSpringSystem({ reducedMotion: 'never' })
-
-    expect(system.running).toBe(false)
-
-    system.start()
-    expect(system.running).toBe(true)
-
-    await frames(2)
-    system.stop()
-    expect(system.running).toBe(false)
   })
 })

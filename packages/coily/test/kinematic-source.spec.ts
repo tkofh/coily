@@ -3,19 +3,9 @@ import { createSpringSystem } from '../src/system.ts'
 import { defineSpring } from '../src/config.ts'
 import { SpringSourceSymbol, mapSpring } from '../src/spring-source.ts'
 import { accelerationOf, velocityOf } from '../src/kinematic-source.ts'
+import { advanceUntilResting } from './helpers.ts'
 
 const config = defineSpring({ mass: 1, tension: 170, damping: 26 })
-
-function advanceUntilResting(
-  system: ReturnType<typeof createSpringSystem>,
-  spring: { isResting: boolean },
-  maxFrames = 600,
-) {
-  for (let i = 0; i < maxFrames; i++) {
-    system.advance(1000 / 60)
-    if (spring.isResting) return
-  }
-}
 
 describe('velocityOf', () => {
   test('reads the source velocity exactly', () => {
