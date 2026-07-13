@@ -156,11 +156,11 @@ function compileShape(
  *
  * The result is a stateless view, not a spring: it holds no
  * subscriptions and needs no disposal, and reads compute `map` of the
- * source's current value on the fly. `map` must be pure — it runs on every read and every
- * source update, and nothing re-evaluates it when anything other than
- * `source` changes. Composition is flat: mapping a mapped source
- * extends its pipeline rather than wrapping it, so chains cost one
- * function call per map however long they grow.
+ * source's current value on the fly. `map` must be pure — it runs on
+ * every read and every source update, and nothing re-evaluates it when
+ * anything other than `source` changes. Composition is flat: mapping a
+ * mapped source extends its pipeline rather than wrapping it, so chains
+ * cost one function call per map however long they grow.
  */
 export function mapSpring(source: SpringSource, map: (value: number) => number): SpringSource
 /**
