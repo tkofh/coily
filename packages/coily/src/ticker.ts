@@ -183,28 +183,36 @@ export class Ticker {
   #onFrame(timestamp: number) {
     if (this.#stopped) return
 
-    if (this.#primed) {
-      const wallElapsed = timestamp - this.#lastWallTime
-      const elapsed = wallElapsed > this.#lagThreshold ? this.#adjustedLag : wallElapsed
+    try {
+      if (this.#primed) {
+        const wallElapsed = timestamp - this.#lastWallTime
+        const elapsed = wallElapsed > this.#lagThreshold ? this.#adjustedLag : wallElapsed
 
-      this.#acc += elapsed
+        this.#acc += elapsed
 
-      // Step once the accumulated time is within half a frame of the cap
-      // gap: capped ticks land on the nearest display frame instead of
-      // always overshooting the requested rate.
-      if (this.#acc + elapsed / 2 >= this.#capGap) {
-        const delta = this.#acc
-        this.#acc = 0
-        this.#step(delta)
+        // Step once the accumulated time is within half a frame of the cap
+        // gap: capped ticks land on the nearest display frame instead of
+        // always overshooting the requested rate.
+        if (this.#acc + elapsed / 2 >= this.#capGap) {
+          const delta = this.#acc
+          this.#acc = 0
+          this.#step(delta)
+        }
+      } else {
+        // The first frame after start or wake only records a baseline
+        // timestamp; stepping begins on the second.
+        this.#primed = true
       }
-    } else {
-      // The first frame after start or wake only records a baseline
-      // timestamp; stepping begins on the second.
-      this.#primed = true
+    } finally {
+      this.#lastWallTime = timestamp
+      // Scheduling in a finally survives listeners that throw out of the
+      // step: the exception still surfaces from the frame callback, but
+      // the loop keeps running. Skip only when a listener stopped the
+      // ticker mid-step.
+      if (!this.#stopped) {
+        this.#schedule()
+      }
     }
-    this.#lastWallTime = timestamp
-
-    this.#schedule()
   }
 
   #step(dt: number) {

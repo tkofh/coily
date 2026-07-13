@@ -9,21 +9,25 @@ import {
   toValue,
   watchSyncEffect,
 } from 'vue'
-import { SpringConfig, type SpringOptions } from '../config.ts'
+import { SpringDefinition, type SpringDefinitionOptions } from '../config.ts'
+import { type SpringSource, type SpringSourceApi, SpringSourceSymbol } from '../spring-source.ts'
 import type { SpringSystem } from '../system.ts'
 import { injectLocal } from './local.ts'
 import { SpringSystemKey } from './system.ts'
 
 /**
- * Options for a scalar `useSpring`: a `SpringConfig`, any option shape
- * `defineSpring` accepts, or a ref/getter of either. Reactive options
- * reconfigure the spring in place when they change; `undefined` means
- * the default config.
+ * Config for a scalar `useSpring`: a `SpringDefinition`, any option shape
+ * `defineSpring` accepts, or a ref/getter of either. Reactive config
+ * reconfigures the spring in place when it changes; `undefined` means the
+ * default config.
  */
-export type UseSpringOptions = MaybeRefOrGetter<SpringOptions | SpringConfig | undefined>
+export type UseSpringConfig = MaybeRefOrGetter<
+  SpringDefinitionOptions | SpringDefinition | undefined
+>
 
-/** The spring surface the reactive wrapper needs — satisfied by both `Spring` and `SpringObject`. */
+/** The spring surface the reactive wrapper needs — satisfied by both `Spring` and `CompositeSpring`. */
 interface SpringLike<V, W, C> {
+  readonly [SpringSourceSymbol]: SpringSourceApi<V>
   get value(): V
   set value(next: W)
   get velocity(): V
@@ -47,8 +51,15 @@ interface SpringLike<V, W, C> {
  * Writing the main ref displaces the spring — it springs back toward its
  * target. To move the spring, drive the target you passed to
  * `useSpring`.
+ *
+ * The ref is also a `SpringSource`: it goes anywhere a source does —
+ * another `useSpring`, a `mapSpring` leaf, a composite channel target.
+ * Followers read the backing spring through `SpringSourceSymbol`, never
+ * through the ref's tracked getter, so following registers no Vue
+ * dependencies — an effect that touches a follower's leader stays
+ * independent of the leader's animation.
  */
-export interface ReactiveSpringRef<V, W = V> extends Ref<V, W> {
+export interface ReactiveSpringRef<V, W = V> extends Ref<V, W>, SpringSource<V> {
   /**
    * The current velocity in value units per second, as a writable ref.
    * Writing flings the spring; it settles back to its target.
@@ -91,12 +102,12 @@ export function injectSpringSystem(): SpringSystem {
 }
 
 export function resolveSpringConfig(
-  options: UseSpringOptions | undefined,
-): ComputedRef<SpringConfig | undefined> {
+  config: UseSpringConfig | undefined,
+): ComputedRef<SpringDefinition | undefined> {
   return computed(() => {
-    const opts = toValue(options)
-    if (opts instanceof SpringConfig) return opts
-    return opts ? new SpringConfig(opts) : undefined
+    const resolved = toValue(config)
+    if (resolved instanceof SpringDefinition) return resolved
+    return resolved ? new SpringDefinition(resolved) : undefined
   })
 }
 
@@ -184,6 +195,10 @@ export function createReactiveSpringRef<V, W, C>(
     get: () => spring.settled,
   })
   Object.defineProperty(ref, instanceKey, { value: spring })
+  // The source slot hands followers the backing spring's own api, so
+  // their reads bypass the customRef getter and can never track into an
+  // active effect.
+  Object.defineProperty(ref, SpringSourceSymbol, { value: spring[SpringSourceSymbol] })
 
   return ref
 }

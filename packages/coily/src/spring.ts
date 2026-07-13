@@ -1,144 +1,93 @@
-import { SpringConfig } from './config.ts'
+import { SpringDefinition } from './config.ts'
 import type { MotionSet } from './motion-set.ts'
 import { Motion } from './motion.ts'
-
-/** A follow target: the spring to track, plus a constant offset. */
-export interface SpringWithOffset {
-  /** The spring whose live value to follow. */
-  spring: Spring
-  /**
-   * Constant added to the leader's value, in value units.
-   * @default 0
-   */
-  offset?: number | undefined
-}
+import { type SpringSource, SpringSourceSymbol, isSpringSource } from './spring-source.ts'
+import type { KinematicSource, KinematicSourceApi } from './kinematic-source.ts'
+import { invariant, RESOLVED } from './util.ts'
 
 /**
- * What a spring can animate toward: a fixed number, another spring to
- * follow, or a spring plus a constant offset.
+ * What a spring can animate toward: a fixed number, or a `SpringSource`
+ * — another spring, or a value derived from one with `mapSpring` —
+ * whose live value the spring follows.
  */
-export type SpringTarget = number | Spring | SpringWithOffset
-
-interface DisplacedSpringPosition {
-  /** The initial target. When omitted, the spring starts at rest at `value`. */
-  target?: SpringTarget | undefined
-  /**
-   * The initial value. When omitted, the spring starts at the target.
-   * Provide both `target` and `value` to create a spring already in
-   * motion. Ignored under reduced motion: springs start at their target.
-   */
-  value?: number | undefined
-}
+export type SpringTarget = number | SpringSource
 
 /**
- * Where a spring starts: a plain number for a spring at rest at that
- * value, or a target/value pair for one created displaced or already
- * following another spring.
+ * What a spring animates, which decides whether reduced motion applies to
+ * it. `'motion'` moves something on screen — position, scale, rotation —
+ * and snaps to its target under reduced motion. `'appearance'` changes
+ * how something looks without moving it — a cross-fade, a color, a blur —
+ * and keeps animating under reduced motion, since it carries no motion to
+ * reduce. Fixed when the spring is created; read it back from
+ * `Spring.purpose`.
  */
-export type SpringPosition = number | DisplacedSpringPosition
-
-function normalizeTarget(
-  target: SpringTarget | undefined,
-): { spring: Spring; offset: number } | null {
-  if (target instanceof Spring) return { spring: target, offset: 0 }
-  if (
-    typeof target === 'object' &&
-    target !== null &&
-    'spring' in target &&
-    target.spring instanceof Spring
-  ) {
-    return { spring: target.spring, offset: target.offset ?? 0 }
-  }
-  return null
-}
-
-// Shared so resting and disposed springs don't allocate a promise per read.
-const RESOLVED = Promise.resolve()
+export type Purpose = 'motion' | 'appearance'
 
 /**
  * One animated number, driven toward its target with damped spring
  * motion. Create springs with `SpringSystem.createSpring`; the owning
  * system advances them, so a spring only moves while its system runs.
  *
- * Reads return the exact simulated state; nothing is rounded. See
+ * Reads return the exact simulated state; nothing is rounded. Numeric
+ * writes — `target`, `value`, `velocity`, `jumpTo` — require finite
+ * numbers: `NaN` or an infinity throws rather than poisoning the
+ * simulation. See
  * https://github.com/tkofh/coily/blob/main/PRECISION.md for the
  * numerical contract.
  */
-export class Spring {
+export class Spring implements KinematicSource {
+  /** Brands the spring as a `KinematicSource` whose api is the spring itself. */
+  get [SpringSourceSymbol](): KinematicSourceApi<number> {
+    return this
+  }
+
   #target: number
-  #override: SpringConfig | null
-  #resolved: SpringConfig
+  #config: SpringDefinition
+  readonly #purpose: Purpose
   readonly #motion: Motion
   readonly #motions: MotionSet
-  readonly #followers = new Set<Spring>()
 
-  #leader: Spring | null = null
-  #offset = 0
+  #leader: SpringSource | null = null
   #unsubLeader: (() => void) | null = null
 
   #settled: Promise<void> | null = null
   #resolveSettled: (() => void) | null = null
   #disposed = false
 
-  constructor(motions: MotionSet, position: SpringPosition, config?: SpringConfig) {
+  constructor(
+    motions: MotionSet,
+    value: number,
+    config?: SpringDefinition,
+    purpose: Purpose = 'motion',
+  ) {
+    invariant(Number.isFinite(value), 'Spring value must be a finite number')
+    invariant(
+      purpose === 'motion' || purpose === 'appearance',
+      "Spring purpose must be 'motion' or 'appearance'",
+    )
     this.#motions = motions
-
-    let numericTarget: number
-    let value: number
-    let normalized: { spring: Spring; offset: number } | null = null
-
-    if (typeof position === 'number') {
-      numericTarget = position
-      value = position
-    } else {
-      normalized = normalizeTarget(position.target)
-      if (normalized) {
-        numericTarget = normalized.spring.value + normalized.offset
-        value = position.value ?? numericTarget
-      } else {
-        numericTarget = (position.target as number | undefined) ?? position.value ?? 0
-        value = position.value ?? numericTarget
-      }
-    }
-
-    if (motions.reduced) {
-      value = numericTarget
-    }
-
-    this.#override = config ?? null
-    this.#resolved = config ?? (normalized ? normalized.spring.#resolved : SpringConfig.default)
-
-    this.#target = numericTarget
-    this.#motion = new Motion(this.#resolved, value - numericTarget, 0)
-
-    if (!this.#motion.isResting) {
-      this.#motions.add(this.#motion)
-    }
-
-    if (normalized) {
-      this.#leader = normalized.spring
-      this.#offset = normalized.offset
-      normalized.spring.#followers.add(this)
-      this.#unsubLeader = normalized.spring.onUpdate(() => {
-        this.#setTarget(this.#leader!.value + this.#offset)
-      })
-    }
+    this.#config = config ?? SpringDefinition.default
+    this.#target = value
+    this.#purpose = purpose
+    this.#motion = new Motion(this.#config, 0, 0)
+    // An 'appearance' spring opts out of reduced motion: its own writes
+    // stay animated (below), and MotionSet.finishAll leaves it running.
+    this.#motion.respectsReducedMotion = purpose === 'motion'
   }
 
   /**
-   * The value the spring is animating toward. While following another
-   * spring, reads return the leader's value plus the offset, as of the
-   * leader's last update.
+   * The value the spring is animating toward. While following a source,
+   * reads return the source's value as of its last update.
    *
    * Assignment accepts any `SpringTarget`:
    * - A number retargets the spring. The current value and momentum carry
    *   over, so mid-flight retargets stay smooth. Assigning a number while
    *   following also stops the following.
-   * - A `Spring` — or `{ spring, offset }` — makes this spring follow the
-   *   leader's live value. Followers without a config of their own adopt
-   *   the leader's.
+   * - A `SpringSource` — a `Spring`, or a value derived with `mapSpring` —
+   *   makes this spring follow the source's live value.
    *
-   * Under reduced motion, retargets apply instantly.
+   * Under reduced motion, retargets apply instantly — unless `purpose` is
+   * `'appearance'`, in which case they animate as normal.
    */
   get target(): number {
     return this.#target
@@ -149,8 +98,12 @@ export class Spring {
       this.#unfollow()
       this.#setTarget(value)
     } else {
-      const normalized = normalizeTarget(value)!
-      this.#follow(normalized.spring, normalized.offset)
+      invariant(isSpringSource(value), 'Spring target must be a number or a SpringSource')
+      invariant(
+        typeof value[SpringSourceSymbol].value === 'number',
+        'A spring can only follow a scalar SpringSource; derive one from a composite with mapSpring',
+      )
+      this.#follow(value as SpringSource)
     }
   }
 
@@ -161,14 +114,16 @@ export class Spring {
    * Writing displaces the spring: it keeps its target and springs back
    * from the written value, notifying update listeners synchronously.
    * Writing the current value is a no-op. Under reduced motion a write
-   * jumps the spring — target included — to the written value.
+   * jumps the spring — target included — to the written value, unless
+   * `purpose` is `'appearance'`, in which case it displaces as normal.
    */
   get value() {
     return this.#target + this.#motion.position
   }
 
   set value(value: number) {
-    if (this.#motions.reduced) {
+    invariant(Number.isFinite(value), 'Spring value must be a finite number')
+    if (this.#motions.reduced && this.#purpose === 'motion') {
       if (value !== this.value) {
         this.jumpTo(value)
       }
@@ -188,65 +143,94 @@ export class Spring {
    *
    * Writing flings the spring: motion continues from the current value
    * with the written velocity, then settles back to the target. Under
-   * reduced motion writes are ignored.
+   * reduced motion writes are ignored, unless `purpose` is `'appearance'`,
+   * in which case the fling applies as normal.
    */
   get velocity() {
     return this.#motion.velocity
   }
 
   set velocity(value: number) {
-    if (this.#motions.reduced) return
+    invariant(Number.isFinite(value), 'Spring velocity must be a finite number')
+    if (this.#motions.reduced && this.#purpose === 'motion') return
 
     this.#motions.add(this.#motion)
     this.#motion.velocity = value
   }
 
   /**
-   * The spring's resolved `SpringConfig`: its own if one was assigned,
-   * otherwise the leader's while following, otherwise
-   * `SpringConfig.default`.
+   * The current acceleration, in value units per second squared — how
+   * fast the velocity is changing. Read-only: acceleration is the
+   * spring's stiffness and friction acting on its current displacement
+   * and velocity, so it follows from the motion rather than being set.
+   * To fling the spring, write `velocity` instead.
+   */
+  get acceleration() {
+    // Newton's second law for the damped spring, a = -(k*x + c*v) / m,
+    // with x the displacement from the target. Exact from state and
+    // config, like value and velocity.
+    const { tension, damping, mass } = this.#config
+    return -(tension * this.#motion.position + damping * this.#motion.velocity) / mass
+  }
+
+  /**
+   * What the spring animates — `'motion'` or `'appearance'` — fixed when
+   * it was created. An `'appearance'` spring opts out of reduced motion:
+   * it keeps animating where a `'motion'` spring snaps to its target. See
+   * `Purpose`.
+   */
+  get purpose(): Purpose {
+    return this.#purpose
+  }
+
+  /**
+   * The spring's `SpringDefinition`: the one it was created with or last
+   * assigned, otherwise `SpringDefinition.default`. Following a source
+   * never changes it — how a spring chases its target is the spring's
+   * own setting.
    *
    * Assigning a config reconfigures the spring in place — value and
    * velocity are preserved, so mid-flight reconfigures stay smooth.
-   * Assigning `null` clears the spring's own config, reverting to the
-   * default (or to the leader's, while following). Reconfiguring a leader
-   * cascades to every follower without a config of its own.
-   *
-   * A follower that stops following keeps the leader config it had been
-   * using as its own.
+   * Assigning `null` reverts to the default.
    */
-  get config() {
-    return this.#resolved
+  get config(): SpringDefinition {
+    return this.#config
   }
 
-  /** The resolved config's mass. */
+  /** The config's mass. */
   get mass() {
-    return this.#resolved.mass
+    return this.#config.mass
   }
 
-  /** The resolved config's tension (stiffness). */
+  /** The config's tension (stiffness). */
   get tension() {
-    return this.#resolved.tension
+    return this.#config.tension
   }
 
-  /** The resolved config's damping (friction). */
+  /** The config's damping (friction). */
   get damping() {
-    return this.#resolved.damping
+    return this.#config.damping
   }
 
-  /** The resolved config's damping ratio. */
+  /** The config's damping ratio. */
   get dampingRatio() {
-    return this.#resolved.dampingRatio
+    return this.#config.dampingRatio
   }
 
-  /** The resolved config's resting precision. */
+  /** The config's resting precision. */
   get precision() {
-    return this.#resolved.precision
+    return this.#config.precision
   }
 
-  set config(value: SpringConfig | null) {
-    this.#override = value
-    this.#applyConfig(value ?? (this.#leader ? this.#leader.#resolved : SpringConfig.default))
+  set config(value: SpringDefinition | null) {
+    const next = value ?? SpringDefinition.default
+    if (this.#config === next) return
+
+    this.#config = next
+    this.#motion.configure(next)
+    if (!this.#motion.isResting) {
+      this.#motions.add(this.#motion)
+    }
   }
 
   /**
@@ -302,14 +286,15 @@ export class Spring {
    * synchronously — `update`, plus `stop` if the spring was moving.
    */
   jumpTo(value: number) {
+    invariant(Number.isFinite(value), 'Spring value must be a finite number')
     this.#target = value
     this.#motion.finish()
   }
 
   /**
    * Releases the spring permanently: stops following, detaches followers
-   * (each keeps its current target and config), resolves `settled`, and
-   * notifies dispose listeners. Calling it again is a no-op.
+   * (each keeps its current target), resolves `settled`, and notifies
+   * dispose listeners. Calling it again is a no-op.
    *
    * A disposed spring keeps its final value readable; writes throw.
    */
@@ -326,17 +311,11 @@ export class Spring {
     if (this.#unsubLeader) {
       this.#unsubLeader()
       this.#unsubLeader = null
-    }
-    if (this.#leader) {
-      this.#leader.#followers.delete(this)
       this.#leader = null
     }
 
-    for (const follower of this.#followers) {
-      follower.#unfollow()
-    }
-
     this.#motions.remove(this.#motion)
+    // Disposing the motion emits 'dispose', which detaches any followers.
     this.#motion.dispose()
   }
 
@@ -373,8 +352,11 @@ export class Spring {
   }
 
   #setTarget(value: number) {
+    // Guards followed sources too: a map that produces NaN mid-flight
+    // throws here, at the moment of the poisoned retarget.
+    invariant(Number.isFinite(value), 'Spring target must be a finite number')
     if (value !== this.#target) {
-      if (this.#motions.reduced) {
+      if (this.#motions.reduced && this.#purpose === 'motion') {
         this.jumpTo(value)
         return
       }
@@ -389,25 +371,23 @@ export class Spring {
     }
   }
 
-  #follow(leader: Spring, offset: number) {
-    if (this.#unsubLeader) {
-      this.#unsubLeader()
-      this.#leader!.#followers.delete(this)
-    }
+  #follow(source: SpringSource) {
+    this.#unsubLeader?.()
+    this.#leader = source
 
-    this.#leader = leader
-    this.#offset = offset
-    leader.#followers.add(this)
-
-    if (this.#override === null) {
-      this.#applyConfig(leader.#resolved)
-    }
-
-    this.#unsubLeader = leader.onUpdate(() => {
-      this.#setTarget(this.#leader!.value + this.#offset)
+    const api = source[SpringSourceSymbol]
+    const unsubUpdate = api.onUpdate(() => {
+      this.#setTarget(api.value)
     })
+    const unsubDispose = api.onDispose(() => {
+      this.#unfollow()
+    })
+    this.#unsubLeader = () => {
+      unsubUpdate()
+      unsubDispose()
+    }
 
-    this.#setTarget(leader.value + offset)
+    this.#setTarget(api.value)
   }
 
   #unfollow() {
@@ -415,30 +395,6 @@ export class Spring {
 
     this.#unsubLeader!()
     this.#unsubLeader = null
-    this.#leader.#followers.delete(this)
     this.#leader = null
-    this.#offset = 0
-
-    if (this.#override === null) {
-      // Adopt the inherited config as our own: unfollowing must not
-      // visibly reconfigure the spring.
-      this.#override = this.#resolved
-    }
-  }
-
-  #applyConfig(next: SpringConfig) {
-    if (this.#resolved === next) return
-
-    this.#resolved = next
-    this.#motion.configure(next)
-    if (!this.#motion.isResting) {
-      this.#motions.add(this.#motion)
-    }
-
-    for (const follower of this.#followers) {
-      if (follower.#override === null) {
-        follower.#applyConfig(next)
-      }
-    }
   }
 }

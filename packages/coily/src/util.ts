@@ -31,3 +31,6 @@ export function isArray(value: unknown): value is unknown[] {
 export function isNumber(value: unknown): value is number {
   return typeof value === 'number'
 }
+
+// Shared so resting and disposed springs don't allocate a promise per read.
+export const RESOLVED = Promise.resolve()

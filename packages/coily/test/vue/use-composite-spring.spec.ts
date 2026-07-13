@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { defineComponent, h, nextTick, reactive, ref } from 'vue'
 import { mount } from '@vue/test-utils'
-import { createSpringSystem, defineSpring } from '../../src/index.ts'
+import { createSpringSystem, defineSpring, mapSpring } from '../../src/index.ts'
 import { SpringSystemKey } from '../../src/vue/system.ts'
 import { useSpring } from '../../src/vue/spring.ts'
 import { useSpringPool, type SpringPool } from '../../src/vue/pool.ts'
@@ -144,7 +144,7 @@ describe('useSpring: object shapes', () => {
     expect(spring.value.fast).toBeGreaterThan(spring.value.slow)
   })
 
-  test('a SpringObjectRef target links the springs channel-wise', async () => {
+  test('a CompositeSpringRef target links the springs channel-wise', async () => {
     const target = ref({ x: 0, y: 0 })
     const { system, result } = mountWith(() => {
       const leader = useSpring(target)
@@ -165,6 +165,47 @@ describe('useSpring: object shapes', () => {
       if (leader.isResting.value && follower.isResting.value) break
     }
     expect(follower.value).toEqual({ x: 100, y: -50 })
+  })
+
+  test('a CompositeSpringRef is a mapSpring input', async () => {
+    const target = ref({ x: 0, y: 0 })
+    const { system, result } = mountWith(() => {
+      const point = useSpring(target)
+      const magnitude = useSpring(mapSpring(point, ({ x, y }) => Math.hypot(x, y)))
+      return { point, magnitude }
+    })
+    const { point, magnitude } = result
+
+    expect(magnitude.value).toBe(0)
+
+    target.value = { x: 3, y: 4 }
+    await nextTick()
+    for (let i = 0; i < 1000; i++) {
+      system.advance(16)
+      if (point.isResting.value && magnitude.isResting.value) break
+    }
+    expect(magnitude.value).toBeCloseTo(5, 5)
+  })
+
+  test('a scalar SpringRef works as a channel target', async () => {
+    const scalarTarget = ref(0)
+    const { system, result } = mountWith(() => {
+      const leader = useSpring(scalarTarget)
+      const pool = useSpringPool()
+      const composite = pool.createSpring({ x: 0, y: 0 })
+      composite.target = { x: leader }
+      return { leader, composite }
+    })
+    const { leader, composite } = result
+
+    scalarTarget.value = 100
+    await nextTick()
+    for (let i = 0; i < 1000; i++) {
+      system.advance(16)
+      if (leader.isResting.value && composite.isResting) break
+    }
+    expect(composite.value.x).toBe(100)
+    expect(composite.value.y).toBe(0)
   })
 
   test('settled resolves when every channel rests', async () => {
@@ -266,8 +307,8 @@ describe('useSpring shape dispatch', () => {
   })
 })
 
-describe('useSpringPool createSpringObject', () => {
-  test('pool spring objects dispose with the scope', () => {
+describe('useSpringPool createSpring', () => {
+  test('pool composite springs dispose with the scope', () => {
     let pool!: SpringPool
     const {
       wrapper,
@@ -275,7 +316,7 @@ describe('useSpringPool createSpringObject', () => {
       result: spring,
     } = mountWith(() => {
       pool = useSpringPool()
-      return pool.createSpringObject({ x: 0, y: 0 })
+      return pool.createSpring({ x: 0, y: 0 })
     })
 
     spring.target = { x: 100 }

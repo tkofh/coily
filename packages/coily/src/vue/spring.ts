@@ -1,23 +1,23 @@
-import { type MaybeRefOrGetter, type Ref, toValue, watchSyncEffect } from 'vue'
-import type { Shape } from '../spring-object.ts'
+import { type MaybeRefOrGetter, toValue, watchSyncEffect } from 'vue'
+import type { Shape } from '../composite-spring.ts'
 import type { Spring } from '../spring.ts'
+import type { SpringOptions, CompositeSpringOptions } from '../system.ts'
+import { type SpringSource, SpringSourceSymbol, isSpringSource } from '../spring-source.ts'
 import {
   type ReactiveSpringRef,
-  type UseSpringOptions,
+  type UseSpringConfig,
   createReactiveSpringRef,
   injectSpringSystem,
   resolveSpringConfig,
 } from './reactive-spring.ts'
 import {
   type AnyShape,
-  type SpringObjectRef,
-  type UseSpringObjectOptions,
-  createLinkedSpringObjectRef,
-  createSpringObjectRef,
-  hasSpringObjectInstance,
-} from './spring-object.ts'
-
-export type { UseSpringOptions } from './reactive-spring.ts'
+  type CompositeSpringRef,
+  type UseCompositeSpringConfig,
+  createLinkedCompositeSpringRef,
+  createCompositeSpringRef,
+  hasCompositeSpringInstance,
+} from './composite-spring.ts'
 
 /**
  * The reactive handle for a scalar spring: a writable ref of the
@@ -31,117 +31,154 @@ export interface SpringRef extends ReactiveSpringRef<number> {}
 // from it without exposing the instance on the public type.
 const SpringInstanceKey = Symbol('spring')
 
-type SpringRefWithInstance = SpringRef & { [SpringInstanceKey]: Spring }
+interface SpringRefWithInstance extends SpringRef {
+  readonly [SpringInstanceKey]: Spring
+}
 
 function hasSpringInstance(value: unknown): value is SpringRefWithInstance {
   return typeof value === 'object' && value !== null && SpringInstanceKey in value
 }
 
 /**
- * Creates a spring animating toward `target` — a number, ref, or getter
- * — and returns it as a `SpringRef`. Reactive targets retarget the
- * spring whenever they change, momentum intact; reactive `options`
- * reconfigure it in place.
+ * Creates a scalar spring and returns it as a `SpringRef`. The target
+ * is a number to animate toward, or a `SpringSource` to follow — another
+ * `useSpring` ref, a `mapSpring` result, a pooled `Spring` — or a
+ * ref/getter of either. Reactive numbers retarget the spring whenever
+ * they change, momentum intact; a getter of a source re-follows when its
+ * own dependencies change, so `useSpring(() => (split.value ? left :
+ * right))` switches leaders live. Reactive `config` reconfigures the
+ * spring in place; while following, it configures the follower's own
+ * motion — the leader's config plays no part.
+ *
+ * Following bypasses Vue reactivity — the spring subscribes to the
+ * source directly — so effects and getters never gain a dependency on a
+ * leader's animation.
  *
  * Call it during `setup()` below a provided spring system (the
  * coily/nuxt module, or `useSpringSystem()` in an ancestor). The spring
  * is disposed with the component's scope, and composables are loop-safe:
  * map over targets for several independent springs.
  *
+ * `options.purpose` marks what the spring animates — `'appearance'`
+ * (a cross-fade, a color) keeps animating under reduced motion, `'motion'`
+ * (the default) snaps. It is read once, so unlike `config` it is not
+ * reactive.
+ *
  * @example
  * ```ts
  * const target = ref(0)
  * const x = useSpring(target, { duration: 500, bounce: 0.3 })
  * // template: <div :style="{ translate: `${x}px 0` }" @click="target = 300" />
+ *
+ * const opacity = useSpring(shown ? 1 : 0, undefined, { purpose: 'appearance' })
  * ```
  */
-export function useSpring(target: MaybeRefOrGetter<number>, options?: UseSpringOptions): SpringRef
+export function useSpring(
+  target: MaybeRefOrGetter<number | SpringSource>,
+  config?: UseSpringConfig,
+  options?: SpringOptions,
+): SpringRef
 /**
- * Creates a spring that follows another `useSpring` ref's live value,
- * momentum intact. Without `options` the follower uses the leader's
- * config; with them, its own.
- *
- * Call it during `setup()` below a provided spring system. The spring is
- * disposed with the component's scope.
- */
-export function useSpring(target: SpringRef, options?: UseSpringOptions): SpringRef
-/**
- * Creates a spring object that follows another `useSpring` object ref
- * channel by channel. Channels animate toward the leader's live values;
- * without `options` each uses its leader channel's config.
+ * Creates a composite spring that follows another `useSpring` object ref
+ * channel by channel, animating toward the leader's live values.
  *
  * Call it during `setup()` below a provided spring system. The springs
  * are disposed with the component's scope.
  */
 export function useSpring<T extends object>(
-  target: SpringObjectRef<T>,
-  options?: UseSpringObjectOptions<T>,
-): SpringObjectRef<T>
+  target: CompositeSpringRef<T>,
+  config?: UseCompositeSpringConfig<T>,
+  options?: CompositeSpringOptions<T>,
+): CompositeSpringRef<T>
 /**
  * Creates a composite spring over a numeric shape — a plain object or
- * array whose leaves are all numbers — and returns a `SpringObjectRef`:
- * reads are the deep-readonly composite value, writes take partial
- * shapes. The shape is fixed at creation; reactive `options` accept a
- * per-channel config shape.
+ * array whose leaves are all numbers, or a ref/getter of one — and
+ * returns a `CompositeSpringRef`: reads are the deep-readonly composite
+ * value, writes take partial shapes. The shape is fixed at creation.
+ * Reactive targets retarget the channels, momentum intact — a ref on
+ * replacement or nested mutation, a getter whenever its reactive
+ * dependencies change. Reactive `config` accepts a per-channel config
+ * shape.
  *
  * Call it during `setup()` below a provided spring system. The springs
  * are disposed with the component's scope.
- */
-export function useSpring<T extends object>(
-  target: T & Shape<T>,
-  options?: UseSpringObjectOptions<T>,
-): SpringObjectRef<T>
-/**
- * Creates a composite spring driven by a reactive numeric shape: any
- * change to the ref — replacement or nested mutation — retargets the
- * springs, momentum intact. The shape itself is fixed at creation.
  *
- * Call it during `setup()` below a provided spring system. The springs
- * are disposed with the component's scope.
+ * `options.purpose` marks reduced-motion behavior per channel: a single
+ * `Purpose` for all, or a shape mirroring the value. It is read once, so
+ * unlike `config` it is not reactive.
  */
 export function useSpring<T extends object>(
-  target: Ref<T & Shape<T>>,
-  options?: UseSpringObjectOptions<T>,
-): SpringObjectRef<T>
+  target: MaybeRefOrGetter<T & Shape<T>>,
+  config?: UseCompositeSpringConfig<T>,
+  options?: CompositeSpringOptions<T>,
+): CompositeSpringRef<T>
 /**
  * Creates a composite spring driven by a getter of a numeric shape: the
  * springs retarget whenever the getter's reactive dependencies change.
  * The shape itself is fixed at creation.
+ *
+ * (This is the getter case of the shape overload above, split out
+ * because the shape doesn't infer through `MaybeRefOrGetter`'s
+ * function member.)
  *
  * Call it during `setup()` below a provided spring system. The springs
  * are disposed with the component's scope.
  */
 export function useSpring<T extends object>(
   target: () => T & Shape<T>,
-  options?: UseSpringObjectOptions<T>,
-): SpringObjectRef<T>
+  config?: UseCompositeSpringConfig<T>,
+  options?: CompositeSpringOptions<T>,
+): CompositeSpringRef<T>
 export function useSpring(
   target: unknown,
+  config?: unknown,
   options?: unknown,
-): SpringRef | SpringObjectRef<AnyShape> {
+): SpringRef | CompositeSpringRef<AnyShape> {
   if (hasSpringInstance(target)) {
-    return createLinkedSpringRef(target, options as UseSpringOptions)
+    return createLinkedSpringRef(
+      target,
+      config as UseSpringConfig,
+      options as SpringOptions | undefined,
+    )
   }
-  if (hasSpringObjectInstance(target)) {
-    return createLinkedSpringObjectRef(target, options as UseSpringObjectOptions<AnyShape>)
+  if (hasCompositeSpringInstance(target)) {
+    return createLinkedCompositeSpringRef(
+      target,
+      config as UseCompositeSpringConfig<AnyShape>,
+      options as CompositeSpringOptions<AnyShape> | undefined,
+    )
   }
-  if (typeof toValue(target as MaybeRefOrGetter<unknown>) === 'number') {
-    return createSpringRef(target as MaybeRefOrGetter<number>, options as UseSpringOptions)
+  const resolved = toValue(target as MaybeRefOrGetter<unknown>)
+  if (typeof resolved === 'number' || isSpringSource(resolved)) {
+    return createSpringRef(
+      target as MaybeRefOrGetter<number | SpringSource>,
+      config as UseSpringConfig,
+      options as SpringOptions | undefined,
+    )
   }
-  return createSpringObjectRef(
+  return createCompositeSpringRef(
     target as MaybeRefOrGetter<AnyShape>,
-    options as UseSpringObjectOptions<AnyShape>,
+    config as UseCompositeSpringConfig<AnyShape>,
+    options as CompositeSpringOptions<AnyShape> | undefined,
   )
 }
 
 function createSpringRef(
-  target: MaybeRefOrGetter<number>,
-  options: UseSpringOptions | undefined,
+  target: MaybeRefOrGetter<number | SpringSource>,
+  config: UseSpringConfig | undefined,
+  options: SpringOptions | undefined,
 ): SpringRef {
   const system = injectSpringSystem()
-  const config = resolveSpringConfig(options)
-  const spring = system.createSpring(toValue(target), config.value)
-  const ref = createReactiveSpringRef(spring, config, SpringInstanceKey)
+  const resolvedConfig = resolveSpringConfig(config)
+  // A source target starts the spring at rest at the source's current
+  // value; the target effect below attaches the follow.
+  const initial = toValue(target)
+  const spring = system.createSpring(
+    typeof initial === 'number' ? initial : initial[SpringSourceSymbol].value,
+    resolvedConfig.value,
+    options,
+  )
+  const ref = createReactiveSpringRef(spring, resolvedConfig, SpringInstanceKey)
 
   watchSyncEffect(() => {
     spring.target = toValue(target)
@@ -152,10 +189,12 @@ function createSpringRef(
 
 function createLinkedSpringRef(
   leaderRef: SpringRefWithInstance,
-  options: UseSpringOptions | undefined,
+  config: UseSpringConfig | undefined,
+  options: SpringOptions | undefined,
 ): SpringRef {
   const system = injectSpringSystem()
-  const config = resolveSpringConfig(options)
-  const spring = system.createSpring({ target: leaderRef[SpringInstanceKey] }, config.value)
-  return createReactiveSpringRef(spring, config, SpringInstanceKey)
+  const leader = leaderRef[SpringInstanceKey]
+  const resolvedConfig = resolveSpringConfig(config)
+  const spring = system.createSpring(leader, resolvedConfig.value, options)
+  return createReactiveSpringRef(spring, resolvedConfig, SpringInstanceKey)
 }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { SpringConfig } from '../src/config.ts'
+import { SpringDefinition } from '../src/config.ts'
 import { MotionSet } from '../src/motion-set.ts'
 import { Motion } from '../src/motion.ts'
 import { Ticker } from '../src/ticker.ts'
@@ -46,7 +46,7 @@ class FrameSource {
 
 /** A motion displaced far enough to stay active for the whole test. */
 function activeMotion() {
-  return new Motion(SpringConfig.default, 1e6, 0)
+  return new Motion(SpringDefinition.default, 1e6, 0)
 }
 
 afterEach(() => {
@@ -359,7 +359,7 @@ describe('Ticker', () => {
     test('stops requesting frames once every motion rests', () => {
       const source = new FrameSource().install()
       const motions = new MotionSet()
-      motions.add(new Motion(SpringConfig.default, 1, 0))
+      motions.add(new Motion(SpringDefinition.default, 1, 0))
       const ticker = new Ticker(motions)
 
       ticker.start()
@@ -433,6 +433,54 @@ describe('Ticker', () => {
 
       motions.add(activeMotion())
       expect(source.pending).toBe(1)
+    })
+  })
+
+  describe('resilience', () => {
+    test('keeps scheduling after a listener throws mid-step', () => {
+      const source = new FrameSource().install()
+      const motions = new MotionSet()
+      const ticker = new Ticker(motions)
+      const motion = activeMotion()
+
+      let boom = true
+      motion.onUpdate(() => {
+        if (boom) {
+          boom = false
+          throw new Error('boom')
+        }
+      })
+      motions.add(motion)
+      ticker.start()
+
+      source.frame(16) // priming frame: baseline only
+      expect(() => source.frame(16)).toThrow('boom')
+
+      // The throw escaped the frame callback, but the next frame was
+      // already scheduled — the loop survives and keeps stepping.
+      expect(source.pending).toBe(1)
+      const before = ticker.frame
+      source.frame(16)
+      expect(ticker.frame).toBe(before + 1)
+    })
+
+    test('a listener stopping the ticker mid-step leaves no stray frame', () => {
+      const source = new FrameSource().install()
+      const motions = new MotionSet()
+      const ticker = new Ticker(motions)
+      const motion = activeMotion()
+
+      motion.onUpdate(() => {
+        ticker.stop()
+      })
+      motions.add(motion)
+      ticker.start()
+
+      source.frame(16)
+      source.frame(16) // steps once; the listener stops the ticker
+
+      expect(ticker.stopped).toBe(true)
+      expect(source.pending).toBe(0)
     })
   })
 })

@@ -25,7 +25,7 @@ describe('advance simulation', () => {
   bench('advance 100 active springs (1 frame)', () => {
     const system = createSpringSystem()
     for (let i = 0; i < 100; i++) {
-      system.createSpring({ target: 100, value: 0 }, defaultConfig)
+      system.createSpring(0, defaultConfig).target = 100
     }
     system.advance(FRAME)
   })
@@ -33,7 +33,7 @@ describe('advance simulation', () => {
   bench('advance 1,000 active springs (1 frame)', () => {
     const system = createSpringSystem()
     for (let i = 0; i < 1_000; i++) {
-      system.createSpring({ target: 100, value: 0 }, defaultConfig)
+      system.createSpring(0, defaultConfig).target = 100
     }
     system.advance(FRAME)
   })
@@ -41,7 +41,7 @@ describe('advance simulation', () => {
   bench('advance 10,000 active springs (1 frame)', () => {
     const system = createSpringSystem()
     for (let i = 0; i < 10_000; i++) {
-      system.createSpring({ target: 100, value: 0 }, defaultConfig)
+      system.createSpring(0, defaultConfig).target = 100
     }
     system.advance(FRAME)
   })
@@ -50,7 +50,8 @@ describe('advance simulation', () => {
 describe('advance to rest', () => {
   bench('settle 1 spring to rest', () => {
     const system = createSpringSystem()
-    const spring = system.createSpring({ target: 100, value: 0 }, defaultConfig)
+    const spring = system.createSpring(0, defaultConfig)
+    spring.target = 100
     while (!spring.isResting) {
       system.advance(FRAME)
     }
@@ -58,9 +59,11 @@ describe('advance to rest', () => {
 
   bench('settle 100 springs to rest', () => {
     const system = createSpringSystem()
-    const springs = Array.from({ length: 100 }, () =>
-      system.createSpring({ target: 100, value: 0 }, defaultConfig),
-    )
+    const springs = Array.from({ length: 100 }, () => {
+      const spring = system.createSpring(0, defaultConfig)
+      spring.target = 100
+      return spring
+    })
     while (springs.some((s) => !s.isResting)) {
       system.advance(FRAME)
     }
@@ -70,7 +73,8 @@ describe('advance to rest', () => {
     const system = createSpringSystem()
     let sum = 0
     const springs = Array.from({ length: 100 }, () => {
-      const spring = system.createSpring({ target: 100, value: 0 }, defaultConfig)
+      const spring = system.createSpring(0, defaultConfig)
+      spring.target = 100
       spring.onUpdate(() => {
         sum += spring.value
       })
@@ -85,7 +89,8 @@ describe('advance to rest', () => {
     const system = createSpringSystem()
     const noop = () => {}
     const springs = Array.from({ length: 100 }, () => {
-      const spring = system.createSpring({ target: 100, value: 0 }, defaultConfig)
+      const spring = system.createSpring(0, defaultConfig)
+      spring.target = 100
       spring.onUpdate(noop)
       return spring
     })
@@ -96,9 +101,11 @@ describe('advance to rest', () => {
 
   bench('settle 100 springs to rest (no listeners)', () => {
     const system = createSpringSystem()
-    const springs = Array.from({ length: 100 }, () =>
-      system.createSpring({ target: 100, value: 0 }, defaultConfig),
-    )
+    const springs = Array.from({ length: 100 }, () => {
+      const spring = system.createSpring(0, defaultConfig)
+      spring.target = 100
+      return spring
+    })
     while (springs.some((s) => !s.isResting)) {
       system.advance(FRAME)
     }
@@ -133,7 +140,8 @@ describe('springs with listeners', () => {
     const system = createSpringSystem()
     const noop = () => {}
     for (let i = 0; i < 1_000; i++) {
-      const spring = system.createSpring({ target: 100, value: 0 }, defaultConfig)
+      const spring = system.createSpring(0, defaultConfig)
+      spring.target = 100
       spring.onUpdate(noop)
     }
     system.advance(FRAME)
@@ -146,7 +154,9 @@ describe('linked spring chains', () => {
     const springs = [head]
     let prev = head
     for (let i = 1; i < length; i++) {
-      prev = system.createSpring({ target: prev })
+      const next = system.createSpring(prev.value)
+      next.target = prev
+      prev = next
       springs.push(prev)
     }
     return springs
@@ -186,33 +196,33 @@ describe('linked spring chains', () => {
   })
 })
 
-describe('spring objects', () => {
+describe('composite springs', () => {
   // Four channels per object — comparable to four scalar springs.
   const shape = { position: { x: 0, y: 0 }, scale: 1, opacity: 1 }
   const fullTarget = { position: { x: 100, y: 100 }, scale: 2, opacity: 0 }
 
-  bench('create 1,000 spring objects (4 channels)', () => {
+  bench('create 1,000 composite springs (4 channels)', () => {
     const system = createSpringSystem()
     for (let i = 0; i < 1_000; i++) {
-      system.createSpringObject(shape, defaultConfig)
+      system.createSpring(shape, defaultConfig)
     }
   })
 
-  bench('advance 250 spring objects × 4 channels (1 frame)', () => {
+  bench('advance 250 composite springs × 4 channels (1 frame)', () => {
     // Same motion count as "advance 1,000 active springs".
     const system = createSpringSystem()
     for (let i = 0; i < 250; i++) {
-      const spring = system.createSpringObject(shape, defaultConfig)
+      const spring = system.createSpring(shape, defaultConfig)
       spring.target = fullTarget
     }
     system.advance(FRAME)
   })
 
-  bench('settle 100 spring objects to rest (with onUpdate)', () => {
+  bench('settle 100 composite springs to rest (with onUpdate)', () => {
     const system = createSpringSystem()
     let sum = 0
     const springs = Array.from({ length: 100 }, () => {
-      const spring = system.createSpringObject(shape, defaultConfig)
+      const spring = system.createSpring(shape, defaultConfig)
       spring.onUpdate(() => {
         sum += spring.value.position.x
       })
@@ -224,10 +234,10 @@ describe('spring objects', () => {
     }
   })
 
-  bench('settle 100 spring objects to rest (no listeners)', () => {
+  bench('settle 100 composite springs to rest (no listeners)', () => {
     const system = createSpringSystem()
     const springs = Array.from({ length: 100 }, () => {
-      const spring = system.createSpringObject(shape, defaultConfig)
+      const spring = system.createSpring(shape, defaultConfig)
       spring.target = fullTarget
       return spring
     })
@@ -236,11 +246,9 @@ describe('spring objects', () => {
     }
   })
 
-  bench('partial retargets on 1,000 spring objects', () => {
+  bench('partial retargets on 1,000 composite springs', () => {
     const system = createSpringSystem()
-    const springs = Array.from({ length: 1_000 }, () =>
-      system.createSpringObject(shape, defaultConfig),
-    )
+    const springs = Array.from({ length: 1_000 }, () => system.createSpring(shape, defaultConfig))
     for (const spring of springs) {
       spring.target = { position: { x: 100 } }
     }
@@ -248,7 +256,7 @@ describe('spring objects', () => {
 
   bench('read composite value 10,000 times (4 channels)', () => {
     const system = createSpringSystem()
-    const spring = system.createSpringObject(shape, defaultConfig)
+    const spring = system.createSpring(shape, defaultConfig)
     spring.target = fullTarget
     system.advance(FRAME)
     let sum = 0
@@ -261,9 +269,11 @@ describe('spring objects', () => {
 describe('mixed operations', () => {
   bench('create, animate, dispose cycle (100 springs)', () => {
     const system = createSpringSystem()
-    const springs = Array.from({ length: 100 }, () =>
-      system.createSpring({ target: 100, value: 0 }, defaultConfig),
-    )
+    const springs = Array.from({ length: 100 }, () => {
+      const spring = system.createSpring(0, defaultConfig)
+      spring.target = 100
+      return spring
+    })
     for (let i = 0; i < 10; i++) {
       system.advance(FRAME)
     }

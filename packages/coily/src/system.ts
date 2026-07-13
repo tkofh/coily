@@ -1,8 +1,46 @@
-import type { SpringConfig } from './config.ts'
+import type { SpringDefinition } from './config.ts'
 import { MotionSet } from './motion-set.ts'
-import { Spring, type SpringPosition } from './spring.ts'
-import { type ConfigShape, type Shape, SpringObject } from './spring-object.ts'
+import { Spring, type Purpose } from './spring.ts'
+import { type SpringSource, SpringSourceSymbol, isSpringSource } from './spring-source.ts'
+import {
+  type ConfigShape,
+  type PurposeShape,
+  type Shape,
+  CompositeSpring,
+} from './composite-spring.ts'
 import { Ticker, type TickerOptions } from './ticker.ts'
+import { invariant } from './util.ts'
+
+/**
+ * Per-spring options for `SpringSystem.createSpring`, separate from the
+ * physical `config`.
+ */
+export interface SpringOptions {
+  /**
+   * What the spring animates, which decides whether reduced motion applies
+   * to it. `'appearance'` — a cross-fade, a color, a blur — keeps
+   * animating under reduced motion; `'motion'` snaps to the target. Fixed
+   * for the spring's life. See `Purpose`.
+   * @default 'motion'
+   */
+  purpose?: Purpose | undefined
+}
+
+/**
+ * Per-spring options for a composite `SpringSystem.createSpring`, separate
+ * from the physical `config`.
+ */
+export interface CompositeSpringOptions<T extends object> {
+  /**
+   * What each channel animates, deciding reduced-motion behavior per
+   * channel: a single `Purpose` for every channel, or a shape mirroring
+   * the value with purposes at any level — a purpose at a subtree covers
+   * every channel below it. Channels it doesn't reach default to
+   * `'motion'`. Fixed for the spring's life. See `PurposeShape`.
+   * @default 'motion'
+   */
+  purpose?: PurposeShape<T> | undefined
+}
 
 export interface SpringSystemOptions extends TickerOptions {
   /**
@@ -55,18 +93,51 @@ class SpringSystemImpl implements SpringSystem {
     return this.#motion.reduced
   }
 
-  createSpring(position: SpringPosition, config?: SpringConfig): Spring {
-    return new Spring(this.#motion, position, config)
-  }
-
-  createSpringObject<T extends object>(
+  createSpring(value: number, config?: SpringDefinition, options?: SpringOptions): Spring
+  createSpring(source: SpringSource, config?: SpringDefinition, options?: SpringOptions): Spring
+  createSpring<T extends object>(
     value: T & Shape<T>,
     config?: ConfigShape<T>,
-  ): SpringObject<T> {
-    return new SpringObject(this.#motion, value, config)
+    options?: CompositeSpringOptions<T>,
+  ): CompositeSpring<T>
+  createSpring(
+    value: number | SpringSource | Record<string, number>,
+    config?: SpringDefinition | ConfigShape<Record<string, number>>,
+    options?: SpringOptions | CompositeSpringOptions<Record<string, number>>,
+  ): Spring | CompositeSpring<Record<string, number>> {
+    if (typeof value === 'number') {
+      return new Spring(
+        this.#motion,
+        value,
+        config as SpringDefinition | undefined,
+        (options as SpringOptions | undefined)?.purpose,
+      )
+    }
+    if (isSpringSource(value)) {
+      const api = value[SpringSourceSymbol]
+      invariant(
+        typeof api.value === 'number',
+        'A spring can only follow a scalar SpringSource; derive one from a composite with mapSpring',
+      )
+      const spring = new Spring(
+        this.#motion,
+        api.value,
+        config as SpringDefinition | undefined,
+        (options as SpringOptions | undefined)?.purpose,
+      )
+      spring.target = value as SpringSource
+      return spring
+    }
+    return new CompositeSpring(
+      this.#motion,
+      value,
+      config as ConfigShape<Record<string, number>> | undefined,
+      (options as CompositeSpringOptions<Record<string, number>> | undefined)?.purpose,
+    )
   }
 
   advance(dt: number) {
+    invariant(Number.isFinite(dt), 'dt must be a finite number of milliseconds')
     this.#motion.tick(dt / 1000)
   }
 
@@ -114,24 +185,39 @@ class SpringSystemImpl implements SpringSystem {
  */
 export interface SpringSystem {
   /**
-   * Creates a spring at `position` — a number for a spring at rest, or a
-   * target/value pair for one created displaced or following another
-   * spring. Without `config`, springs use the default: critically damped,
-   * settling in about 500ms.
+   * Creates a spring at rest at `value`. Without `config`, springs use
+   * the default: critically damped, settling in about 500ms. To follow
+   * another spring from birth, pass it in place of `value`.
+   *
+   * `options.purpose` marks what the spring animates: `'appearance'`
+   * keeps animating under reduced motion, `'motion'` (the default) snaps.
    */
-  createSpring(position: SpringPosition, config?: SpringConfig): Spring
+  createSpring(value: number, config?: SpringDefinition, options?: SpringOptions): Spring
+  /**
+   * Creates a spring already following `source` — a `Spring`, or a value
+   * derived with `mapSpring`. It starts at the source's current value,
+   * so nothing moves until the source does; equivalent to creating a
+   * spring at that value and assigning `source` to its `target`.
+   *
+   * `options.purpose` marks what the spring animates: `'appearance'`
+   * keeps animating under reduced motion, `'motion'` (the default) snaps.
+   */
+  createSpring(source: SpringSource, config?: SpringDefinition, options?: SpringOptions): Spring
   /**
    * Creates a composite spring over a numeric shape: a plain object or
    * array, nested arbitrarily, whose leaves are all numbers. Each leaf
    * becomes an independently sprung channel.
    *
-   * `config` applies per channel: a single `SpringConfig` for every
+   * `config` applies per channel: a single `SpringDefinition` for every
    * channel, or a shape mirroring the value with configs at any level.
+   * `options.purpose` marks reduced-motion behavior the same way, per
+   * channel — an `'appearance'` channel keeps animating.
    */
-  createSpringObject<T extends object>(
+  createSpring<T extends object>(
     value: T & Shape<T>,
     config?: ConfigShape<T>,
-  ): SpringObject<T>
+    options?: CompositeSpringOptions<T>,
+  ): CompositeSpring<T>
   /**
    * Advances every moving spring by `dt` milliseconds. For manual
    * stepping in place of `start()` — tests, custom loops, offline
@@ -156,7 +242,8 @@ export interface SpringSystem {
   /**
    * Whether springs currently snap instead of animating, per the
    * `reducedMotion` option and, in `'user'` mode, the live OS setting.
-   * Read it to gate purely decorative effects of your own.
+   * Read it to gate purely decorative effects of your own. Springs
+   * created with `purpose: 'appearance'` animate regardless.
    */
   readonly reducedMotion: boolean
   /**

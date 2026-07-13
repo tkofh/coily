@@ -55,7 +55,8 @@ function simulateToSettling(
   const est = config.computeTimeRemaining({ position: displacement, velocity: 0 })
 
   const system = createSpringSystem()
-  const spring = system.createSpring({ target: params.target, value: params.value }, config)
+  const spring = system.createSpring(params.value, config)
+  spring.target = params.target
 
   const dt = est / iterations
 
@@ -104,7 +105,8 @@ describe('property-based: no NaN or Infinity', () => {
         const dt = est / ITERATIONS
 
         const system = createSpringSystem()
-        const spring = system.createSpring({ target: params.target, value: params.value }, config)
+        const spring = system.createSpring(params.value, config)
+        spring.target = params.target
 
         for (let i = 0; i < ITERATIONS; i++) {
           system.advance(dt)
@@ -137,8 +139,10 @@ describe('property-based: symmetry', () => {
         const system2 = createSpringSystem()
         const config = defineSpring({ mass, tension, damping })
 
-        const s1 = system1.createSpring({ target: 0, value: displacement }, config)
-        const s2 = system2.createSpring({ target: 0, value: -displacement }, config)
+        const s1 = system1.createSpring(displacement, config)
+        s1.target = 0
+        const s2 = system2.createSpring(-displacement, config)
+        s2.target = 0
 
         const est = config.computeTimeRemaining({ position: displacement, velocity: 0 })
         const dt = est / ITERATIONS
@@ -173,7 +177,8 @@ describe('property-based: monotonicity for overdamped springs', () => {
       fc.property(overdampedArb, ({ mass, tension, damping, displacement }) => {
         const config = defineSpring({ mass, tension, damping })
         const system = createSpringSystem()
-        const spring = system.createSpring({ target: 0, value: displacement }, config)
+        const spring = system.createSpring(displacement, config)
+        spring.target = 0
 
         const est = config.computeTimeRemaining({ position: displacement, velocity: 0 })
         const dt = est / ITERATIONS
@@ -215,7 +220,8 @@ describe('property-based: energy', () => {
       fc.property(underdampedArb, ({ mass, tension, damping, displacement }) => {
         const config = defineSpring({ mass, tension, damping })
         const system = createSpringSystem()
-        const spring = system.createSpring({ target: 0, value: displacement }, config)
+        const spring = system.createSpring(displacement, config)
+        spring.target = 0
 
         const est = config.computeTimeRemaining({ position: displacement, velocity: 0 })
         const dt = est / ITERATIONS
@@ -258,7 +264,8 @@ describe('property-based: target changes', () => {
             damping: params.damping,
           })
           const system = createSpringSystem()
-          const spring = system.createSpring({ target: params.target, value: params.value }, config)
+          const spring = system.createSpring(params.value, config)
+          spring.target = params.target
 
           // Run for a fraction of estimated settling time
           const initialEst = config.computeTimeRemaining({

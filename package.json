@@ -1,5 +1,5 @@
 {
-  "name": "coily",
+  "name": "coily-workspace",
   "private": true,
   "scripts": {
     "build": "turbo run build",
@@ -7,12 +7,13 @@
     "dev:nuxt": "turbo run dev --filter=playground-nuxt...",
     "deps:reinstall": "pnpm dlx rimraf --glob node_modules packages/*/node_modules pnpm-lock.yaml && pnpm install",
     "deps:upgrade": "pnpm update --recursive --latest && pnpm dedupe",
-    "lint": "oxlint --fix",
-    "lint:report": "oxlint",
+    "typecheck": "turbo run check",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
     "format": "oxfmt --write .",
-    "format:report": "oxfmt --check .",
-    "check": "oxlint --fix && oxfmt --write .",
-    "check:report": "oxlint && oxfmt --check .",
+    "format:check": "oxfmt --check .",
+    "check": "turbo run check && oxlint && oxfmt --check .",
+    "fix": "oxlint --fix && oxfmt --write .",
     "test": "turbo run test",
     "version-packages": "changeset version && pnpm install --lockfile-only && pnpm run format"
   },

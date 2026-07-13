@@ -2,7 +2,7 @@ import { invariant } from './util.ts'
 
 /**
  * A spring's instantaneous motion, measured relative to its target.
- * `SpringConfig.computeTimeRemaining` takes one; build it from a live
+ * `SpringDefinition.computeTimeRemaining` takes one; build it from a live
  * spring as `{ position: spring.value - spring.target, velocity: spring.velocity }`.
  */
 export interface SpringState {
@@ -143,7 +143,12 @@ export type SpringOptionKeys =
  */
 type Exact<T> = T & { [K in Exclude<SpringOptionKeys, keyof T>]?: undefined }
 
-export type SpringOptions =
+/**
+ * Every input `defineSpring` accepts: one of the documented parameter
+ * combinations, exactly as written — keys from different combinations
+ * don't mix.
+ */
+export type SpringDefinitionOptions =
   | Exact<DirectOptions>
   | Exact<TensionRatioOptions>
   | Exact<TensionBounceOptions>
@@ -165,9 +170,9 @@ export type SpringOptions =
  * Instances are frozen and safe to share between springs; to change a
  * spring's behavior, assign a new config via `spring.config`.
  */
-export class SpringConfig {
+export class SpringDefinition {
   /** The config for springs created without one: critically damped, settling in about 500ms. */
-  static readonly default = new SpringConfig({ dampingRatio: 1, duration: 500 })
+  static readonly default = new SpringDefinition({ dampingRatio: 1, duration: 500 })
 
   /** Mass of the moving value, as provided or derived. */
   readonly mass: number
@@ -192,7 +197,7 @@ export class SpringConfig {
   /** Resting threshold in value units: half a unit in the last `precision` place. */
   readonly restingMagnitude: number
 
-  constructor(input: SpringOptions) {
+  constructor(input: SpringDefinitionOptions) {
     const raw = input as unknown as Record<string, number | undefined>
 
     const mass = raw.mass
@@ -202,6 +207,16 @@ export class SpringConfig {
     const duration = raw.duration !== undefined ? raw.duration / 1000 : undefined
     const displacement = raw.displacement ?? 1
     const precision = raw.precision ?? 2
+
+    // Every provided option must be a finite number before its own range
+    // check: comparisons reject NaN on their own, but let infinities
+    // through to poison the derived parameters.
+    for (const key of Object.keys(raw)) {
+      const value = raw[key]
+      if (value !== undefined) {
+        invariant(Number.isFinite(value), () => `Invalid ${key}: expected a finite number`)
+      }
+    }
 
     // Validate individual values
     if (mass !== undefined) invariant(mass > 0, 'Mass must be greater than 0')
@@ -352,41 +367,41 @@ export class SpringConfig {
  * Creates a config from direct physical parameters: you set stiffness
  * and friction exactly.
  */
-export function defineSpring(input: Exact<DirectOptions>): SpringConfig
+export function defineSpring(input: Exact<DirectOptions>): SpringDefinition
 /**
  * Creates a config from stiffness and motion character. Damping is
  * derived as `2 * dampingRatio * sqrt(mass * tension)`.
  */
-export function defineSpring(input: Exact<TensionRatioOptions>): SpringConfig
+export function defineSpring(input: Exact<TensionRatioOptions>): SpringDefinition
 /**
  * Creates a config from stiffness and bounciness. Damping is derived to
  * match the requested bounce, from -1 (no bounce, slow settle) to 1
  * (maximum bounce).
  */
-export function defineSpring(input: Exact<TensionBounceOptions>): SpringConfig
+export function defineSpring(input: Exact<TensionBounceOptions>): SpringDefinition
 /**
  * Creates a config from friction and motion character. Tension is
  * derived as `damping^2 / (4 * dampingRatio^2 * mass)`; `dampingRatio`
  * must be greater than 0.
  */
-export function defineSpring(input: Exact<DampingRatioOptions>): SpringConfig
+export function defineSpring(input: Exact<DampingRatioOptions>): SpringDefinition
 /**
  * Creates a config from friction and bounciness. Tension is derived to
  * match the requested bounce; `bounce` must be less than 1.
  */
-export function defineSpring(input: Exact<DampingBounceOptions>): SpringConfig
+export function defineSpring(input: Exact<DampingBounceOptions>): SpringDefinition
 /**
  * Creates a config from all three physical knobs. Mass is derived as
  * `damping^2 / (4 * dampingRatio^2 * tension)` and cannot be provided;
  * `dampingRatio` must be greater than 0.
  */
-export function defineSpring(input: Exact<TensionDampingRatioOptions>): SpringConfig
+export function defineSpring(input: Exact<TensionDampingRatioOptions>): SpringDefinition
 /**
  * Creates a config from all three physical knobs. Mass is derived from
  * tension, damping, and the requested bounce, and cannot be provided;
  * `bounce` must be less than 1.
  */
-export function defineSpring(input: Exact<TensionDampingBounceOptions>): SpringConfig
+export function defineSpring(input: Exact<TensionDampingBounceOptions>): SpringDefinition
 /**
  * Tunes the spring to settle within `duration` milliseconds, with
  * `dampingRatio` setting the motion's character. Tension and damping are
@@ -402,7 +417,7 @@ export function defineSpring(input: Exact<TensionDampingBounceOptions>): SpringC
  * defineSpring({ duration: 750, dampingRatio: 1, displacement: 300 })
  * ```
  */
-export function defineSpring(input: Exact<DurationOptions>): SpringConfig
+export function defineSpring(input: Exact<DurationOptions>): SpringDefinition
 /**
  * Tunes the spring to settle within `duration` milliseconds, with
  * `bounce` setting how oscillatory the settling motion is. Tension and
@@ -412,7 +427,7 @@ export function defineSpring(input: Exact<DurationOptions>): SpringConfig
  * from the target — pass a `displacement` matching your animation range
  * for accurate timing.
  */
-export function defineSpring(input: Exact<BounceDurationOptions>): SpringConfig
+export function defineSpring(input: Exact<BounceDurationOptions>): SpringDefinition
 /**
  * Tunes a spring of the given stiffness to settle within `duration`
  * milliseconds. Mass is derived from tension and the computed natural
@@ -423,7 +438,7 @@ export function defineSpring(input: Exact<BounceDurationOptions>): SpringConfig
  * from the target — pass a `displacement` matching your animation range
  * for accurate timing.
  */
-export function defineSpring(input: Exact<TensionDurationOptions>): SpringConfig
+export function defineSpring(input: Exact<TensionDurationOptions>): SpringDefinition
 /**
  * Tunes a spring of the given stiffness to settle within `duration`
  * milliseconds, with `bounce` setting how oscillatory the settling motion
@@ -434,7 +449,7 @@ export function defineSpring(input: Exact<TensionDurationOptions>): SpringConfig
  * from the target — pass a `displacement` matching your animation range
  * for accurate timing.
  */
-export function defineSpring(input: Exact<TensionBounceDurationOptions>): SpringConfig
+export function defineSpring(input: Exact<TensionBounceDurationOptions>): SpringDefinition
 /**
  * Tunes a spring of the given friction to settle within `duration`
  * milliseconds. Mass is derived from damping, `dampingRatio`, and the
@@ -445,7 +460,7 @@ export function defineSpring(input: Exact<TensionBounceDurationOptions>): Spring
  * from the target — pass a `displacement` matching your animation range
  * for accurate timing.
  */
-export function defineSpring(input: Exact<DampingDurationOptions>): SpringConfig
+export function defineSpring(input: Exact<DampingDurationOptions>): SpringDefinition
 /**
  * Tunes a spring of the given friction to settle within `duration`
  * milliseconds, with `bounce` setting how oscillatory the settling motion
@@ -456,7 +471,7 @@ export function defineSpring(input: Exact<DampingDurationOptions>): SpringConfig
  * from the target — pass a `displacement` matching your animation range
  * for accurate timing.
  */
-export function defineSpring(input: Exact<DampingBounceDurationOptions>): SpringConfig
-export function defineSpring(input: SpringOptions): SpringConfig {
-  return new SpringConfig(input)
+export function defineSpring(input: Exact<DampingBounceDurationOptions>): SpringDefinition
+export function defineSpring(input: SpringDefinitionOptions): SpringDefinition {
+  return new SpringDefinition(input)
 }

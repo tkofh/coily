@@ -1,7 +1,7 @@
 /**
  * Defers callbacks while inside a batch or tick: `request` runs the
  * callback immediately at depth 0 and queues it — deduplicated — until
- * the outermost exit otherwise. Spring objects use it to coalesce
+ * the outermost exit otherwise. Composite springs use it to coalesce
  * per-channel events into composite ones.
  */
 export class FlushQueue {

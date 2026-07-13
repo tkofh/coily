@@ -1,19 +1,22 @@
 import { describe, expect, test } from 'vitest'
-import { defineComponent, h, nextTick, ref } from 'vue'
+import { defineComponent, h, nextTick, ref, watchSyncEffect } from 'vue'
 import { mount } from '@vue/test-utils'
-import { createSpringSystem } from '../../src/index.ts'
+import { createSpringSystem, mapSpring } from '../../src/index.ts'
 import { SpringSystemKey } from '../../src/vue/system.ts'
 import { useSpring, type SpringRef } from '../../src/vue/spring.ts'
 import type { MaybeRefOrGetter } from 'vue'
 
-interface SpringOptions {
+interface SpringDefinitionOptions {
   mass: number
   tension: number
   damping: number
   precision?: number
 }
 
-function mountSpring(target: MaybeRefOrGetter<number>, options?: MaybeRefOrGetter<SpringOptions>) {
+function mountSpring(
+  target: MaybeRefOrGetter<number>,
+  options?: MaybeRefOrGetter<SpringDefinitionOptions>,
+) {
   const system = createSpringSystem()
   let spring!: SpringRef
   const wrapper = mount(
@@ -195,6 +198,149 @@ describe('useSpring', () => {
       if (leader.isResting.value && follower.isResting.value) break
     }
     expect(follower.value).toBe(100)
+  })
+
+  test('a mapped SpringRef is a valid target', async () => {
+    const system = createSpringSystem()
+    const target = ref(0)
+    let leader!: SpringRef
+    let follower!: SpringRef
+    mount(
+      defineComponent({
+        setup() {
+          leader = useSpring(target)
+          follower = useSpring(mapSpring(leader, (value) => value + 10))
+          return {}
+        },
+        render: () => h('div'),
+      }),
+      { global: { provide: { [SpringSystemKey as symbol]: system } } },
+    )
+
+    expect(follower.value).toBe(10)
+
+    target.value = 100
+    await nextTick()
+    for (let i = 0; i < 1000; i++) {
+      system.advance(16)
+      if (leader.isResting.value && follower.isResting.value) break
+    }
+    expect(follower.value).toBe(110)
+  })
+
+  test('spring refs compose as mapSpring leaves', async () => {
+    const system = createSpringSystem()
+    const xTarget = ref(0)
+    const yTarget = ref(0)
+    let x!: SpringRef
+    let y!: SpringRef
+    let sum!: SpringRef
+    mount(
+      defineComponent({
+        setup() {
+          x = useSpring(xTarget)
+          y = useSpring(yTarget)
+          sum = useSpring(mapSpring({ x, y }, (values) => values.x + values.y))
+          return {}
+        },
+        render: () => h('div'),
+      }),
+      { global: { provide: { [SpringSystemKey as symbol]: system } } },
+    )
+
+    expect(sum.value).toBe(0)
+
+    xTarget.value = 30
+    yTarget.value = 40
+    await nextTick()
+    for (let i = 0; i < 1000; i++) {
+      system.advance(16)
+      if (x.isResting.value && y.isResting.value && sum.isResting.value) break
+    }
+    expect(sum.value).toBe(70)
+  })
+
+  test('a getter target switches leaders without tracking their motion', async () => {
+    const system = createSpringSystem()
+    const targetA = ref(10)
+    const useSecond = ref(false)
+    let gets = 0
+    let a!: SpringRef
+    let b!: SpringRef
+    let follower!: SpringRef
+    mount(
+      defineComponent({
+        setup() {
+          a = useSpring(targetA)
+          b = useSpring(20)
+          follower = useSpring(() => {
+            gets++
+            return useSecond.value ? b : a
+          })
+          return {}
+        },
+        render: () => h('div'),
+      }),
+      { global: { provide: { [SpringSystemKey as symbol]: system } } },
+    )
+
+    expect(follower.value).toBe(10)
+    const getsAfterSetup = gets
+
+    // The first leader animating must not re-run the getter: following
+    // reads through the source slot, not the ref's tracked getter.
+    targetA.value = 100
+    await nextTick()
+    for (let i = 0; i < 20; i++) system.advance(16)
+    expect(gets).toBe(getsAfterSetup)
+    expect(follower.value).toBeGreaterThan(10)
+
+    // Switching the getter's own dependency re-follows immediately.
+    useSecond.value = true
+    expect(gets).toBe(getsAfterSetup + 1)
+    for (let i = 0; i < 1000; i++) {
+      system.advance(16)
+      if (b.isResting.value && follower.isResting.value) break
+    }
+    expect(follower.value).toBe(20)
+  })
+
+  test('a synchronous leader write inside an effect stays untracked', () => {
+    const system = createSpringSystem()
+    const trigger = ref(0)
+    let runs = 0
+    let leader!: SpringRef
+    mount(
+      defineComponent({
+        setup() {
+          leader = useSpring(0)
+          // The follower subscribes through the leader ref's source slot;
+          // its retargets read the backing spring, not the tracked getter.
+          useSpring(mapSpring(leader, (value) => value))
+          watchSyncEffect(() => {
+            runs++
+            void trigger.value
+            // Displacing emits update synchronously: the follower
+            // retargets inside this very effect run.
+            leader.value = 50
+          })
+          return {}
+        },
+        render: () => h('div'),
+      }),
+      { global: { provide: { [SpringSystemKey as symbol]: system } } },
+    )
+
+    expect(runs).toBe(1)
+
+    // The leader springs back, updating every frame; a phantom dependency
+    // would re-run the effect (and re-displace the leader) each tick.
+    for (let i = 0; i < 60; i++) system.advance(16)
+    expect(runs).toBe(1)
+
+    // The effect's real dependency still triggers it.
+    trigger.value++
+    expect(runs).toBe(2)
   })
 
   test('settled resolves when the spring settles', async () => {

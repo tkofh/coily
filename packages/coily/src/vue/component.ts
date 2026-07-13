@@ -1,16 +1,24 @@
 import { type SlotsType, defineComponent, toRefs } from 'vue'
 import { useSpring } from './spring.ts'
-import type { SpringConfig, SpringOptions } from '../config.ts'
+import type { SpringDefinition, SpringDefinitionOptions } from '../config.ts'
+import type { Purpose } from '../spring.ts'
 
 export interface SpringValueProps {
   /** The value to animate toward. Changing it retargets the spring, momentum intact. */
   target: number
   /**
-   * Spring config: a `SpringConfig` or any option shape `defineSpring`
+   * Spring config: a `SpringDefinition` or any option shape `defineSpring`
    * accepts. Changing it reconfigures the spring in place; omit it for
    * the default.
    */
-  config?: SpringOptions | SpringConfig
+  config?: SpringDefinitionOptions | SpringDefinition
+  /**
+   * What the spring animates — `'motion'` (default) or `'appearance'`.
+   * `'appearance'` (a cross-fade, a color) keeps animating under reduced
+   * motion. Read once at mount; later changes are ignored.
+   * @default 'motion'
+   */
+  purpose?: Purpose
 }
 
 /** `SpringValue` emits no events. */
@@ -40,7 +48,7 @@ export type SpringValueSlots = SlotsType<{ default: SpringValueSlotScope }>
  *
  * @example
  * ```vue
- * <SpringValue :target="expanded ? 1 : 0" v-slot="{ value }">
+ * <SpringValue :target="expanded ? 1 : 0" purpose="appearance" v-slot="{ value }">
  *   <div :style="{ opacity: value }" />
  * </SpringValue>
  * ```
@@ -53,7 +61,8 @@ export const SpringValue = defineComponent<
 >(
   (props, { slots, expose }) => {
     const { target, config } = toRefs(props)
-    const spring = useSpring(target, config)
+    // purpose is fixed at creation, so read it once rather than as a ref.
+    const spring = useSpring(target, config, { purpose: props.purpose })
 
     expose({
       value: spring,
@@ -74,6 +83,6 @@ export const SpringValue = defineComponent<
   },
   {
     name: 'SpringValue',
-    props: ['target', 'config'],
+    props: ['target', 'config', 'purpose'],
   },
 )

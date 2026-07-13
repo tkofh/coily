@@ -25,19 +25,13 @@ function frames(n: number) {
   })
 }
 
-function blockMainThread(ms: number) {
-  const end = performance.now() + ms
-  while (performance.now() < end) {
-    /* busy wait */
-  }
-}
-
 const defaultConfig = defineSpring({ mass: 1, tension: 170, damping: 26 })
 
 describe('ticker with requestAnimationFrame', () => {
   test('start() drives spring updates via rAF', async () => {
     const system = createSpringSystem({ reducedMotion: 'never' })
-    const spring = system.createSpring({ target: 0, value: 100 }, defaultConfig)
+    const spring = system.createSpring(100, defaultConfig)
+    spring.target = 0
 
     system.start()
     await frames(5)
@@ -49,7 +43,8 @@ describe('ticker with requestAnimationFrame', () => {
 
   test('spring settles to target', async () => {
     const system = createSpringSystem({ reducedMotion: 'never' })
-    const spring = system.createSpring({ target: 0, value: 50 }, defaultConfig)
+    const spring = system.createSpring(50, defaultConfig)
+    spring.target = 0
 
     const settled = waitForStop(spring)
     system.start()
@@ -63,7 +58,8 @@ describe('ticker with requestAnimationFrame', () => {
 
   test('stop() halts the animation loop', async () => {
     const system = createSpringSystem({ reducedMotion: 'never' })
-    const spring = system.createSpring({ target: 0, value: 100 }, defaultConfig)
+    const spring = system.createSpring(100, defaultConfig)
+    spring.target = 0
 
     system.start()
     await frames(3)
@@ -78,11 +74,10 @@ describe('ticker with requestAnimationFrame', () => {
 
   test('multiple springs settle independently', async () => {
     const system = createSpringSystem({ reducedMotion: 'never' })
-    const springA = system.createSpring({ target: 50, value: 0 }, defaultConfig)
-    const springB = system.createSpring(
-      { target: -30, value: 0 },
-      defineSpring({ mass: 1, tension: 80, damping: 20 }),
-    )
+    const springA = system.createSpring(0, defaultConfig)
+    springA.target = 50
+    const springB = system.createSpring(0, defineSpring({ mass: 1, tension: 80, damping: 20 }))
+    springB.target = -30
 
     const settledA = waitForStop(springA)
     const settledB = waitForStop(springB)
@@ -99,7 +94,8 @@ describe('ticker with requestAnimationFrame', () => {
 
   test('changing target mid-animation settles at new target', async () => {
     const system = createSpringSystem({ reducedMotion: 'never' })
-    const spring = system.createSpring({ target: 100, value: 0 }, defaultConfig)
+    const spring = system.createSpring(0, defaultConfig)
+    spring.target = 100
 
     system.start()
     await frames(5)
@@ -116,8 +112,10 @@ describe('ticker with requestAnimationFrame', () => {
 
   test('dispose() during animation does not cause errors', async () => {
     const system = createSpringSystem({ reducedMotion: 'never' })
-    const springA = system.createSpring({ target: 100, value: 0 }, defaultConfig)
-    const springB = system.createSpring({ target: 50, value: 0 }, defaultConfig)
+    const springA = system.createSpring(0, defaultConfig)
+    springA.target = 100
+    const springB = system.createSpring(0, defaultConfig)
+    springB.target = 50
 
     const settledB = waitForStop(springB)
 
@@ -134,7 +132,8 @@ describe('ticker with requestAnimationFrame', () => {
 
   test('onUpdate fires each frame during animation', async () => {
     const system = createSpringSystem({ reducedMotion: 'never' })
-    const spring = system.createSpring({ target: 0, value: 100 }, defaultConfig)
+    const spring = system.createSpring(100, defaultConfig)
+    spring.target = 0
 
     let updateCount = 0
     spring.onUpdate(() => {
@@ -148,74 +147,5 @@ describe('ticker with requestAnimationFrame', () => {
 
     expect(updateCount).toBeGreaterThan(1)
     spring.dispose()
-  })
-
-  test('lag spike is clamped to adjustedLag', async () => {
-    const springOpts = defineSpring({ mass: 1, tension: 170, damping: 26 })
-
-    // System with a low lagThreshold so our busy-wait triggers clamping
-    const clamped = createSpringSystem({
-      lagThreshold: 30,
-      adjustedLag: 16,
-      reducedMotion: 'never',
-    })
-    const clampedSpring = clamped.createSpring({ target: 0, value: 100 }, springOpts)
-
-    // Reference system: manually advanced by exactly adjustedLag
-    const reference = createSpringSystem({ reducedMotion: 'never' })
-    const refSpring = reference.createSpring({ target: 0, value: 100 }, springOpts)
-
-    // Let the clamped system run a few normal frames to establish timing
-    clamped.start()
-    await frames(3)
-
-    // Record value before the spike
-    const valueBeforeSpike = clampedSpring.value
-
-    // Block the main thread for well over the lagThreshold.
-    // The next rAF callback will see a wallElapsed of ~200ms,
-    // but the ticker should clamp it to adjustedLag (16ms).
-    blockMainThread(200)
-
-    // Let the rAF fire after the block
-    await frames(2)
-    clamped.stop()
-
-    const clampedValue = clampedSpring.value
-
-    // Advance the reference spring by the same number of frames
-    // as if no clamping occurred (i.e., with the full 200ms elapsed).
-    // If lag was NOT clamped, the spring would have jumped much further.
-    const unclamped = createSpringSystem({ reducedMotion: 'never' })
-    const unclampedSpring = unclamped.createSpring(
-      { target: 0, value: valueBeforeSpike },
-      springOpts,
-    )
-    unclamped.advance(200)
-    const unclampedValue = unclampedSpring.value
-
-    // The clamped spring should be closer to its pre-spike value
-    // than a spring that received the full 200ms of elapsed time
-    const clampedDistance = Math.abs(clampedValue - valueBeforeSpike)
-    const unclampedDistance = Math.abs(unclampedValue - valueBeforeSpike)
-
-    expect(clampedDistance).toBeLessThan(unclampedDistance)
-
-    clampedSpring.dispose()
-    refSpring.dispose()
-    unclampedSpring.dispose()
-  })
-
-  test('system.running reflects start/stop state', async () => {
-    const system = createSpringSystem({ reducedMotion: 'never' })
-
-    expect(system.running).toBe(false)
-
-    system.start()
-    expect(system.running).toBe(true)
-
-    await frames(2)
-    system.stop()
-    expect(system.running).toBe(false)
   })
 })

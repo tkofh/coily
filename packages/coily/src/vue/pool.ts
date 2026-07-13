@@ -1,7 +1,9 @@
 import { onScopeDispose } from 'vue'
-import type { SpringConfig } from '../config.ts'
-import type { ConfigShape, Shape, SpringObject } from '../spring-object.ts'
-import type { Spring, SpringPosition } from '../spring.ts'
+import type { SpringDefinition } from '../config.ts'
+import type { ConfigShape, Shape, CompositeSpring } from '../composite-spring.ts'
+import type { Spring } from '../spring.ts'
+import type { SpringOptions, CompositeSpringOptions } from '../system.ts'
+import type { SpringSource } from '../spring-source.ts'
 import { injectSpringSystem } from './reactive-spring.ts'
 
 /**
@@ -13,20 +15,27 @@ import { injectSpringSystem } from './reactive-spring.ts'
  */
 export interface SpringPool {
   /**
-   * Creates a pooled spring at `position` — a number for a spring at
-   * rest, or a target/value pair for one created displaced or following
-   * another spring. Without `config`, the default applies.
+   * Creates a pooled spring at rest at `value`. Without `config`, the
+   * default applies. `options.purpose` sets reduced-motion behavior —
+   * `'appearance'` keeps animating, `'motion'` (default) snaps.
    */
-  createSpring(position: SpringPosition, config?: SpringConfig): Spring
+  createSpring(value: number, config?: SpringDefinition, options?: SpringOptions): Spring
+  /**
+   * Creates a pooled spring already following `source`, starting at its
+   * current value. `options.purpose` sets reduced-motion behavior.
+   */
+  createSpring(source: SpringSource, config?: SpringDefinition, options?: SpringOptions): Spring
   /**
    * Creates a pooled composite spring over a numeric shape whose leaves
-   * are all numbers. `config` applies per channel: one `SpringConfig`
-   * for all, or a shape with configs at any level.
+   * are all numbers. `config` applies per channel: one `SpringDefinition`
+   * for all, or a shape with configs at any level. `options.purpose` sets
+   * reduced-motion behavior per channel the same way.
    */
-  createSpringObject<T extends object>(
+  createSpring<T extends object>(
     value: T & Shape<T>,
     config?: ConfigShape<T>,
-  ): SpringObject<T>
+    options?: CompositeSpringOptions<T>,
+  ): CompositeSpring<T>
 }
 
 interface PoolSpring {
@@ -62,10 +71,25 @@ export function useSpringPool(): SpringPool {
     }
   }, true)
 
-  return {
-    createSpring: (position, config) => adopt(system.createSpring(position, config)),
-    createSpringObject<T extends object>(value: T & Shape<T>, config?: ConfigShape<T>) {
-      return adopt(system.createSpringObject<T>(value, config))
-    },
-  }
+  // The pool mirrors the system's `createSpring` overloads but only wires
+  // the result to the scope's disposer, so every overload would forward
+  // the same args to the same call. `system.createSpring` already
+  // dispatches on the value at runtime, so call it through one widened
+  // signature (bound, since it reads `this`) and let the outer cast
+  // restore the overloads for callers.
+  const create = (
+    system.createSpring as (
+      value: number | SpringSource | Record<string, number>,
+      config?: SpringDefinition | ConfigShape<Record<string, number>>,
+      options?: SpringOptions | CompositeSpringOptions<Record<string, number>>,
+    ) => Spring | CompositeSpring<Record<string, number>>
+  ).bind(system)
+
+  const createSpring = ((
+    value: number | SpringSource | Record<string, number>,
+    config?: SpringDefinition | ConfigShape<Record<string, number>>,
+    options?: SpringOptions | CompositeSpringOptions<Record<string, number>>,
+  ) => adopt(create(value, config, options))) as SpringPool['createSpring']
+
+  return { createSpring }
 }
