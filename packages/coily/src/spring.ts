@@ -3,7 +3,7 @@ import type { MotionSet } from './motion-set.ts'
 import { Motion } from './motion.ts'
 import { type SpringSource, SpringSourceSymbol, isSpringSource } from './spring-source.ts'
 import type { KinematicSource, KinematicSourceApi } from './kinematic-source.ts'
-import { invariant } from './util.ts'
+import { invariant, RESOLVED } from './util.ts'
 
 /**
  * What a spring can animate toward: a fixed number, or a `SpringSource`
@@ -11,9 +11,6 @@ import { invariant } from './util.ts'
  * whose live value the spring follows.
  */
 export type SpringTarget = number | SpringSource
-
-// Shared so resting and disposed springs don't allocate a promise per read.
-const RESOLVED = Promise.resolve()
 
 /**
  * One animated number, driven toward its target with damped spring

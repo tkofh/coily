@@ -13,7 +13,7 @@ import {
 import { Spring } from './spring.ts'
 import { type SpringSource, SpringSourceSymbol, isSpringSource } from './spring-source.ts'
 import type { KinematicSource, KinematicSourceApi } from './kinematic-source.ts'
-import { invariant, isNumber, isRecordOrArray } from './util.ts'
+import { invariant, isNumber, isRecordOrArray, RESOLVED } from './util.ts'
 
 /**
  * Compile-time validation of a value shape: every channel must be a `number`,
@@ -151,9 +151,6 @@ const assignConfig = (spring: Spring, config: SpringDefinition | null) => {
 const followChannel = (mine: Spring, theirs: Spring) => {
   mine.target = theirs
 }
-
-// Shared so resting and disposed composite springs don't allocate a promise per read.
-const RESOLVED = Promise.resolve()
 
 /**
  * A composite spring over a fixed numeric shape — a nested plain object
