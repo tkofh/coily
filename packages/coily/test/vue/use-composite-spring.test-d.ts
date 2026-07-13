@@ -72,7 +72,8 @@ useSpring(() => 10)
 // ── Linked object refs ──────────────────────────────────────────────
 
 // Chain-building unions (ref-or-leader, as in a follower loop) collapse
-// into the Ref overload; runtime dispatch still links via the instance.
+// into the shape overload's ref member; runtime dispatch still links via
+// the instance.
 declare const chainTarget:
   | Ref<{ x: number; y: number }>
   | CompositeSpringRef<{ x: number; y: number }>

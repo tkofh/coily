@@ -387,15 +387,16 @@ describe('Spring: following', () => {
       const listeners = new Set<() => void>()
       let current = 5
       const source: SpringSource = {
-        [SpringSourceSymbol]: true,
-        get value() {
-          return current
+        [SpringSourceSymbol]: {
+          get value() {
+            return current
+          },
+          onUpdate: (callback) => {
+            listeners.add(callback)
+            return () => listeners.delete(callback)
+          },
+          onDispose: () => () => {},
         },
-        onUpdate: (callback) => {
-          listeners.add(callback)
-          return () => listeners.delete(callback)
-        },
-        onDispose: () => () => {},
       }
 
       const follower = system.createSpring(0)
@@ -499,16 +500,17 @@ describe('Spring: following', () => {
       let subscriptions = 0
       let current = 5
       const source: SpringSource = {
-        [SpringSourceSymbol]: true,
-        get value() {
-          return current
+        [SpringSourceSymbol]: {
+          get value() {
+            return current
+          },
+          onUpdate: (callback) => {
+            subscriptions++
+            listeners.add(callback)
+            return () => listeners.delete(callback)
+          },
+          onDispose: () => () => {},
         },
-        onUpdate: (callback) => {
-          subscriptions++
-          listeners.add(callback)
-          return () => listeners.delete(callback)
-        },
-        onDispose: () => () => {},
       }
 
       const follower = system.createSpring(0)

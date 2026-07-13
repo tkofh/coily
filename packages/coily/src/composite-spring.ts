@@ -10,7 +10,12 @@ import {
   describePath,
 } from './channel-tree.ts'
 import { Spring } from './spring.ts'
-import { type SpringSource, SpringSourceSymbol, isSpringSource } from './spring-source.ts'
+import {
+  type SpringSource,
+  type SpringSourceApi,
+  SpringSourceSymbol,
+  isSpringSource,
+} from './spring-source.ts'
 import { invariant, isNumber, isRecordOrArray } from './util.ts'
 
 /**
@@ -130,7 +135,7 @@ function acceptChannelTarget(input: unknown, path: string): number | SpringSourc
     return input
   }
   invariant(
-    isSpringSource(input) && typeof input.value === 'number',
+    isSpringSource(input) && typeof input[SpringSourceSymbol].value === 'number',
     () => `Invalid value at '${path}': expected a finite number or a scalar SpringSource`,
   )
   return input as SpringSource
@@ -176,8 +181,10 @@ const RESOLVED = Promise.resolve()
  * channel values.
  */
 export class CompositeSpring<in out T extends object> implements SpringSource<ReadonlyShape<T>> {
-  /** Brands the composite as a `SpringSource`, so `mapSpring` can read it. */
-  readonly [SpringSourceSymbol] = true as const
+  /** Brands the composite as a `SpringSource` whose api is the composite itself. */
+  get [SpringSourceSymbol](): SpringSourceApi<ReadonlyShape<T>> {
+    return this
+  }
 
   readonly #motions: MotionSet
   readonly #map: ChannelTree<Spring>

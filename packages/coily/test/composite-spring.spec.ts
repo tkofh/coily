@@ -556,15 +556,16 @@ describe('CompositeSpring: following', () => {
     const listeners = new Set<() => void>()
     let current = 5
     const source: SpringSource = {
-      [SpringSourceSymbol]: true,
-      get value() {
-        return current
+      [SpringSourceSymbol]: {
+        get value() {
+          return current
+        },
+        onUpdate: (callback) => {
+          listeners.add(callback)
+          return () => listeners.delete(callback)
+        },
+        onDispose: () => () => {},
       },
-      onUpdate: (callback) => {
-        listeners.add(callback)
-        return () => listeners.delete(callback)
-      },
-      onDispose: () => () => {},
     }
     const follower = system.createSpring({ x: 0 }, config)
 

@@ -47,6 +47,16 @@ system.createSpring(channels)
 declare const pair: [number, number]
 const tuple = system.createSpring(pair)
 
+// Array literals infer with exact arity but WIDENED elements, and record
+// literals infer wide — both without a `const` type parameter. Don't add
+// one: `T` is invariant, so `const`'s literal channels (`[0, 0]`,
+// `{ readonly x: 0 }`) would make springs created from different initial
+// values type-incompatible, breaking annotations and follow.
+const arity: CompositeSpring<[number, number]> = system.createSpring([0, 0])
+void arity
+const wide: CompositeSpring<{ x: number }> = system.createSpring({ x: 0 })
+void wide
+
 // ── Value shapes: non-numeric leaves are rejected at the leaf ───────
 
 // @ts-expect-error string channels are not animatable

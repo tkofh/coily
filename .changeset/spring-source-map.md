@@ -6,9 +6,13 @@ Springs can follow live values, not just fixed numbers. `SpringTarget`
 is now `number | SpringSource`, where `SpringSource<T>` is an open
 contract (`T` defaults to `number`): every `Spring` is a source, every
 `CompositeSpring` is a source of its value shape, and any object
-honoring the contract — brand it with `SpringSourceSymbol` — can bridge
-a pointer position or scroll offset into the graph. The contract is
-three members: `value`, `onUpdate`, and `onDispose`.
+honoring the contract can bridge a pointer position or scroll offset
+into the graph. The whole contract lives under `SpringSourceSymbol`:
+the slot holds a `SpringSourceApi` — `value`, `onUpdate`, `onDispose` —
+that followers read. Namespacing it keeps follower reads off the
+object's public face, so a wrapper whose public `value` is reactive (a
+Vue `useSpring` ref) can be a source without followers ever touching
+its reactivity.
 
 `mapSpring` derives new sources by a pure function of existing ones:
 

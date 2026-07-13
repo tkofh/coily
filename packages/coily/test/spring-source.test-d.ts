@@ -13,6 +13,7 @@ import {
   type SpringSystem,
   type CompositeSpring,
   type SpringSource,
+  SpringSourceSymbol,
 } from '../src/index.ts'
 
 declare const a: Spring
@@ -70,6 +71,35 @@ mapSpring([p1, p2], ([from, to]) => (to.y - from.y) / (to.x - from.x))
 
 // @ts-expect-error a composite is not a scalar source, so it cannot be followed
 follower.target = composite
+
+// ── The contract lives under the symbol slot ────────────────────────
+
+// Springs and composites satisfy it with themselves as the api
+a satisfies SpringSource
+composite satisfies SpringSource<{ readonly x: number; readonly y: number }>
+
+// A hand-rolled source is just the slot
+const bridged: SpringSource = {
+  [SpringSourceSymbol]: {
+    value: 0,
+    onUpdate: () => () => {},
+    onDispose: () => () => {},
+  },
+}
+follower.target = bridged
+
+// Followers read through the slot, and its value is read-only
+const api = custom[SpringSourceSymbol]
+const current: number = api.value
+void current
+// @ts-expect-error the api's value is read-only
+api.value = 5
+
+// The source's public face carries nothing
+// @ts-expect-error reads go through the SpringSourceSymbol slot
+void custom.value
+// @ts-expect-error subscriptions go through the SpringSourceSymbol slot
+void custom.onUpdate
 
 // ── The contract carries values only — no config surface ────────────
 

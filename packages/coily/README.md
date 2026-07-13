@@ -170,6 +170,8 @@ const x = useSpring(target, { duration: 500, bounce: 0.3 })
 
 `useSpring` returns a `SpringRef`: a writable ref of the animated value with `velocity`, `isResting`, and `timeRemaining` refs plus `jumpTo()` attached. The target can be a ref, a getter, or another `SpringRef` (which chains the springs). Options are also reactive: swap configs and the spring reconfigures in place.
 
+A `SpringRef` is also a `SpringSource`, and `useSpring` follows any source: chain through `mapSpring` (`useSpring(mapSpring({ x, y }, ({ x, y }) => Math.hypot(x, y)))`), or pass a getter of a source to switch leaders reactively (`useSpring(() => (split.value ? left : right))`). Following bypasses Vue reactivity — followers subscribe to the backing spring directly — so an effect or getter never gains a dependency on a leader's animation.
+
 Numeric shapes work the same way: pass a record or array (plain, ref, or getter) and get a `CompositeSpringRef`. Reads are the deep-readonly composite value, writes take partial shapes, options accept reactive per-channel config shapes, and passing another `CompositeSpringRef` follows it channel-wise. Deeply reactive targets retarget on nested mutation. For several _independent_ scalar springs, map over the targets (composables are loop-safe): `targets.map((t) => useSpring(t))`.
 
 There's also a renderless `<SpringValue :target="n">` component exposing `{ value, velocity, isResting, timeRemaining, jumpTo }` through its default slot.

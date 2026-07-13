@@ -6,5 +6,5 @@
 `SpringSystem` and on `useSpringPool` pools — creating a spring that
 starts at the source's current value and follows it from birth:
 `system.createSpring(mapSpring(lead, ({ x, y }) => Math.hypot(x, y)))`.
-Equivalent to creating at `source.value` and assigning the source to
-`target`.
+Equivalent to creating at the source's current value and assigning the
+source to `target`.

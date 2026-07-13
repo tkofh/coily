@@ -2,11 +2,26 @@ import { describePath } from './channel-tree.ts'
 import { invariant, isArray, isRecordOrArray } from './util.ts'
 
 /**
- * Brands a value as a `SpringSource`. A registry symbol
- * (`Symbol.for('coily/spring-source')`), so sources from one copy of
- * coily are recognized by another when a bundle duplicates the library.
+ * The key under which a `SpringSource` carries its `SpringSourceApi`.
+ * A registry symbol (`Symbol.for('coily/spring-source')`), so sources
+ * from one copy of coily are recognized by another when a bundle
+ * duplicates the library.
  */
 export const SpringSourceSymbol: unique symbol = Symbol.for('coily/spring-source')
+
+/**
+ * What a source exposes to its followers, held under `SpringSourceSymbol`
+ * on the source object. Followers read `value` on every update and
+ * detach on dispose.
+ */
+export interface SpringSourceApi<T = number> {
+  /** The current value, in value units. */
+  readonly value: T
+  /** Subscribes to value changes. Returns an unsubscribe function. */
+  onUpdate(callback: () => void): () => void
+  /** Subscribes to the source being released. Returns an unsubscribe function. */
+  onDispose(callback: () => void): () => void
+}
 
 /**
  * A live value springs can animate toward or derive from. `T` is the
@@ -16,18 +31,18 @@ export const SpringSourceSymbol: unique symbol = Symbol.for('coily/spring-source
  * `SpringSource` of its value shape, and `mapSpring` derives new
  * scalar sources from existing sources of any value.
  *
- * The contract is open — an object with these members can bridge any
+ * The whole contract lives under `SpringSourceSymbol`: the slot holds
+ * the `SpringSourceApi` followers read. Keeping it off the object's
+ * public face matters when the two disagree — a reactive wrapper's
+ * public `value` may track reads into whatever observer is active,
+ * while the slot is the plain channel coily reads from inside ticks
+ * and event callbacks, where tracking must never happen.
+ *
+ * The contract is open — any object carrying the slot can bridge a
  * live value (a pointer position, a scroll offset) into a source.
- * Followers read `value` on every update and detach on dispose.
  */
 export interface SpringSource<T = number> {
-  readonly [SpringSourceSymbol]: true
-  /** The current value, in value units. */
-  readonly value: T
-  /** Subscribes to value changes. Returns an unsubscribe function. */
-  onUpdate(callback: () => void): () => void
-  /** Subscribes to the source being released. Returns an unsubscribe function. */
-  onDispose(callback: () => void): () => void
+  readonly [SpringSourceSymbol]: SpringSourceApi<T>
 }
 
 export function isSpringSource(value: unknown): value is SpringSource<unknown> {
@@ -115,7 +130,8 @@ function compileNode(node: unknown, path: string, leaves: SpringSource<unknown>[
       return () => applyFns(recipe.fns, recipe.read())
     }
     leaves.push(node)
-    return () => node.value
+    const api = node[SpringSourceSymbol]
+    return () => api.value
   }
 
   invariant(
@@ -156,8 +172,8 @@ function compileNode(node: unknown, path: string, leaves: SpringSource<unknown>[
  * leaf of a shape map, or followed by several springs at once.
  *
  * The result is a stateless view, not a spring: it holds no
- * subscriptions and needs no disposal, and reads compute `map(source.value)`
- * on the fly. `map` must be pure — it runs on every read and every
+ * subscriptions and needs no disposal, and reads compute `map` of the
+ * source's current value on the fly. `map` must be pure — it runs on every read and every
  * source update, and nothing re-evaluates it when anything other than
  * `source` changes. Composition is flat: mapping a mapped source
  * extends its pipeline rather than wrapping it, so chains cost one
@@ -194,9 +210,12 @@ export function mapSpring(source: object, map: (value: never) => number): Spring
   let recipe: MappedRecipe
   if (isSpringSource(source)) {
     const flat = RECIPES.get(source)
-    recipe = flat
-      ? { sources: flat.sources, read: flat.read, fns: [...flat.fns, compute] }
-      : { sources: [source], read: () => source.value, fns: [compute] }
+    if (flat) {
+      recipe = { sources: flat.sources, read: flat.read, fns: [...flat.fns, compute] }
+    } else {
+      const api = source[SpringSourceSymbol]
+      recipe = { sources: [source], read: () => api.value, fns: [compute] }
+    }
   } else {
     const leaves: SpringSource<unknown>[] = []
     const read = compileNode(source, '', leaves)
@@ -209,39 +228,41 @@ export function mapSpring(source: object, map: (value: never) => number): Spring
   }
 
   const { sources, read, fns } = recipe
-  const single = sources.length === 1 ? sources[0]! : null
+  const single = sources.length === 1 ? sources[0]![SpringSourceSymbol] : null
+  const apis = single ? null : sources.map((leaf) => leaf[SpringSourceSymbol])
 
   const mapped: SpringSource = Object.freeze({
-    [SpringSourceSymbol]: true as const,
-    get value() {
-      return applyFns(fns, read()) as number
-    },
-    onUpdate: single
-      ? (callback: () => void) => single.onUpdate(callback)
-      : (callback: () => void) => {
-          const unsubscribes = sources.map((leaf) => leaf.onUpdate(callback))
-          return () => {
-            for (const unsubscribe of unsubscribes) unsubscribe()
-          }
-        },
-    onDispose: single
-      ? (callback: () => void) => single.onDispose(callback)
-      : (callback: () => void) => {
-          // The first source to dispose releases the derived value: fire
-          // once, then drop every subscription.
-          let fired = false
-          const unsubscribes = sources.map((leaf) =>
-            leaf.onDispose(() => {
-              if (fired) return
-              fired = true
+    [SpringSourceSymbol]: Object.freeze({
+      get value() {
+        return applyFns(fns, read()) as number
+      },
+      onUpdate: single
+        ? (callback: () => void) => single.onUpdate(callback)
+        : (callback: () => void) => {
+            const unsubscribes = apis!.map((api) => api.onUpdate(callback))
+            return () => {
               for (const unsubscribe of unsubscribes) unsubscribe()
-              callback()
-            }),
-          )
-          return () => {
-            for (const unsubscribe of unsubscribes) unsubscribe()
-          }
-        },
+            }
+          },
+      onDispose: single
+        ? (callback: () => void) => single.onDispose(callback)
+        : (callback: () => void) => {
+            // The first source to dispose releases the derived value: fire
+            // once, then drop every subscription.
+            let fired = false
+            const unsubscribes = apis!.map((api) =>
+              api.onDispose(() => {
+                if (fired) return
+                fired = true
+                for (const unsubscribe of unsubscribes) unsubscribe()
+                callback()
+              }),
+            )
+            return () => {
+              for (const unsubscribe of unsubscribes) unsubscribe()
+            }
+          },
+    }),
   })
   RECIPES.set(mapped, recipe)
   return mapped

@@ -1,7 +1,7 @@
 import type { SpringDefinition } from './config.ts'
 import { MotionSet } from './motion-set.ts'
 import { Spring } from './spring.ts'
-import { type SpringSource, isSpringSource } from './spring-source.ts'
+import { type SpringSource, SpringSourceSymbol, isSpringSource } from './spring-source.ts'
 import { type ConfigShape, type Shape, CompositeSpring } from './composite-spring.ts'
 import { Ticker, type TickerOptions } from './ticker.ts'
 import { invariant } from './util.ts'
@@ -68,11 +68,12 @@ class SpringSystemImpl implements SpringSystem {
       return new Spring(this.#motion, value, config as SpringDefinition | undefined)
     }
     if (isSpringSource(value)) {
+      const api = value[SpringSourceSymbol]
       invariant(
-        typeof value.value === 'number',
+        typeof api.value === 'number',
         'A spring can only follow a scalar SpringSource; derive one from a composite with mapSpring',
       )
-      const spring = new Spring(this.#motion, value.value, config as SpringDefinition | undefined)
+      const spring = new Spring(this.#motion, api.value, config as SpringDefinition | undefined)
       spring.target = value as SpringSource
       return spring
     }
@@ -141,7 +142,7 @@ export interface SpringSystem {
    * Creates a spring already following `source` — a `Spring`, or a value
    * derived with `mapSpring`. It starts at the source's current value,
    * so nothing moves until the source does; equivalent to creating a
-   * spring at `source.value` and assigning `source` to its `target`.
+   * spring at that value and assigning `source` to its `target`.
    */
   createSpring(source: SpringSource, config?: SpringDefinition): Spring
   /**

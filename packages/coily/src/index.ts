@@ -5,6 +5,7 @@ export {
   type SourceShape,
   type SourceValues,
   type SpringSource,
+  type SpringSourceApi,
   SpringSourceSymbol,
 } from './spring-source.ts'
 export type {

@@ -1,7 +1,12 @@
 import { SpringDefinition } from './config.ts'
 import type { MotionSet } from './motion-set.ts'
 import { Motion } from './motion.ts'
-import { type SpringSource, SpringSourceSymbol, isSpringSource } from './spring-source.ts'
+import {
+  type SpringSource,
+  type SpringSourceApi,
+  SpringSourceSymbol,
+  isSpringSource,
+} from './spring-source.ts'
 import { invariant } from './util.ts'
 
 /**
@@ -27,8 +32,10 @@ const RESOLVED = Promise.resolve()
  * numerical contract.
  */
 export class Spring implements SpringSource {
-  /** Brands the spring as a `SpringSource`, so it can be followed. */
-  readonly [SpringSourceSymbol] = true as const
+  /** Brands the spring as a `SpringSource` whose api is the spring itself. */
+  get [SpringSourceSymbol](): SpringSourceApi<number> {
+    return this
+  }
 
   #target: number
   #config: SpringDefinition
@@ -74,10 +81,10 @@ export class Spring implements SpringSource {
     } else {
       invariant(isSpringSource(value), 'Spring target must be a number or a SpringSource')
       invariant(
-        typeof value.value === 'number',
+        typeof value[SpringSourceSymbol].value === 'number',
         'A spring can only follow a scalar SpringSource; derive one from a composite with mapSpring',
       )
-      this.#follow(value)
+      this.#follow(value as SpringSource)
     }
   }
 
@@ -322,10 +329,11 @@ export class Spring implements SpringSource {
     this.#unsubLeader?.()
     this.#leader = source
 
-    const unsubUpdate = source.onUpdate(() => {
-      this.#setTarget(source.value)
+    const api = source[SpringSourceSymbol]
+    const unsubUpdate = api.onUpdate(() => {
+      this.#setTarget(api.value)
     })
-    const unsubDispose = source.onDispose(() => {
+    const unsubDispose = api.onDispose(() => {
       this.#unfollow()
     })
     this.#unsubLeader = () => {
@@ -333,7 +341,7 @@ export class Spring implements SpringSource {
       unsubDispose()
     }
 
-    this.#setTarget(source.value)
+    this.#setTarget(api.value)
   }
 
   #unfollow() {
