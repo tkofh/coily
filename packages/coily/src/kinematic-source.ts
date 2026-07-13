@@ -25,11 +25,11 @@ export interface KinematicSourceApi<T = number> extends SpringSourceApi<T> {
 }
 
 /**
- * A `SpringSource` whose value is in motion, exposing its `velocity` and
- * `acceleration` under the `SpringSourceSymbol` slot — every `Spring`
- * and `CompositeSpring` is one. `velocityOf` and `accelerationOf` accept
+ * A `SpringSource` whose value is in motion, so it also carries the
+ * value's `velocity` and `acceleration` — every `Spring` and
+ * `CompositeSpring` is one. `velocityOf` and `accelerationOf` accept
  * these; a plain `SpringSource` (such as a `mapSpring` result) is not
- * assignable here, since a value derivation is not in motion.
+ * assignable, since a value derivation is not in motion.
  */
 export interface KinematicSource<T = number> extends SpringSource<T> {
   readonly [SpringSourceSymbol]: KinematicSourceApi<T>
@@ -61,11 +61,11 @@ const NOT_KINEMATIC =
  * released with it — followers detach then, keeping their current
  * target, as they would from a disposed spring.
  *
- * Only a source in motion qualifies — a `Spring`, a `CompositeSpring`,
- * or a source bridging a value whose motion it tracks. A value derived
- * with `mapSpring` has no velocity (its rate of change would need the
- * derivative of the map), so it is rejected at the type level and at
- * runtime; take `velocityOf` of the spring the map reads instead.
+ * Only a source in motion qualifies — a `Spring` or a `CompositeSpring`.
+ * A value derived with `mapSpring` has no velocity (its rate of change
+ * would need the derivative of the map), so it is rejected at the type
+ * level and at runtime; take `velocityOf` of the spring the map reads
+ * instead.
  */
 export function velocityOf<T>(source: KinematicSource<T>): SpringSource<T> {
   invariant(isKinematicSource(source), NOT_KINEMATIC)
@@ -100,11 +100,10 @@ export function velocityOf<T>(source: KinematicSource<T>): SpringSource<T> {
  * is released with it, followers detaching then as from a disposed
  * spring.
  *
- * Only a source in motion qualifies — a `Spring`, a `CompositeSpring`,
- * or a source bridging a value whose motion it tracks. A value derived
- * with `mapSpring` has no acceleration, so it is rejected at the type
- * level and at runtime; take `accelerationOf` of the spring the map
- * reads instead.
+ * Only a source in motion qualifies — a `Spring` or a `CompositeSpring`.
+ * A value derived with `mapSpring` has no acceleration, so it is rejected
+ * at the type level and at runtime; take `accelerationOf` of the spring
+ * the map reads instead.
  */
 export function accelerationOf<T>(source: KinematicSource<T>): SpringSource<T> {
   invariant(isKinematicSource(source), NOT_KINEMATIC)

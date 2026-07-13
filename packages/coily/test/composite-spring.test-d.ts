@@ -8,7 +8,6 @@
  */
 import type {
   Purpose,
-  ReadonlyShape,
   Spring,
   SpringDefinition,
   CompositeSpring,
@@ -121,9 +120,9 @@ tuple.target = [undefined, 100]
 tuple.target = [1, 2, 3]
 tuple.config = [null, cfg]
 
-declare const deepReadonly: ReadonlyShape<{ color: [number, number] }>
-// @ts-expect-error readonly applies through arrays as well
-deepReadonly.color[0] = 5
+declare const colorSpring: CompositeSpring<{ color: [number, number] }>
+// @ts-expect-error composite reads are deeply read-only, through arrays as well
+colorSpring.value.color[0] = 5
 
 // ── Following: shapes must match exactly (CompositeSpring is invariant) ─
 

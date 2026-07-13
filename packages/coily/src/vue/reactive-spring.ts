@@ -16,12 +16,12 @@ import { injectLocal } from './local.ts'
 import { SpringSystemKey } from './system.ts'
 
 /**
- * Options for a scalar `useSpring`: a `SpringDefinition`, any option shape
- * `defineSpring` accepts, or a ref/getter of either. Reactive options
- * reconfigure the spring in place when they change; `undefined` means
- * the default config.
+ * Config for a scalar `useSpring`: a `SpringDefinition`, any option shape
+ * `defineSpring` accepts, or a ref/getter of either. Reactive config
+ * reconfigures the spring in place when it changes; `undefined` means the
+ * default config.
  */
-export type UseSpringOptions = MaybeRefOrGetter<
+export type UseSpringConfig = MaybeRefOrGetter<
   SpringDefinitionOptions | SpringDefinition | undefined
 >
 
@@ -102,12 +102,12 @@ export function injectSpringSystem(): SpringSystem {
 }
 
 export function resolveSpringConfig(
-  options: UseSpringOptions | undefined,
+  config: UseSpringConfig | undefined,
 ): ComputedRef<SpringDefinition | undefined> {
   return computed(() => {
-    const opts = toValue(options)
-    if (opts instanceof SpringDefinition) return opts
-    return opts ? new SpringDefinition(opts) : undefined
+    const resolved = toValue(config)
+    if (resolved instanceof SpringDefinition) return resolved
+    return resolved ? new SpringDefinition(resolved) : undefined
   })
 }
 

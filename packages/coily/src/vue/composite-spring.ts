@@ -14,15 +14,15 @@ import {
 } from './reactive-spring.ts'
 
 /**
- * Options for an object `useSpring`: a `ConfigShape` — one `SpringDefinition`
+ * Config for an object `useSpring`: a `ConfigShape` — one `SpringDefinition`
  * for every channel, `null`, or a shape with configs at any level — or a
- * ref/getter of one. Reactive options reconfigure channels in place.
+ * ref/getter of one. Reactive config reconfigures channels in place.
  *
- * Unlike scalar options, config positions here take `SpringDefinition`
- * instances only (build them with `defineSpring`): a plain object is
- * always read as a per-channel shape.
+ * Unlike scalar config, positions here take `SpringDefinition` instances
+ * only (build them with `defineSpring`): a plain object is always read as
+ * a per-channel shape.
  */
-export type UseCompositeSpringOptions<T extends object> = MaybeRefOrGetter<
+export type UseCompositeSpringConfig<T extends object> = MaybeRefOrGetter<
   ConfigShape<T> | undefined
 >
 
@@ -56,22 +56,22 @@ export function hasCompositeSpringInstance(
 }
 
 function resolveConfigShape<T extends object>(
-  options: UseCompositeSpringOptions<T> | undefined,
+  config: UseCompositeSpringConfig<T> | undefined,
 ): ComputedRef<ConfigShape<T> | undefined> {
-  return computed(() => toValue(options))
+  return computed(() => toValue(config))
 }
 
 export function createCompositeSpringRef<T extends object>(
   value: MaybeRefOrGetter<T & Shape<T>>,
-  options: UseCompositeSpringOptions<T> | undefined,
-  springOptions: CompositeSpringOptions<T> | undefined,
+  config: UseCompositeSpringConfig<T> | undefined,
+  options: CompositeSpringOptions<T> | undefined,
 ): CompositeSpringRef<T> {
   const system = injectSpringSystem()
-  const config = resolveConfigShape(options)
-  const spring = system.createSpring<T>(toValue(value), config.value, springOptions)
+  const resolvedConfig = resolveConfigShape(config)
+  const spring = system.createSpring<T>(toValue(value), resolvedConfig.value, options)
   const ref = createReactiveSpringRef<ReadonlyShape<T>, PartialShape<T>, ConfigShape<T>>(
     spring,
-    config,
+    resolvedConfig,
     CompositeSpringInstanceKey,
   )
 
@@ -84,21 +84,21 @@ export function createCompositeSpringRef<T extends object>(
 
 export function createLinkedCompositeSpringRef<T extends object>(
   leaderRef: CompositeSpringRefWithInstance<T>,
-  options: UseCompositeSpringOptions<T> | undefined,
-  springOptions: CompositeSpringOptions<T> | undefined,
+  config: UseCompositeSpringConfig<T> | undefined,
+  options: CompositeSpringOptions<T> | undefined,
 ): CompositeSpringRef<T> {
   const system = injectSpringSystem()
   const leader = leaderRef[CompositeSpringInstanceKey]
-  const config = resolveConfigShape(options)
+  const resolvedConfig = resolveConfigShape(config)
   const spring = system.createSpring<T>(
     leader.value as unknown as T & Shape<T>,
-    config.value,
-    springOptions,
+    resolvedConfig.value,
+    options,
   )
   spring.target = leader
   return createReactiveSpringRef<ReadonlyShape<T>, PartialShape<T>, ConfigShape<T>>(
     spring,
-    config,
+    resolvedConfig,
     CompositeSpringInstanceKey,
   )
 }

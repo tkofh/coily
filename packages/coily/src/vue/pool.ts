@@ -3,7 +3,7 @@ import type { SpringDefinition } from '../config.ts'
 import type { ConfigShape, Shape, CompositeSpring } from '../composite-spring.ts'
 import type { Spring } from '../spring.ts'
 import type { SpringOptions, CompositeSpringOptions } from '../system.ts'
-import { type SpringSource, isSpringSource } from '../spring-source.ts'
+import type { SpringSource } from '../spring-source.ts'
 import { injectSpringSystem } from './reactive-spring.ts'
 
 /**
@@ -71,37 +71,25 @@ export function useSpringPool(): SpringPool {
     }
   }, true)
 
-  // Cast recovers the overload set: no single implementation signature
-  // can satisfy them all, since CompositeSpring's type parameter is
-  // invariant.
+  // The pool mirrors the system's `createSpring` overloads but only wires
+  // the result to the scope's disposer, so every overload would forward
+  // the same args to the same call. `system.createSpring` already
+  // dispatches on the value at runtime, so call it through one widened
+  // signature (bound, since it reads `this`) and let the outer cast
+  // restore the overloads for callers.
+  const create = (
+    system.createSpring as (
+      value: number | SpringSource | Record<string, number>,
+      config?: SpringDefinition | ConfigShape<Record<string, number>>,
+      options?: SpringOptions | CompositeSpringOptions<Record<string, number>>,
+    ) => Spring | CompositeSpring<Record<string, number>>
+  ).bind(system)
+
   const createSpring = ((
     value: number | SpringSource | Record<string, number>,
     config?: SpringDefinition | ConfigShape<Record<string, number>>,
     options?: SpringOptions | CompositeSpringOptions<Record<string, number>>,
-  ) =>
-    typeof value === 'number'
-      ? adopt(
-          system.createSpring(
-            value,
-            config as SpringDefinition | undefined,
-            options as SpringOptions | undefined,
-          ),
-        )
-      : isSpringSource(value)
-        ? adopt(
-            system.createSpring(
-              value as SpringSource,
-              config as SpringDefinition | undefined,
-              options as SpringOptions | undefined,
-            ),
-          )
-        : adopt(
-            system.createSpring(
-              value,
-              config as ConfigShape<Record<string, number>> | undefined,
-              options as CompositeSpringOptions<Record<string, number>> | undefined,
-            ),
-          )) as SpringPool['createSpring']
+  ) => adopt(create(value, config, options))) as SpringPool['createSpring']
 
   return { createSpring }
 }

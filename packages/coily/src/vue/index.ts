@@ -1,5 +1,5 @@
 export { useSpring, type SpringRef } from './spring.ts'
-export type { CompositeSpringRef, UseCompositeSpringOptions } from './composite-spring.ts'
+export type { CompositeSpringRef } from './composite-spring.ts'
 export { useSpringPool, type SpringPool } from './pool.ts'
 export { SpringValue, type SpringValueProps, type SpringValueSlots } from './component.ts'
 export { provideSpringSystem, useSpringSystem } from './system.ts'

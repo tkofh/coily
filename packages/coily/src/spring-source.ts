@@ -2,10 +2,10 @@ import { type LeafParser, ShapeTree, ShapeView, describePath } from './shape-tre
 import { invariant, isRecordOrArray } from './util.ts'
 
 /**
- * The key under which a `SpringSource` carries its `SpringSourceApi`.
- * A registry symbol (`Symbol.for('coily/spring-source')`), so sources
- * from one copy of coily are recognized by another when a bundle
- * duplicates the library.
+ * The property key that brands a `SpringSource` and holds the channel its
+ * followers read. A registry symbol (`Symbol.for('coily/spring-source')`),
+ * so sources from one copy of coily are recognized by another when a
+ * bundle duplicates the library.
  */
 export const SpringSourceSymbol: unique symbol = Symbol.for('coily/spring-source')
 
@@ -24,22 +24,15 @@ export interface SpringSourceApi<T = number> {
 }
 
 /**
- * A live value springs can animate toward or derive from. `T` is the
- * value's type: scalar sources (`T = number`, the default) can be
- * assigned to `Spring.target`, which tracks them momentum intact.
+ * A live value a spring can animate toward or derive from. `T` is the
+ * value's type: a scalar source (`T = number`, the default) can be
+ * assigned to `Spring.target`, which then tracks it momentum intact.
+ *
  * Every `Spring` is a `SpringSource`, every `CompositeSpring` is a
- * `SpringSource` of its value shape, and `mapSpring` derives new
- * scalar sources from existing sources of any value.
- *
- * The whole contract lives under `SpringSourceSymbol`: the slot holds
- * the `SpringSourceApi` followers read. Keeping it off the object's
- * public face matters when the two disagree — a reactive wrapper's
- * public `value` may track reads into whatever observer is active,
- * while the slot is the plain channel coily reads from inside ticks
- * and event callbacks, where tracking must never happen.
- *
- * The contract is open — any object carrying the slot can bridge a
- * live value (a pointer position, a scroll offset) into a source.
+ * `SpringSource` of its value shape, and `mapSpring`, `velocityOf`, and
+ * `accelerationOf` derive fresh sources from existing ones. You take
+ * sources from those APIs and pass them wherever one is accepted; the
+ * type names such a value in your own signatures.
  */
 export interface SpringSource<T = number> {
   readonly [SpringSourceSymbol]: SpringSourceApi<T>
