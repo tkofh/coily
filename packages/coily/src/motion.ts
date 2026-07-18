@@ -150,8 +150,8 @@ export class Motion {
    * Measuring u from the moving target makes the ramp endpoint and the
    * new target coincide — the armer assigns the target, no rebase
    * arithmetic exists. The ramp is an argument of the step, never
-   * persistent solver state: the g = 0 path below is byte-for-byte the
-   * pre-ramp body, so every non-ramped step is bit-exact.
+   * persistent solver state: g = 0 takes the plain step below, so a
+   * motion that never ramps steps bit-exactly like an isolated spring.
    */
   _advance(dt: number) {
     invariant(this.#currentSolver, 'Cannot tick a disposed motion')

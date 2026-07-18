@@ -173,9 +173,8 @@ export class MotionSet {
   // leaders, ranks from the follow graph — so a follower integrates
   // against its leader's current-frame value no matter how construction
   // order or rest/wake churn arranged the set. The frame is K sub-steps
-  // of dt/K (each its own pass) and one settle sweep; the controller's
-  // demand is clamped to 1 until the sub-step loop's semantics land
-  // (hybrid plan stage 3).
+  // of dt/K (each its own pass) and one settle sweep; K is the plan
+  // pass's max demand over measurable edges, capped at MAX_SUBSTEPS.
   #tickOrdered(dt: number, reentrant: boolean) {
     // A reentrant advance (user code stepping the system from inside a
     // callback) gets private worklists so the outer pass's survive.

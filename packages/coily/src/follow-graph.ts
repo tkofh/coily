@@ -107,11 +107,14 @@ export interface FollowEdge {
   /** The frame delta one older than `_d1`; their difference estimates curvature. */
   _d2: number
   /**
-   * Re-anchors the follower to the followed source's current value, with
-   * the exact semantics of the leader-update handler (finite guard,
-   * reduced-motion jump). `h` is the step the follower is about to
-   * advance by, in seconds (the internal tick unit); it is unused until
-   * sub-stepping and first-order hold interpret the delta.
+   * Re-anchors the follower to the followed source's current value.
+   * `h` is the step the follower is about to advance by, in seconds
+   * (the internal tick unit). On an edge where a ramp may arm —
+   * acyclic, passthrough arrival, `h > 0`, not a reduced-motion jump —
+   * it retargets and arms the follower's `_ramp` with the delta over
+   * `h`, so the coming advance integrates against the leader's motion.
+   * Every other edge retargets with the exact semantics of the
+   * leader-update handler (finite guard, reduced-motion jump).
    */
   recouple(h: number): void
   /**
