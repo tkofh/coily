@@ -12,5 +12,9 @@ advertised window: rest lands within a frame of `duration`
 configs).
 
 Every duration-tuned spring, the default included, is noticeably more
-relaxed as a result. To keep a spring's previous feel, multiply its
-`duration` by 0.7.
+relaxed as a result. To keep a spring's previous feel, scale its
+`duration` down: the factor depends on the damping ratio and
+displacement — about 0.7 for the default config, down to roughly 0.5
+for configs far from critical damping (a `bounce: -1` chain wants
+~0.53). Springs that follow each other are the most visible case:
+softer links lag each other further, so retune chained configs first.

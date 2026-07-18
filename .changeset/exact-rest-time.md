@@ -16,3 +16,7 @@ first target crossing (as before), and rebounds or slowdowns now add
 their per-crossing velocity loss to the effective decay rate — an
 undamped spring with such a multiplier reports a finite time instead of
 Infinity, and honors it.
+
+The time is solved from the live state on read, and nothing is
+maintained per tick: springs whose `timeRemaining` is never read pay
+nothing for it, however often they move.
