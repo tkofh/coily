@@ -409,10 +409,6 @@ export class Spring implements KinematicSource {
     // alone.
     const leaders = resolveLeaderMotions(source)
     if (leaders.length > 0) {
-      // Fresh shock terms need leader state in the followed value's
-      // units, which only an identity passthrough has: a derived source
-      // (mapSpring, kinematic wrappers) runs on history alone.
-      const leaderMotion = api instanceof Spring ? leaders[0]! : null
       const edge: FollowEdge = {
         follower: this.#motion,
         leaders,
@@ -430,24 +426,29 @@ export class Spring implements KinematicSource {
           edge._d1 = d
           edge._prevValue = target
 
+          // History covers smooth motion; a leader knocked off its
+          // tracking manifold — teleported, flung — escalates with its
+          // own kinematic bound before history can see the move. Bound
+          // and gate are in the leader's units: exact for an identity
+          // passthrough (the common case), a slope ~1 heuristic through
+          // map code.
           let dHat = Math.abs(d)
-          let error = Math.abs(d - edge._d2) / 8
-          if (leaderMotion !== null && leaderMotion._manifoldDeviation() > MANIFOLD_GATE * dHat) {
-            const accel = Math.abs(leaderMotion._acceleration())
-            const speed = Math.abs(leaderMotion.velocity)
-            dHat = Math.max(dHat, speed * dt + 0.5 * accel * dt * dt)
-            error = Math.max(error, (accel * dt * dt) / 8)
+          for (const leader of leaders) {
+            if (leader._manifoldDeviation() > MANIFOLD_GATE * Math.abs(d)) {
+              const accel = Math.abs(leader._acceleration())
+              const speed = Math.abs(leader.velocity)
+              dHat = Math.max(dHat, speed * dt + 0.5 * accel * dt * dt)
+            }
           }
 
           // The budget floors at the follower's resting quantum: coupling
           // finer than rest can resolve buys nothing.
-          const tol = Math.max(this.#config.restingMagnitude, this.#motions.couplingBudget)
-          // ZOH law inside a cycle and for arrival springs (their
-          // crossings stay closed-form under fixed-target sub-steps);
-          // the FOH sqrt law everywhere a ramp may arm.
-          return edge._cyclic || this.#config.arrival !== 1
-            ? Math.ceil(dHat / (2 * tol))
-            : Math.ceil(Math.sqrt(error / tol))
+          const tol = Math.max(this.#config.restingMagnitude, this.#motions.couplingTolerance)
+          // Held-target coupling leaves half a sub-step of leader travel
+          // as tracking error, so the demand is linear in the frame's
+          // move. The FOH sqrt law returns with the ramp (hybrid plan
+          // stage 4); until then every edge holds, cycles included.
+          return Math.ceil(dHat / (2 * tol))
         },
       }
       this.#motions.graph.addEdge(edge)

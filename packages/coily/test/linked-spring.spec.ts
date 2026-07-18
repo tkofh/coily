@@ -1,5 +1,7 @@
 import { describe, expect, vi } from 'vitest'
 import { SpringDefinition, defineSpring } from '../src/config.ts'
+import { type SpringSystemOptions, createSpringSystem } from '../src/system.ts'
+import type { Spring } from '../src/spring.ts'
 import { mapSpring } from '../src/spring-source.ts'
 import { advanceUntilResting, makeSource, test } from './helpers.ts'
 
@@ -723,6 +725,157 @@ describe('Spring: following', () => {
 
       system.advance(1000 / 60)
       expect(bystander.value).not.toBe(0)
+    })
+  })
+
+  describe('error-controlled sub-stepping', () => {
+    // The coupling investigation's demo config: stiff and overdamped,
+    // the regime where frame-grain coupling error is largest. A huge
+    // tolerance pins K = 1, standing in for the pre-controller library.
+    const stiff = defineSpring({ bounce: -1, duration: 265 })
+    const K1 = { couplingTolerance: 1e9 }
+
+    /** Releases a mutual pair from A=100/B=0 at 30fps and returns where it settles. */
+    function releasePair(options?: SpringSystemOptions): [number, number] {
+      const system = createSpringSystem(options)
+      const a = system.createSpring(0, stiff)
+      const b = system.createSpring(0, stiff)
+      b.target = a
+      a.target = b
+      a.value = 100
+      for (let i = 0; i < 90; i++) system.advance(33)
+      return [a.value, b.value]
+    }
+
+    test('a mutual pair settles at its midpoint on coarse frames', () => {
+      // Held-target coupling integrates whole frames against a stale
+      // partner and bleeds the pair's conserved mean: at 33ms frames the
+      // K = 1 baseline settles near 34 instead of the true 50
+      // (follower-coupling-investigation.md section 4). Sub-stepping
+      // converges it like 1/K.
+      const [a, b] = releasePair()
+      expect(Math.abs(a - b)).toBeLessThan(0.1)
+      expect(Math.abs(a - 50)).toBeLessThan(3)
+
+      const [baseline] = releasePair(K1)
+      expect(Math.abs(baseline - 50)).toBeGreaterThan(10)
+    })
+
+    /** Flings a self-follower with v = 1000 and returns its total drift. */
+    function fling(dtMs: number, options?: SpringSystemOptions): number {
+      const system = createSpringSystem(options)
+      const spring = system.createSpring(0, stiff)
+      spring.target = spring
+      spring.velocity = 1000
+      for (let elapsed = 0; elapsed < 3000; elapsed += dtMs) system.advance(dtMs)
+      return spring.value
+    }
+
+    test('a self-follow fling travels the same distance at 30 and 60 fps', () => {
+      const gap = Math.abs(fling(33) / fling(1000 / 60) - 1)
+      expect(gap).toBeLessThan(0.05)
+
+      // The frame-rate dependence this fixes: K = 1 travels ~29% less
+      // at 30fps than at 60fps.
+      const baselineGap = Math.abs(fling(33, K1) / fling(1000 / 60, K1) - 1)
+      expect(baselineGap).toBeGreaterThan(0.2)
+    })
+
+    /**
+     * Advances a leader/follower pair through a 200-unit target teleport
+     * at 33ms frames, each frame in `sub` equal advances, and returns the
+     * follower's value at every whole-frame boundary.
+     */
+    function teleportTrail(
+      sub: number,
+      options?: SpringSystemOptions,
+      wire: (leader: Spring, follower: Spring) => void = (leader, follower) => {
+        follower.target = leader
+      },
+    ): number[] {
+      const system = createSpringSystem(options)
+      const leader = system.createSpring(0, stiff) as Spring
+      const follower = system.createSpring(0, stiff) as Spring
+      wire(leader, follower)
+      leader.target = 200
+      const trail: number[] = []
+      for (let frame = 0; frame < 30; frame++) {
+        for (let i = 0; i < sub; i++) system.advance(33 / sub)
+        trail.push(follower.value)
+      }
+      return trail
+    }
+
+    function maxGap(a: number[], b: number[]): number {
+      let gap = 0
+      for (let i = 0; i < a.length; i++) gap = Math.max(gap, Math.abs(a[i]! - b[i]!))
+      return gap
+    }
+
+    test('a teleport frame sub-steps toward the finely-stepped trajectory', () => {
+      const reference = teleportTrail(16, K1)
+      const controlled = maxGap(teleportTrail(1), reference)
+      const baseline = maxGap(teleportTrail(1, K1), reference)
+
+      expect(controlled).toBeLessThan(baseline / 3)
+    })
+
+    test('a teleport through a map escalates the same way', () => {
+      // A derived source has no leader state in the mapped value's
+      // units; the controller still catches the shock through the
+      // underlying leader's own state.
+      const viaMap = (leader: Spring, follower: Spring) => {
+        follower.target = mapSpring(leader, (value) => value + 5)
+      }
+      const reference = teleportTrail(16, K1, viaMap)
+      const controlled = maxGap(teleportTrail(1, undefined, viaMap), reference)
+      const baseline = maxGap(teleportTrail(1, K1, viaMap), reference)
+
+      expect(controlled).toBeLessThan(baseline / 3)
+    })
+
+    test('quiet frames stay single-step: bit-identical to a pinned K = 1 system', () => {
+      const crawl = (options?: SpringSystemOptions): number[] => {
+        const system = createSpringSystem(options)
+        const leader = system.createSpring(0, stiff)
+        const follower = system.createSpring(0, stiff)
+        follower.target = leader
+        const trail: number[] = []
+        for (let frame = 0; frame < 60; frame++) {
+          leader.target = frame * 0.05
+          system.advance(1000 / 60)
+          trail.push(leader.value, follower.value)
+        }
+        return trail
+      }
+
+      const controlled = crawl()
+      const pinned = crawl(K1)
+      for (let i = 0; i < controlled.length; i++) {
+        expect(controlled[i]).toBe(pinned[i])
+      }
+    })
+
+    test('updates still fire once per spring per frame while sub-stepping', () => {
+      const system = createSpringSystem()
+      const leader = system.createSpring(0, stiff)
+      const follower = system.createSpring(0, stiff)
+      follower.target = leader
+      const composite = system.createSpring({ x: 0, y: 0 }, stiff)
+      const compositeFollower = system.createSpring({ x: 0, y: 0 }, stiff)
+      compositeFollower.target = composite
+
+      const counts = { leader: 0, follower: 0, composite: 0 }
+      leader.onUpdate(() => counts.leader++)
+      follower.onUpdate(() => counts.follower++)
+      compositeFollower.onUpdate(() => counts.composite++)
+
+      // Teleports rail K for the frame; notification must not scale.
+      leader.target = 200
+      composite.target = { x: 200, y: 200 }
+      system.advance(33)
+
+      expect(counts).toEqual({ leader: 1, follower: 1, composite: 1 })
     })
   })
 })

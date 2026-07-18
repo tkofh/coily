@@ -44,6 +44,17 @@ export interface CompositeSpringOptions<T extends object> {
 
 export interface SpringSystemOptions extends TickerOptions {
   /**
+   * How far a spring may trail a source it follows within one frame, in
+   * the value's own units. A frame whose motion would exceed it is split
+   * into internal sub-steps (at most 8), so followed chains stay
+   * accurate through slow frames and sudden retargets. Smaller is
+   * tighter and costs more solver work; it never goes finer than the
+   * follower's resting precision, and listeners still fire once per
+   * frame. Springs that follow nothing are unaffected.
+   * @default 0.1
+   */
+  couplingTolerance?: number | undefined
+  /**
    * Log active motion counts to the console whenever they change.
    * @default false
    */
@@ -65,6 +76,10 @@ class SpringSystemImpl implements SpringSystem {
   constructor(options?: SpringSystemOptions) {
     this.#motion = new MotionSet(options?.debug)
     this.#ticker = new Ticker(this.#motion, options)
+
+    if (options?.couplingTolerance !== undefined) {
+      this.couplingTolerance = options.couplingTolerance
+    }
 
     const mode = options?.reducedMotion ?? 'user'
     if (mode === 'always') {
@@ -91,6 +106,18 @@ class SpringSystemImpl implements SpringSystem {
 
   get reducedMotion() {
     return this.#motion.reduced
+  }
+
+  get couplingTolerance() {
+    return this.#motion.couplingTolerance
+  }
+
+  set couplingTolerance(value: number) {
+    invariant(
+      Number.isFinite(value) && value >= 0,
+      'couplingTolerance must be a finite, non-negative number',
+    )
+    this.#motion.couplingTolerance = value
   }
 
   createSpring(value: number, config?: SpringDefinition, options?: SpringOptions): Spring
@@ -246,6 +273,13 @@ export interface SpringSystem {
    * created with `purpose: 'appearance'` animate regardless.
    */
   readonly reducedMotion: boolean
+  /**
+   * How far a spring may trail a source it follows within one frame, in
+   * the value's own units — see the `couplingTolerance` option.
+   * Assignment accepts any finite number >= 0 and applies from the next
+   * frame; 0 means as fine as the follower's resting precision allows.
+   */
+  couplingTolerance: number
   /**
    * Frame-rate cap. 0 means uncapped: one tick per displayed frame,
    * whatever rate the screen runs at. Capped ticks land on whole display

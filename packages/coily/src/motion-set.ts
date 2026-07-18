@@ -6,6 +6,12 @@ function compareMotions(a: Motion, b: Motion): number {
   return a._rank - b._rank || a._id - b._id
 }
 
+// Sub-steps per frame are capped: past this, one frame's solver work
+// competes with the rendering that made the frame long in the first
+// place. Validated in the s4-freshness probe (error stays flat with the
+// controller railing here only on frames that genuinely need it).
+const MAX_SUBSTEPS = 8
+
 /**
  * A binary min-heap over (rank, creation id): the ordered pass worklist.
  * Duplicate pushes are expected — the tick's pass marker deduplicates at
@@ -65,10 +71,10 @@ export class MotionSet {
   /**
    * The coupling error budget, in value units: the local per-frame error
    * the sub-step controller targets on each follow edge, floored by the
-   * follower's resting magnitude. Internal until the public-option
-   * decision in the hybrid plan's stage 3.
+   * follower's resting magnitude. `SpringSystem` exposes it as the
+   * `couplingTolerance` option and property; validation lives there.
    */
-  couplingBudget = 0.1
+  couplingTolerance = 0.1
   readonly flushes = new FlushQueue()
   /** Follow edges registered by following springs, with the dependency rank over their motions. */
   readonly graph = new FollowGraph()
@@ -181,17 +187,22 @@ export class MotionSet {
     const frame = ++this.#frame
 
     // The plan pass: refresh every measurable edge's estimator and take
-    // the frame's sub-step demand as their max. An edge is measurable
-    // when a leader is active — nothing else moves a followed value
-    // between plans — mirroring the recouple skip below.
+    // the frame's sub-step demand as their max — one shared subdivision,
+    // so every recouple in a sub-step reads a same-aged leader. An edge
+    // is measurable when a leader is active — nothing else moves a
+    // followed value between plans — mirroring the recouple skip below.
+    // Under reduced motion recouples jump, so there is nothing to
+    // refine and the estimators idle.
     let demand = 1
-    for (const edge of this.graph.edges) {
-      if (this.#shouldPlan(edge)) {
-        const k = edge.plan(dt)
-        if (k > demand) demand = k
+    if (!this.reduced) {
+      for (const edge of this.graph.edges) {
+        if (this.#shouldPlan(edge)) {
+          const k = edge.plan(dt)
+          if (k > demand) demand = k
+        }
       }
     }
-    const K = Math.min(demand, 1)
+    const K = Math.min(demand, MAX_SUBSTEPS)
     const h = dt / K
 
     try {

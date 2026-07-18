@@ -629,6 +629,9 @@ describe('FollowGraph: planning', () => {
 
   test('planning reads no user map code', () => {
     const motions = new MotionSet()
+    // A huge tolerance pins K = 1, so recouple runs once per frame and
+    // any further read could only come from the plan pass.
+    motions.couplingTolerance = 1e9
     const leader = new Spring(motions, 0)
     let reads = 0
     const mapped = mapSpring(leader, (value) => {
