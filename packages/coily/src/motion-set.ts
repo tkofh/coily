@@ -142,10 +142,26 @@ export class MotionSet {
       this.flushes.exit()
     }
 
-    if (this.#debug && this.#motions.size !== this.#lastSize) {
-      this.#lastSize = this.#motions.size
-      console.log(`coily: ${this.#lastSize} active motions`)
+    this.#settle(advanced)
+  }
+
+  // Phase 2: deliver the frame's events after every motion has
+  // advanced, in the order they advanced — update callbacks read
+  // frame-final values everywhere. Skipped for motions after a throwing
+  // callback, like the rest of any aborted pass.
+  #settle(advanced: readonly Motion[]) {
+    for (const motion of advanced) {
+      motion._settleFrame()
     }
+  }
+
+  #shouldRecouple(edge: FollowEdge): boolean {
+    for (const leader of edge.leaders) {
+      if (leader._pass === this.#pass || this.#motions.has(leader)) {
+        return true
+      }
+    }
+    return false
   }
 
   /** The no-edge fast path: nothing constrains order, so insertion order serves for free. */
