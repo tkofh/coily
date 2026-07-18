@@ -46,8 +46,22 @@ function collectInto(source: object, leaders: Set<Motion>): void {
   if (backing === undefined && isSpringSource(source)) {
     // Backing registers lazily, in the brand getter: reading the api
     // registers coily sources and is a plain read on foreign ones.
-    void source[SpringSourceSymbol]
+    const api = source[SpringSourceSymbol]
     backing = MOTION_BACKING.get(source)
+    if (
+      backing === undefined &&
+      typeof api === 'object' &&
+      api !== null &&
+      (api as unknown) !== source
+    ) {
+      // A wrapper can hand out another source's api as a plain value
+      // slot — a Vue SpringRef exposes its backing spring's — so the
+      // wrapper itself never registers; resolve through the api. Coily
+      // apis belong to sources created before their wrapper, so the
+      // walk still follows creation order and cannot cycle.
+      collectInto(api, leaders)
+      return
+    }
   }
   if (backing === undefined) return
   if (backing instanceof Motion) {
@@ -60,10 +74,19 @@ function collectInto(source: object, leaders: Set<Motion>): void {
 const NO_LEADERS: readonly Motion[] = []
 
 /**
+ * The sub-step controller's shock gate: an edge's fresh kinematic terms
+ * engage only when its leader's manifold deviation exceeds this many
+ * multiples of the last observed frame delta. Decided empirically in
+ * `probes/follower-coupling/s4-freshness.ts`.
+ */
+export const MANIFOLD_GATE = 4
+
+/**
  * One follow relationship, as the system sees it: which motion
- * retargets, which motions it reads, and how to re-anchor it. `Spring`
- * registers an edge when a follow is wired to a source with resolvable
- * motions, and unregisters it on unfollow and dispose.
+ * retargets, which motions it reads, how to re-anchor it, and the
+ * sub-step controller's per-edge state. `Spring` registers an edge when
+ * a follow is wired to a source with resolvable motions, and
+ * unregisters it on unfollow and dispose.
  */
 export interface FollowEdge {
   /** The motion that retargets when its leaders advance. */
@@ -71,13 +94,38 @@ export interface FollowEdge {
   /** The distinct motions behind the followed source, per `resolveLeaderMotions`. */
   readonly leaders: readonly Motion[]
   /**
-   * Re-anchors the follower to the followed source's current value, with
-   * the exact semantics of the leader-update handler (finite guard,
-   * reduced-motion jump). `h` is the step the follower is about to
-   * advance by, in seconds (the internal tick unit); it is unused until
-   * sub-stepping and first-order hold interpret the delta.
+   * Whether the follower shares a Tarjan SCC with any of its leaders,
+   * self-follow included. Written by `FollowGraph` on recompute. Routes
+   * `plan` to the ZOH sub-step law: FOH destabilizes cycles that are
+   * stable under ZOH, so no ramp may ever arm inside an SCC.
+   */
+  _cyclic: boolean
+  /** The follower's target as of the last `plan` call. */
+  _prevValue: number
+  /** The followed value's frame delta observed by the last `plan` call. */
+  _d1: number
+  /** The frame delta one older than `_d1`; their difference estimates curvature. */
+  _d2: number
+  /**
+   * Re-anchors the follower to the followed source's current value.
+   * `h` is the step the follower is about to advance by, in seconds
+   * (the internal tick unit). On an edge where a ramp may arm —
+   * acyclic, passthrough arrival, `h > 0`, not a reduced-motion jump —
+   * it retargets and arms the follower's `_ramp` with the delta over
+   * `h`, so the coming advance integrates against the leader's motion.
+   * Every other edge retargets with the exact semantics of the
+   * leader-update handler (finite guard, reduced-motion jump).
    */
   recouple(h: number): void
+  /**
+   * Refreshes the estimator from the follower's current target and
+   * returns this edge's sub-step demand for a frame of `dt` seconds —
+   * unclamped; the caller maxes over edges and clamps. Runs no user
+   * code: history is the target trail, freshness reads leader motion
+   * state. Call at most once per edge per frame, before any motion
+   * advances.
+   */
+  plan(dt: number): number
 }
 
 /**
@@ -94,11 +142,18 @@ export class FollowGraph {
   #ranked: readonly Motion[] = []
   /** Motions holding a follower list from the last recompute, so stale lists reset to null. */
   #withFollowers: readonly Motion[] = []
+  /** Edge list mirroring the map, rebuilt with the ranks, so the per-frame plan pass iterates an array. */
+  #edgeList: readonly FollowEdge[] = []
   #dirty = false
 
   /** Whether no edges are registered, letting the tick skip ordering work entirely. */
   get isEmpty(): boolean {
     return this.#edges.size === 0
+  }
+
+  /** Every registered edge, valid after `ensureOrder`; the plan pass walks this once per frame. */
+  get edges(): readonly FollowEdge[] {
+    return this.#edgeList
   }
 
   /**
@@ -174,8 +229,10 @@ export class FollowGraph {
     const onStack = new Set<Motion>()
     const stack: Motion[] = []
     const ranked: Motion[] = []
+    const sccOf = new Map<Motion, number>()
     let index = 0
     let rank = 0
+    let scc = 0
 
     for (const root of roots) {
       if (indexOf.has(root)) continue
@@ -223,14 +280,26 @@ export class FollowGraph {
             members.sort((a, b) => a._id - b._id)
             for (const motion of members) {
               motion._rank = rank++
+              sccOf.set(motion, scc)
               ranked.push(motion)
             }
+            scc++
           }
         }
       }
     }
 
     this.#ranked = ranked
+
+    // An edge inside an SCC is a cycle edge: its recouple reads a value
+    // the pass has not refreshed yet, and the controller must keep it on
+    // the ZOH law.
+    const edgeList = [...this.#edges.values()]
+    for (const edge of edgeList) {
+      const home = sccOf.get(edge.follower)
+      edge._cyclic = edge.leaders.some((leader) => sccOf.get(leader) === home)
+    }
+    this.#edgeList = edgeList
   }
 
   #leadersOf(motion: Motion): readonly Motion[] {

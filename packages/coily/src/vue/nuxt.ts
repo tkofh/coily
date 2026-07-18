@@ -32,6 +32,14 @@ export interface CoilyModuleOptions {
    */
   adjustedLag?: number
   /**
+   * How far a spring may trail a source it follows within one frame, in
+   * the value's own units. Frames whose motion would exceed it split
+   * into internal sub-steps; smaller is tighter and costs more solver
+   * work.
+   * @default 0.1
+   */
+  couplingTolerance?: number
+  /**
    * When springs snap to their targets instead of animating: `'user'`
    * follows the OS prefers-reduced-motion setting, including live
    * changes; `'always'` and `'never'` force one behavior.
@@ -46,6 +54,8 @@ function getPluginTemplate(options: CoilyModuleOptions) {
   if (options.fps !== undefined) systemOptions.fps = options.fps
   if (options.lagThreshold !== undefined) systemOptions.lagThreshold = options.lagThreshold
   if (options.adjustedLag !== undefined) systemOptions.adjustedLag = options.adjustedLag
+  if (options.couplingTolerance !== undefined)
+    systemOptions.couplingTolerance = options.couplingTolerance
   if (options.reducedMotion) systemOptions.reducedMotion = options.reducedMotion
 
   const args = Object.keys(systemOptions).length > 0 ? JSON.stringify(systemOptions) : ''

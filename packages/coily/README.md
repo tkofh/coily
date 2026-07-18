@@ -102,7 +102,9 @@ A mapped value is a `SpringSource`, the contract `target` accepts and every `Spr
 
 Chains advance in dependency order: each frame, a spring moves after the springs it follows — whatever order anything was created or wired in — so a follower always chases its leader's current value rather than last frame's. Update events fire once per spring per frame, after every spring has moved, in that same leader-first order. A callback that reads another spring sees its final value for the frame, and a spring retargeted from inside a callback starts moving on the next frame.
 
-Follow graphs may contain cycles: retargets never re-emit, so nothing loops within a frame. Mutual followers converge to a shared value. A cycle has no order that puts every member after its leaders, so members advance in creation order and the edge that closes the loop chases one frame behind. A cycle whose maps expand (`(v) => v + 10` in both directions) chases forever and never rests, keeping the system awake until you break the cycle.
+Following is accurate within the frame, too: a follower integrates against the path its leader actually traveled, not a value sampled once at the frame boundary, and when a single frame carries more motion than the system's `couplingTolerance` allows (0.1 value units by default), the system splits that frame into internal sub-steps. Dropped frames and teleporting targets refine themselves; update events still fire once per frame. The result is that a chain keeps the same shape at 30fps as at 120fps — see https://github.com/tkofh/coily/blob/main/PRECISION.md for the model.
+
+Follow graphs may contain cycles: retargets never re-emit, so nothing loops within a frame. Mutual followers converge to a shared value — the same value at any frame rate. A cycle has no order that puts every member after its leaders, so members advance in creation order and the edge that closes the loop chases one frame behind. A cycle whose maps expand (`(v) => v + 10` in both directions) chases forever and never rests, keeping the system awake until you break the cycle.
 
 ### Composites
 

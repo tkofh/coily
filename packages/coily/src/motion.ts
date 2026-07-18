@@ -21,6 +21,12 @@ export class Motion {
   _pass = 0
 
   /**
+   * Frame marker written by `MotionSet`: sub-steps share one frame, and
+   * the first advance in it queues the motion for the settle sweep.
+   */
+  _frame = 0
+
+  /**
    * Dependency rank written by `FollowGraph`: motions the follow graph
    * touches count up from 0, leaders before followers; -1 marks a motion
    * outside the graph.
@@ -33,6 +39,15 @@ export class Motion {
    * field instead of a map.
    */
   _edge: FollowEdge | null = null
+
+  /**
+   * A first-order-hold ramp slope in value units per second, armed by a
+   * ramped `recouple` immediately before the `_advance` that consumes
+   * it (read-and-clear; no user code runs between the two). 0 means the
+   * target holds still across the step — every path but a ramped
+   * recouple.
+   */
+  _ramp = 0
 
   /**
    * The edges reading this motion, or null when none. Written by
@@ -125,9 +140,50 @@ export class Motion {
    * Advances the simulation and emits nothing. The tick pass advances
    * every motion through this, then delivers the frame's events with
    * `_settleFrame`; the synchronous `tick` wraps the two.
+   *
+   * A pending `_ramp` integrates the step against a target moving at
+   * that slope instead of holding still: one affine transform around
+   * the unchanged solver. With the target at `p(t) = p0 + g*t`, the
+   * displacement u = x - p(t) obeys the homogeneous equation shifted by
+   * the constant u_ss = -(2*zeta/wn)*g = -(damping/tension)*g, so the
+   * solver ticks w = u - u_ss exactly and the results shift back.
+   * Measuring u from the moving target makes the ramp endpoint and the
+   * new target coincide — the armer assigns the target, no rebase
+   * arithmetic exists. The ramp is an argument of the step, never
+   * persistent solver state: g = 0 takes the plain step below, so a
+   * motion that never ramps steps bit-exactly like an isolated spring.
    */
   _advance(dt: number) {
     invariant(this.#currentSolver, 'Cannot tick a disposed motion')
+
+    const g = this._ramp
+    if (g !== 0) {
+      this._ramp = 0
+      const state = this.#state
+      const shift = (this.#config.damping / this.#config.tension) * g
+      state.position += shift
+      state.velocity -= g
+      // Anchor in ramp space from the shifted state: unconditionally,
+      // and again next step — the ramp-space anchor is wrong for any
+      // other frame.
+      if (this.#needsUpdate) {
+        this.#updateSolver()
+        this.#needsUpdate = false
+      } else {
+        this.#currentSolver.configure()
+      }
+
+      this.#currentSolver.tick(dt)
+
+      state.position -= shift
+      state.velocity += g
+      this.#needsReset = true
+      if (state.isResting) {
+        state.position = 0
+        state.velocity = 0
+      }
+      return
+    }
 
     if (this.#needsUpdate) {
       this.#updateSolver()
@@ -180,6 +236,27 @@ export class Motion {
     this.position = 0
     this.velocity = 0
     this.tick(0)
+  }
+
+  /**
+   * The sub-step controller's shock signal, read by a follower's `plan`
+   * with this motion as its leader: deviation from the quasi-steady
+   * tracking manifold x = -(damping/tension) * v, where damping/tension
+   * is 2*zeta/wn. Near zero while chasing any smoothly moving target at
+   * any speed; the full displacement after a target teleport;
+   * (damping/tension) * |v| after a fling.
+   */
+  _manifoldDeviation() {
+    const config = this.#config
+    return Math.abs(this.#state.position + (config.damping / config.tension) * this.#state.velocity)
+  }
+
+  /** Acceleration from current state, for `plan`'s kinematic bound on a shock frame. */
+  _acceleration() {
+    const config = this.#config
+    return (
+      -(config.tension * this.#state.position + config.damping * this.#state.velocity) / config.mass
+    )
   }
 
   onUpdate(callback: () => void) {

@@ -27,15 +27,22 @@ export interface LinearEasingOptions {
   /**
    * Animation range the duration is tuned for, in value units. The easing
    * shape is identical regardless; only the settle time scales with it.
+   * The keyframe helpers (`springToWaapi`, `springToCss`,
+   * `springToTransition`) default it to the largest move among their
+   * specs instead.
    * @default 1
    */
   readonly displacement?: number
   /**
    * Max output error of the piecewise-linear approximation, in progress
-   * units (0..1). Smaller keeps more stops. @default 0.0025
+   * units (0..1). Smaller keeps more stops.
+   * @default 0.0025
    */
   readonly maxError?: number
-  /** Hard cap on generated duration, in ms, for near-undamped configs. @default 10000 */
+  /**
+   * Hard cap on generated duration, in ms, for near-undamped configs.
+   * @default 10000
+   */
   readonly maxDuration?: number
 }
 
@@ -50,17 +57,17 @@ interface EasingBase {
   readonly maxError: number
 }
 
-/** A spring that comes to rest: play the easing once over `duration`. */
+/** The easing of a spring that comes to rest: play it once over `duration`. */
 export interface SettlingEasing extends EasingBase {
   readonly mode: 'settle'
 }
 
 /**
- * A spring that never rests: an undamped oscillation, expressed as a
- * seamless loop. Animate the property between its two swing extremes
- * (`from` and `2 * target - from`, target at the 50% midpoint) with
- * `animation-iteration-count: infinite` and `animation-direction:
- * alternate`; `duration` is one half period.
+ * The easing of a spring that never rests — an undamped oscillation,
+ * expressed as a seamless loop. Animate the property between its two
+ * swing extremes (`from` and `2 * target - from`, target at the 50%
+ * midpoint) with `animation-iteration-count: infinite` and
+ * `animation-direction: alternate`. `duration` is one half period.
  */
 export interface LoopingEasing extends EasingBase {
   readonly mode: 'loop'
@@ -245,8 +252,9 @@ function reconstructionError(
 /**
  * Turns a resolved spring config into a CSS `linear()` easing and the
  * duration in ms to pair it with. A spring that settles returns a
- * `'settle'` easing; a pure undamped one returns a `'loop'` easing for an
- * infinite alternating animation.
+ * `'settle'` easing. A pure undamped config (`dampingRatio: 0` with
+ * passthrough `arrival`) has no friction and never settles, so it
+ * returns a `'loop'` easing for an infinite alternating animation.
  */
 export function springToLinear(
   config: SpringDefinition,
@@ -325,7 +333,10 @@ export interface PropertySpec {
   readonly from: number
   /** Target value the spring is tuned toward. */
   readonly to: number
-  /** Unit appended to numbers, e.g. `'px'`, `'%'`, `'deg'`. @default '' */
+  /**
+   * Unit appended to numbers, e.g. `'px'`, `'%'`, `'deg'`.
+   * @default ''
+   */
   readonly unit?: string
   /**
    * Formats an interpolated number into a property value, overriding
@@ -343,7 +354,10 @@ export interface PropertySpec {
 }
 
 export interface CssOptions extends LinearEasingOptions {
-  /** Name for the generated `@keyframes` rule. @default 'coily' */
+  /**
+   * Name for the generated `@keyframes` rule.
+   * @default 'coily'
+   */
   readonly name?: string
 }
 
@@ -437,6 +451,20 @@ export function springToWaapi(
  * shorthand value, driving one property or several from one spring. The
  * `name` option (default `'coily'`) names the `@keyframes` rule and is
  * referenced by the `animation` value.
+ *
+ * @example
+ * ```ts
+ * const { keyframes, animation } = springToCss(config, {
+ *   property: 'translate',
+ *   from: 0,
+ *   to: 300,
+ *   unit: 'px',
+ * })
+ * const style = document.createElement('style')
+ * style.textContent = keyframes
+ * document.head.append(style)
+ * element.style.animation = animation
+ * ```
  */
 export function springToCss(
   config: SpringDefinition,

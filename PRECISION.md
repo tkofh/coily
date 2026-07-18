@@ -147,6 +147,55 @@ across crossings any more than it does across frames. A rebounding
 spring never visits the far side of its target, and it rests — snapped,
 per rule 2 — exactly on the target itself.
 
+## Followed targets
+
+Everything above concerns a spring and its own target. Following adds
+an approximation an isolated spring never has: a follower's target
+moves continuously with its leader, but the follower can only sample
+it at discrete points. That sampling is where frame timing could leak
+into trajectories, and two mechanisms keep it out.
+
+**First-order hold.** On a passthrough edge — a follower outside any
+follow cycle, with the default `arrival` — each step integrates
+against a linear ramp through the leader's actual motion for that
+step, not a value held from the step boundary. The ramp keeps the
+closed forms closed: a target moving at constant slope `g` shifts the
+equilibrium by the constant `-(damping/tension) * g`, so the solver
+ticks the shifted state exactly and shifts back. A linearly moving
+leader is followed exactly at any step size; a curving one leaves an
+error that shrinks with the square of the step.
+
+**Error-controlled sub-steps.** Before each frame, the system
+estimates every follow edge's impending coupling error from its recent
+frame deltas and its leader's current state, and splits the frame into
+up to 8 equal sub-steps when one step would exceed the edge's
+tolerance: `max(0.5 * 10^-precision, couplingTolerance)`, the
+follower's own resting resolution floored by the system-wide knob.
+Quiet frames take one step and cost nothing extra; teleports, flings,
+and dropped frames sub-step. The estimate is a calibrated heuristic,
+not a proven bound, and the tolerance targets local per-frame error —
+accumulated error over a long trajectory runs a small multiple of it.
+
+Ramps never arm inside a cycle — a ramp's velocity coupling is
+necessarily one step stale around a loop, which can destabilize cycles
+that are unconditionally stable under held targets — and never for an
+`arrival` spring, whose crossings are closed-form only against a held
+target. Those edges couple through a target held per sub-step instead.
+
+What following preserves bit-for-bit:
+
+- An isolated spring never sub-steps. K steps of `dt/K` are not
+  float-identical to one step of `dt`, so a motion outside the follow
+  graph always advances in one exact step per frame.
+- Synchronous writes stay events. A retarget, value write, or `jumpTo`
+  on a leader lands on its followers as an exact step at write time,
+  never smeared across the following frame.
+- Rest is a fixpoint through any depth of following, and arrival
+  crossings stay solved, never sampled.
+
+The visible contract: a chain's shape is a property of its springs,
+not of the frame rate it happens to render at.
+
 ## What stays exact
 
 Two comparisons look like they want a tolerance but deliberately use raw

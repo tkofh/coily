@@ -1,12 +1,12 @@
 import { describe, expect } from 'vitest'
 import { SpringDefinition, defineSpring } from '../src/config.ts'
 import { CompositeSpring } from '../src/composite-spring.ts'
-import { FollowGraph, resolveLeaderMotions } from '../src/follow-graph.ts'
+import { type FollowEdge, FollowGraph, resolveLeaderMotions } from '../src/follow-graph.ts'
 import { accelerationOf, velocityOf } from '../src/kinematic-source.ts'
 import { Motion } from '../src/motion.ts'
 import { MotionSet } from '../src/motion-set.ts'
 import { Spring } from '../src/spring.ts'
-import { mapSpring } from '../src/spring-source.ts'
+import { SpringSourceSymbol, mapSpring } from '../src/spring-source.ts'
 import { makeSource, test } from './helpers.ts'
 
 const config = defineSpring({ mass: 1, tension: 170, damping: 26 })
@@ -20,8 +20,19 @@ function makeMotion(): Motion {
   return new Motion(SpringDefinition.default, 0, 0)
 }
 
-function link(graph: FollowGraph, follower: Motion, ...leaders: Motion[]): void {
-  graph.addEdge({ follower, leaders, recouple: () => {} })
+function link(graph: FollowGraph, follower: Motion, ...leaders: Motion[]): FollowEdge {
+  const edge: FollowEdge = {
+    follower,
+    leaders,
+    _cyclic: false,
+    _prevValue: 0,
+    _d1: 0,
+    _d2: 0,
+    recouple: () => {},
+    plan: () => 1,
+  }
+  graph.addEdge(edge)
+  return edge
 }
 
 /** The single motion behind a scalar spring. */
@@ -106,6 +117,17 @@ describe('resolveLeaderMotions', () => {
     // Overlapping derivations of one composite deduplicate.
     const overlapped = mapSpring({ a: point, b: velocityOf(point) }, ({ a, b }) => a.x + b.y)
     expect(idsOf(resolveLeaderMotions(overlapped))).toEqual(channels)
+  })
+
+  test('a wrapper handing out a spring api resolves through it', ({ system }) => {
+    // The Vue SpringRef shape: the brand is a plain value slot holding
+    // another source's api, so the wrapper itself never lazily registers.
+    const spring = system.createSpring(0, config)
+    const wrapper = { [SpringSourceSymbol]: spring[SpringSourceSymbol] }
+
+    const resolved = resolveLeaderMotions(wrapper)
+    expect(resolved).toHaveLength(1)
+    expect(resolved[0]).toBe(resolveLeaderMotions(spring)[0])
   })
 
   test('a foreign source resolves to nothing', () => {
@@ -287,6 +309,105 @@ describe('FollowGraph: ordering', () => {
   })
 })
 
+describe('FollowGraph: cycle classification', () => {
+  test('chain edges are acyclic', () => {
+    const graph = new FollowGraph()
+    const a = makeMotion()
+    const b = makeMotion()
+    const c = makeMotion()
+    const ab = link(graph, b, a)
+    const bc = link(graph, c, b)
+
+    graph.ensureOrder()
+
+    expect(ab._cyclic).toBe(false)
+    expect(bc._cyclic).toBe(false)
+  })
+
+  test('diamond edges are acyclic', () => {
+    const graph = new FollowGraph()
+    const x = makeMotion()
+    const y = makeMotion()
+    const z = makeMotion()
+    const w = makeMotion()
+    const edges = [link(graph, y, x), link(graph, z, x), link(graph, w, y, z)]
+
+    graph.ensureOrder()
+
+    for (const edge of edges) {
+      expect(edge._cyclic).toBe(false)
+    }
+  })
+
+  test('mutual followers classify both edges cyclic', () => {
+    const graph = new FollowGraph()
+    const a = makeMotion()
+    const b = makeMotion()
+    const ab = link(graph, a, b)
+    const ba = link(graph, b, a)
+
+    graph.ensureOrder()
+
+    expect(ab._cyclic).toBe(true)
+    expect(ba._cyclic).toBe(true)
+  })
+
+  test('a self-follow edge is cyclic', () => {
+    const graph = new FollowGraph()
+    const solo = makeMotion()
+    const edge = link(graph, solo, solo)
+
+    graph.ensureOrder()
+
+    expect(edge._cyclic).toBe(true)
+  })
+
+  test('a tail off a cycle classifies acyclic while the cycle edges classify', () => {
+    const graph = new FollowGraph()
+    const a = makeMotion()
+    const b = makeMotion()
+    const c = makeMotion()
+    const tail = makeMotion()
+    const cycle = [link(graph, a, c), link(graph, c, b), link(graph, b, a)]
+    const out = link(graph, tail, c)
+
+    graph.ensureOrder()
+
+    for (const edge of cycle) {
+      expect(edge._cyclic).toBe(true)
+    }
+    expect(out._cyclic).toBe(false)
+  })
+
+  test('breaking a cycle reclassifies the surviving edge', () => {
+    const graph = new FollowGraph()
+    const a = makeMotion()
+    const b = makeMotion()
+    link(graph, a, b)
+    const ba = link(graph, b, a)
+    graph.ensureOrder()
+    expect(ba._cyclic).toBe(true)
+
+    graph.removeEdge(a)
+    graph.ensureOrder()
+
+    expect(ba._cyclic).toBe(false)
+  })
+
+  test('a multi-leader edge is cyclic if any leader shares its SCC', () => {
+    const graph = new FollowGraph()
+    const outside = makeMotion()
+    const a = makeMotion()
+    const b = makeMotion()
+    const edge = link(graph, b, a, outside)
+    link(graph, a, b)
+
+    graph.ensureOrder()
+
+    expect(edge._cyclic).toBe(true)
+  })
+})
+
 describe('FollowGraph: spring wiring', () => {
   test('following registers an edge; the leader ranks first', () => {
     const motions = new MotionSet()
@@ -447,5 +568,101 @@ describe('FollowGraph: spring wiring', () => {
     expect(follower.value).toBeCloseTo(100, 0)
     expect(motionOf(leader)._rank).toBe(0)
     expect(motionOf(follower)._rank).toBe(1)
+  })
+
+  test('following through a wrapper registers the edge and orders the pair', () => {
+    const motions = new MotionSet()
+    const leader = new Spring(motions, 0)
+    const follower = new Spring(motions, 0)
+    follower.target = { [SpringSourceSymbol]: leader[SpringSourceSymbol] }
+
+    motions.graph.ensureOrder()
+
+    expect(motionOf(leader)._rank).toBe(0)
+    expect(motionOf(follower)._rank).toBe(1)
+  })
+})
+
+describe('FollowGraph: planning', () => {
+  test("plan tracks the follower's target trail as frame deltas", () => {
+    const motions = new MotionSet()
+    const leader = new Spring(motions, 0)
+    const follower = new Spring(motions, 0)
+    follower.target = leader
+    const edge = motionOf(follower)._edge!
+    expect(edge._prevValue).toBe(follower.target)
+
+    leader.target = 100
+    motions.tick(1 / 60)
+    // This frame's plan ran before its recouple: the observed delta is
+    // still zero, the leader's first move lands in the next plan.
+    expect(edge._d1).toBe(0)
+    const first = follower.target
+
+    motions.tick(1 / 60)
+    expect(edge._d1).toBe(first)
+    expect(edge._d2).toBe(0)
+    const second = follower.target
+
+    motions.tick(1 / 60)
+    expect(edge._d1).toBe(second - first)
+    expect(edge._d2).toBe(first)
+    expect(edge._prevValue).toBe(second)
+  })
+
+  test('an edge with resting leaders is not planned', () => {
+    const motions = new MotionSet()
+    const leader = new Spring(motions, 0)
+    const follower = new Spring(motions, 0)
+    follower.target = leader
+    const edge = motionOf(follower)._edge!
+    // An unplanned edge must not touch its estimator; the sentinel
+    // survives frames where only the follower moves.
+    edge._prevValue = 42
+
+    follower.value = 50
+    motions.tick(1 / 60)
+    motions.tick(1 / 60)
+
+    expect(edge._prevValue).toBe(42)
+  })
+
+  test('planning reads no user map code', () => {
+    const motions = new MotionSet()
+    // A huge tolerance pins K = 1, so recouple runs once per frame and
+    // any further read could only come from the plan pass.
+    motions.couplingTolerance = 1e9
+    const leader = new Spring(motions, 0)
+    let reads = 0
+    const mapped = mapSpring(leader, (value) => {
+      reads++
+      return value * 2
+    })
+    const follower = new Spring(motions, 0)
+    follower.target = mapped
+    const wired = reads
+
+    leader.target = 100
+    motions.tick(1 / 60)
+    motions.tick(1 / 60)
+    motions.tick(1 / 60)
+
+    // Two reads per frame — the mid-pass recouple and the frame-end
+    // update handler — and none from the plan pass, whose history is the
+    // follower's own target trail.
+    expect(reads).toBe(wired + 6)
+  })
+
+  test('cycle edges wired through springs classify on the next tick', () => {
+    const motions = new MotionSet()
+    const a = new Spring(motions, 0)
+    const b = new Spring(motions, 0)
+    b.target = a
+    a.target = b
+
+    motions.graph.ensureOrder()
+
+    expect(motionOf(a)._edge!._cyclic).toBe(true)
+    expect(motionOf(b)._edge!._cyclic).toBe(true)
   })
 })
