@@ -19,6 +19,13 @@ export class Motion {
   /** Tick-pass marker written by `MotionSet` so a motion re-added mid-pass isn't ticked twice. */
   _pass = 0
 
+  /**
+   * Dependency rank written by `FollowGraph`: motions the follow graph
+   * touches count up from 0, leaders before followers; -1 marks a motion
+   * outside the graph.
+   */
+  _rank = -1
+
   // Set by the owning Spring from its `purpose`; `MotionSet.finishAll`
   // leaves motions that don't respect reduced motion running, so
   // 'appearance' springs keep animating when it turns on.

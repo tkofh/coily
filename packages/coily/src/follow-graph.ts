@@ -47,3 +47,163 @@ function collectInto(source: object, leaders: Set<Motion>): void {
     for (const part of backing) collectInto(part, leaders)
   }
 }
+
+const NO_LEADERS: readonly Motion[] = []
+
+/**
+ * One follow relationship, as the system sees it: which motion
+ * retargets, which motions it reads, and how to re-anchor it. `Spring`
+ * registers an edge when a follow is wired to a source with resolvable
+ * motions, and unregisters it on unfollow and dispose.
+ */
+export interface FollowEdge {
+  /** The motion that retargets when its leaders advance. */
+  readonly follower: Motion
+  /** The distinct motions behind the followed source, per `resolveLeaderMotions`. */
+  readonly leaders: readonly Motion[]
+  /**
+   * Re-anchors the follower to the followed source's current value, with
+   * the exact semantics of the leader-update handler (finite guard,
+   * reduced-motion jump). `h` is the step the follower is about to
+   * advance by, in seconds (the internal tick unit); it is unused until
+   * sub-stepping and first-order hold interpret the delta.
+   */
+  recouple(h: number): void
+}
+
+/**
+ * The follow graph as a walkable structure: one edge per following
+ * motion, and a cached dependency rank over every motion the edges
+ * touch. `MotionSet` owns one; springs register and unregister edges as
+ * follows are wired and torn down.
+ */
+export class FollowGraph {
+  readonly #edges = new Map<Motion, FollowEdge>()
+  /** Motions holding a rank from the last recompute, so stale ranks reset to -1. */
+  #ranked: readonly Motion[] = []
+  #dirty = false
+
+  /** The edge whose follower is `motion`, if one is registered. */
+  edgeOf(motion: Motion): FollowEdge | undefined {
+    return this.#edges.get(motion)
+  }
+
+  /**
+   * Registers `edge`, replacing any edge with the same follower: a
+   * spring follows at most one source at a time.
+   */
+  addEdge(edge: FollowEdge): void {
+    this.#edges.set(edge.follower, edge)
+    this.#dirty = true
+  }
+
+  /** Drops the edge whose follower is `motion`, if one is registered. */
+  removeEdge(follower: Motion): void {
+    if (this.#edges.delete(follower)) {
+      this.#dirty = true
+    }
+  }
+
+  /**
+   * Recomputes ranks if an edge was added or removed since the last
+   * call; clean calls return immediately. Afterward, motions the graph
+   * touches hold ranks counting up from 0 with every leader ranked
+   * before its followers, members of a cycle rank in ascending creation
+   * id, and motions outside the graph hold -1. Ranks are canonical: a
+   * function of graph structure and creation order, never of wiring
+   * order.
+   */
+  ensureOrder(): void {
+    if (!this.#dirty) return
+    this.#dirty = false
+    this.#recompute()
+  }
+
+  #recompute(): void {
+    for (const motion of this.#ranked) {
+      motion._rank = -1
+    }
+
+    const nodes = new Set<Motion>()
+    for (const [follower, edge] of this.#edges) {
+      nodes.add(follower)
+      for (const leader of edge.leaders) {
+        nodes.add(leader)
+      }
+    }
+    // Roots visit in ascending creation id, not edge-insertion order, so
+    // ranks depend on structure and creation order alone: wiring the
+    // same graph in any order yields the same ranks.
+    const roots = [...nodes].sort((a, b) => a._id - b._id)
+
+    // Iterative Tarjan over follower -> leader adjacency. An SCC
+    // completes only after every SCC it reads from, so completion order
+    // is dependency order and ranks assign as SCCs finish.
+    const indexOf = new Map<Motion, number>()
+    const lowOf = new Map<Motion, number>()
+    const onStack = new Set<Motion>()
+    const stack: Motion[] = []
+    const ranked: Motion[] = []
+    let index = 0
+    let rank = 0
+
+    for (const root of roots) {
+      if (indexOf.has(root)) continue
+
+      const frames = [{ node: root, leaders: this.#leadersOf(root), next: 0 }]
+      indexOf.set(root, index)
+      lowOf.set(root, index)
+      index++
+      stack.push(root)
+      onStack.add(root)
+
+      while (frames.length > 0) {
+        const frame = frames.at(-1)!
+        if (frame.next < frame.leaders.length) {
+          const leader = frame.leaders[frame.next++]!
+          const seen = indexOf.get(leader)
+          if (seen === undefined) {
+            indexOf.set(leader, index)
+            lowOf.set(leader, index)
+            index++
+            stack.push(leader)
+            onStack.add(leader)
+            frames.push({ node: leader, leaders: this.#leadersOf(leader), next: 0 })
+          } else if (onStack.has(leader)) {
+            lowOf.set(frame.node, Math.min(lowOf.get(frame.node)!, seen))
+          }
+        } else {
+          frames.pop()
+          const low = lowOf.get(frame.node)!
+          const parent = frames.at(-1)
+          if (parent !== undefined) {
+            lowOf.set(parent.node, Math.min(lowOf.get(parent.node)!, low))
+          }
+          if (low === indexOf.get(frame.node)!) {
+            // frame.node roots a finished SCC: pop its members and rank
+            // them in ascending creation id — the cycle policy, stable
+            // across passes and churn.
+            const members: Motion[] = []
+            let member: Motion
+            do {
+              member = stack.pop()!
+              onStack.delete(member)
+              members.push(member)
+            } while (member !== frame.node)
+            members.sort((a, b) => a._id - b._id)
+            for (const motion of members) {
+              motion._rank = rank++
+              ranked.push(motion)
+            }
+          }
+        }
+      }
+    }
+
+    this.#ranked = ranked
+  }
+
+  #leadersOf(motion: Motion): readonly Motion[] {
+    return this.#edges.get(motion)?.leaders ?? NO_LEADERS
+  }
+}

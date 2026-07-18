@@ -1,4 +1,5 @@
 import { FlushQueue } from './flush-queue.ts'
+import { FollowGraph } from './follow-graph.ts'
 import type { Motion } from './motion.ts'
 
 /**
@@ -10,6 +11,8 @@ export class MotionSet {
   reduced = false
   onWake: (() => void) | null = null
   readonly flushes = new FlushQueue()
+  /** Follow edges registered by following springs, with the dependency rank over their motions. */
+  readonly graph = new FollowGraph()
   readonly #motions = new Set<Motion>()
   readonly #debug: boolean
   #lastSize = 0
