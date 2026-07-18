@@ -32,7 +32,6 @@ export class Motion {
   // velocity write.
   #needsUpdate = false
   #needsReset = false
-  #timeRemaining = 0
   #running: boolean
 
   readonly #emitter: Emitter
@@ -44,7 +43,6 @@ export class Motion {
     this.#running = !this.#state.isResting
 
     this.#updateSolver()
-    this.#timeRemaining = this.#config.computeTimeRemaining(this.#state)
   }
 
   get position() {
@@ -68,7 +66,11 @@ export class Motion {
   }
 
   get timeRemaining() {
-    return this.#timeRemaining
+    // Solved from the live state on read: the closed forms are
+    // time-invariant, so nothing needs maintaining per tick — chains of
+    // followers disturb every motion every frame, and eager bookkeeping
+    // here is a per-frame bisection nobody asked for.
+    return this.#config.computeTimeRemaining(this.#state)
   }
 
   get isResting() {
@@ -85,8 +87,6 @@ export class Motion {
   tick(dt: number, emit = true) {
     invariant(this.#currentSolver, 'Cannot tick a disposed motion')
 
-    const needsTimeRemaining = this.#needsUpdate || this.#needsReset
-
     if (this.#needsUpdate) {
       this.#updateSolver()
 
@@ -98,12 +98,7 @@ export class Motion {
       this.#needsReset = false
     }
 
-    if (needsTimeRemaining) {
-      this.#timeRemaining = this.#config.computeTimeRemaining(this.#state)
-    }
-
     this.#currentSolver.tick(dt)
-    this.#timeRemaining = Math.max(0, this.#timeRemaining - dt * 1000)
 
     if (this.#state.isResting) {
       // Snap exactly to the target at rest; the deferred reset re-anchors
@@ -120,7 +115,6 @@ export class Motion {
     if (this.#state.isResting) {
       if (this.#running) {
         this.#running = false
-        this.#timeRemaining = 0
         this.#emitter.emit('stop')
       }
     } else if (!this.#running) {

@@ -5,18 +5,25 @@ function onMouseMove(event: MouseEvent) {
   mouse.value = { x: event.clientX, y: event.clientY }
 }
 
-const bouncy = useSpring(mouse, defineSpring({ dampingRatio: 1, duration: 500 }))
-const stiff = useSpring(mouse, defineSpring({ dampingRatio: 1.5, duration: 500 }))
+// High mass keeps wn = sqrt(tension / mass) low: a slow first step, then
+// real momentum. arrival -0.75 rebounds each axis off the cursor with
+// three quarters of its speed instead of overshooting it, so the balls
+// rattle into the pointer and come to rest on it.
+const heavy = useSpring(
+  mouse,
+  defineSpring({ mass: 8, tension: 400, dampingRatio: 0.25, arrival: -0.75 }),
+)
+const heavier = useSpring(
+  mouse,
+  defineSpring({ mass: 16, tension: 400, dampingRatio: 0.2, arrival: -0.75 }),
+)
 </script>
 
 <template>
   <div class="playground" @mousemove="onMouseMove">
-    <nav class="nav">
-      <NuxtLink to="/chain" class="nav-link">Chain Demo →</NuxtLink>
-      <NuxtLink to="/arrival" class="nav-link">Arrival Demo →</NuxtLink>
-    </nav>
-    <div class="ball bouncy" :style="{ '--x': bouncy.x, '--y': bouncy.y }" />
-    <div class="ball stiff" :style="{ '--x': stiff.x, '--y': stiff.y }" />
+    <NuxtLink to="/" class="nav-link">&larr; Spring Demo</NuxtLink>
+    <div class="ball heavy" :style="{ '--x': heavy.x, '--y': heavy.y }" />
+    <div class="ball heavier" :style="{ '--x': heavier.x, '--y': heavier.y }" />
   </div>
 </template>
 
@@ -40,22 +47,15 @@ const stiff = useSpring(mouse, defineSpring({ dampingRatio: 1.5, duration: 500 }
   overflow: hidden;
 }
 
-.nav {
+.nav-link {
   position: fixed;
   top: 20px;
-  right: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  text-align: right;
-  z-index: 10;
-}
-
-.nav-link {
+  left: 20px;
   color: #888;
   text-decoration: none;
   font-family: system-ui;
   font-size: 14px;
+  z-index: 10;
 }
 
 .nav-link:hover {
@@ -70,11 +70,11 @@ const stiff = useSpring(mouse, defineSpring({ dampingRatio: 1.5, duration: 500 }
   translate: calc(var(--x) * 1px - 50%) calc(var(--y) * 1px - 50%);
 }
 
-.ball.bouncy {
-  background-color: #e74c3c;
+.ball.heavy {
+  background-color: #2ecc71;
 }
 
-.ball.stiff {
-  background-color: #3498db;
+.ball.heavier {
+  background-color: #9b59b6;
 }
 </style>
