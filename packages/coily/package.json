@@ -19,6 +19,7 @@
   "sideEffects": false,
   "exports": {
     ".": "./dist/index.js",
+    "./css": "./dist/css.js",
     "./nuxt": "./dist/nuxt.js",
     "./vue": "./dist/vue.js",
     "./package.json": "./package.json"
