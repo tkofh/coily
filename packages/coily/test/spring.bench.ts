@@ -171,6 +171,18 @@ describe('linked spring chains', () => {
     }
   })
 
+  // The same run with sub-stepping pinned off isolates the coupling
+  // controller's standing overhead (plan pass + ramp arming) from the
+  // sub-steps it chooses to spend.
+  bench('64-spring chain: 60 frames, coupling pinned to one step per frame', () => {
+    const system = createSpringSystem({ couplingTolerance: 1e9 })
+    const springs = createChain(system, 64)
+    springs[0]!.target = 100
+    for (let i = 0; i < 60; i++) {
+      system.advance(FRAME)
+    }
+  })
+
   bench('64-spring chain with onUpdate listeners: 60 frames', () => {
     const system = createSpringSystem()
     const springs = createChain(system, 64)
