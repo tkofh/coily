@@ -201,6 +201,9 @@ const followChannel = (mine: Spring, theirs: Spring) => {
 export class CompositeSpring<in out T extends object> implements KinematicSource<ReadonlyShape<T>> {
   /** Brands the composite as a `KinematicSource` whose api is the composite itself. */
   get [SpringSourceSymbol](): KinematicSourceApi<ReadonlyShape<T>> {
+    // Backing registers on first use as a source — see `Spring`'s brand
+    // getter for why registration is lazy.
+    registerBacking(this, this.#tree.leaves)
     return this
   }
 
@@ -278,7 +281,6 @@ export class CompositeSpring<in out T extends object> implements KinematicSource
           new Spring(motions, leafValue, undefined, purposeByPath?.get(path) ?? 'motion'),
       ),
     )
-    registerBacking(this, this.#tree.leaves)
     if (config !== undefined) {
       this.#tree.root.broadcast(config, resolveConfigNode, assignConfig, 'config')
     }

@@ -39,6 +39,12 @@ export type Purpose = 'motion' | 'appearance'
 export class Spring implements KinematicSource {
   /** Brands the spring as a `KinematicSource` whose api is the spring itself. */
   get [SpringSourceSymbol](): KinematicSourceApi<number> {
+    // Backing registers on first use as a source, not at construction:
+    // a per-creation entry kept every spring in the weak registry, and
+    // major GCs walking that ephemeron set cost 8x on creation. Every
+    // follow path reads this api before resolving leaders, so
+    // resolution always finds the entry.
+    registerBacking(this, this.#motion)
     return this
   }
 
@@ -71,7 +77,6 @@ export class Spring implements KinematicSource {
     this.#target = value
     this.#purpose = purpose
     this.#motion = new Motion(this.#config, 0, 0)
-    registerBacking(this, this.#motion)
     // An 'appearance' spring opts out of reduced motion: its own writes
     // stay animated (below), and MotionSet.finishAll leaves it running.
     this.#motion.respectsReducedMotion = purpose === 'motion'

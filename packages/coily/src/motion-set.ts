@@ -180,8 +180,8 @@ export class MotionSet {
         // leader is resting and unadvanced: their values cannot have
         // changed since the last retarget, which also keeps user map
         // code uncalled on frames where its inputs are still.
-        const edge = this.graph.edgeOf(motion)
-        if (edge !== undefined && this.#shouldRecouple(edge)) {
+        const edge = motion._edge
+        if (edge !== null && this.#shouldRecouple(edge)) {
           edge.recouple(dt)
         }
         // The wake walk pushes followers whether or not they wake; a
@@ -195,8 +195,11 @@ export class MotionSet {
         if (motion.isResting) {
           this.#motions.delete(motion)
         }
-        for (const out of this.graph.followersOf(motion)) {
-          heap.push(out.follower)
+        const followers = motion._followers
+        if (followers !== null) {
+          for (const out of followers) {
+            heap.push(out.follower)
+          }
         }
       }
     } finally {

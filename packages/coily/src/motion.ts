@@ -1,5 +1,6 @@
 import { SpringDefinition } from './config.ts'
 import { Emitter } from './emitter.ts'
+import type { FollowEdge } from './follow-graph.ts'
 import { State } from './state.ts'
 import { CriticallyDampedSolver, OverdampedSolver, UnderdampedSolver } from './solver.ts'
 import { invariant } from './util.ts'
@@ -25,6 +26,20 @@ export class Motion {
    * outside the graph.
    */
   _rank = -1
+
+  /**
+   * The edge this motion follows through, or null. Written by
+   * `FollowGraph` on edge add/remove so the tick's hot loop reads a
+   * field instead of a map.
+   */
+  _edge: FollowEdge | null = null
+
+  /**
+   * The edges reading this motion, or null when none. Written by
+   * `FollowGraph` with the rank cache, so it can lag a mid-pass edge
+   * change until the next recompute; the tick tolerates stale entries.
+   */
+  _followers: FollowEdge[] | null = null
 
   // Set by the owning Spring from its `purpose`; `MotionSet.finishAll`
   // leaves motions that don't respect reduced motion running, so

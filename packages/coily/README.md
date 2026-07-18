@@ -100,7 +100,9 @@ const magnitude = system.createSpring(mapSpring(point, ({ x, y }) => Math.hypot(
 
 A mapped value is a `SpringSource`, the contract `target` accepts and every `Spring` implements. A `CompositeSpring` is a source _of its shape_: `mapSpring` reads it, alone or at the leaves of a shape, but only scalar sources can be followed directly.
 
-Follow graphs may contain cycles: retargets never re-emit, so nothing loops within a frame. Mutual followers converge to a shared value. A cycle whose maps expand (`(v) => v + 10` in both directions) chases forever and never rests, keeping the system awake until you break the cycle.
+Chains advance in dependency order: each frame, a spring moves after the springs it follows — whatever order anything was created or wired in — so a follower always chases its leader's current value rather than last frame's. Update events fire once per spring per frame, after every spring has moved, in that same leader-first order. A callback that reads another spring sees its final value for the frame, and a spring retargeted from inside a callback starts moving on the next frame.
+
+Follow graphs may contain cycles: retargets never re-emit, so nothing loops within a frame. Mutual followers converge to a shared value. A cycle has no order that puts every member after its leaders, so members advance in creation order and the edge that closes the loop chases one frame behind. A cycle whose maps expand (`(v) => v + 10` in both directions) chases forever and never rests, keeping the system awake until you break the cycle.
 
 ### Composites
 

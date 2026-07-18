@@ -1,18 +1,21 @@
 import { Motion } from './motion.ts'
-import { recipeOf } from './spring-source.ts'
+import { SpringSourceSymbol, isSpringSource, recipeOf } from './spring-source.ts'
 
 // What advances a registered source: its own motion, or the sources it
 // aggregates (a composite's channels), each resolved through its own
-// entry. Constructors write it; `resolveLeaderMotions` reads it. A
-// source with no entry is foreign — a user-authored object honoring the
-// `SpringSource` contract — and contributes no ordering constraint.
+// entry. Brand getters write it lazily; `resolveLeaderMotions` reads
+// it. A source with no entry is foreign — a user-authored object
+// honoring the `SpringSource` contract — and contributes no ordering
+// constraint.
 const MOTION_BACKING = new WeakMap<object, Motion | readonly object[]>()
 
 /**
  * Records what advances `source`: its own `Motion` for a scalar spring,
  * or the aggregated sources whose own registrations lead to motions (a
- * composite registers its channel springs). Called once per source, from
- * the `Spring` and `CompositeSpring` constructors.
+ * composite registers its channel springs). Called from the
+ * `SpringSourceSymbol` brand getters on every api read — lazily, so
+ * springs never used as sources stay out of the weak registry, and
+ * idempotently, so repeated reads just overwrite the entry.
  */
 export function registerBacking(source: object, backing: Motion | readonly object[]): void {
   MOTION_BACKING.set(source, backing)
@@ -39,7 +42,13 @@ function collectInto(source: object, leaders: Set<Motion>): void {
     for (const root of recipe.sources) collectInto(root, leaders)
     return
   }
-  const backing = MOTION_BACKING.get(source)
+  let backing = MOTION_BACKING.get(source)
+  if (backing === undefined && isSpringSource(source)) {
+    // Backing registers lazily, in the brand getter: reading the api
+    // registers coily sources and is a plain read on foreign ones.
+    void source[SpringSourceSymbol]
+    backing = MOTION_BACKING.get(source)
+  }
   if (backing === undefined) return
   if (backing instanceof Motion) {
     leaders.add(backing)
@@ -71,38 +80,25 @@ export interface FollowEdge {
   recouple(h: number): void
 }
 
-const NO_EDGES: readonly FollowEdge[] = []
-
 /**
  * The follow graph as a walkable structure: one edge per following
  * motion, and a cached dependency rank over every motion the edges
  * touch. `MotionSet` owns one; springs register and unregister edges as
- * follows are wired and torn down.
+ * follows are wired and torn down. What the tick reads per motion —
+ * `_edge`, `_followers`, `_rank` — lives on the motions themselves;
+ * this class is their writer.
  */
 export class FollowGraph {
   readonly #edges = new Map<Motion, FollowEdge>()
-  readonly #followers = new Map<Motion, FollowEdge[]>()
   /** Motions holding a rank from the last recompute, so stale ranks reset to -1. */
   #ranked: readonly Motion[] = []
+  /** Motions holding a follower list from the last recompute, so stale lists reset to null. */
+  #withFollowers: readonly Motion[] = []
   #dirty = false
 
   /** Whether no edges are registered, letting the tick skip ordering work entirely. */
   get isEmpty(): boolean {
     return this.#edges.size === 0
-  }
-
-  /** The edge whose follower is `motion`, if one is registered. */
-  edgeOf(motion: Motion): FollowEdge | undefined {
-    return this.#edges.get(motion)
-  }
-
-  /**
-   * The edges reading `motion` — the tick's wake walk. Rebuilt with the
-   * rank cache, so it can lag a mid-pass edge change until the next
-   * `ensureOrder`; consumers must tolerate edges already unregistered.
-   */
-  followersOf(motion: Motion): readonly FollowEdge[] {
-    return this.#followers.get(motion) ?? NO_EDGES
   }
 
   /**
@@ -111,12 +107,14 @@ export class FollowGraph {
    */
   addEdge(edge: FollowEdge): void {
     this.#edges.set(edge.follower, edge)
+    edge.follower._edge = edge
     this.#dirty = true
   }
 
   /** Drops the edge whose follower is `motion`, if one is registered. */
   removeEdge(follower: Motion): void {
     if (this.#edges.delete(follower)) {
+      follower._edge = null
       this.#dirty = true
     }
   }
@@ -141,17 +139,20 @@ export class FollowGraph {
       motion._rank = -1
     }
 
-    this.#followers.clear()
+    for (const motion of this.#withFollowers) {
+      motion._followers = null
+    }
+    const withFollowers: Motion[] = []
     for (const edge of this.#edges.values()) {
       for (const leader of edge.leaders) {
-        const list = this.#followers.get(leader)
-        if (list === undefined) {
-          this.#followers.set(leader, [edge])
-        } else {
-          list.push(edge)
+        if (leader._followers === null) {
+          leader._followers = []
+          withFollowers.push(leader)
         }
+        leader._followers.push(edge)
       }
     }
+    this.#withFollowers = withFollowers
 
     const nodes = new Set<Motion>()
     for (const [follower, edge] of this.#edges) {
