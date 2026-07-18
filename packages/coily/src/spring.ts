@@ -3,7 +3,12 @@ import type { MotionSet } from './motion-set.ts'
 import { Motion } from './motion.ts'
 import { type SpringSource, SpringSourceSymbol, isSpringSource } from './spring-source.ts'
 import type { KinematicSource, KinematicSourceApi } from './kinematic-source.ts'
-import { registerBacking, resolveLeaderMotions } from './follow-graph.ts'
+import {
+  type FollowEdge,
+  MANIFOLD_GATE,
+  registerBacking,
+  resolveLeaderMotions,
+} from './follow-graph.ts'
 import { invariant, RESOLVED } from './util.ts'
 
 /**
@@ -404,13 +409,58 @@ export class Spring implements KinematicSource {
     // alone.
     const leaders = resolveLeaderMotions(source)
     if (leaders.length > 0) {
-      this.#motions.graph.addEdge({
+      // Fresh shock terms need leader state in the followed value's
+      // units, which only an identity passthrough has: a derived source
+      // (mapSpring, kinematic wrappers) runs on history alone.
+      const leaderMotion = api instanceof Spring ? leaders[0]! : null
+      const edge: FollowEdge = {
         follower: this.#motion,
         leaders,
+        _cyclic: false,
+        _prevValue: 0,
+        _d1: 0,
+        _d2: 0,
         recouple: () => {
           this.#setTarget(api.value)
         },
-      })
+        plan: (dt) => {
+          const target = this.#target
+          const d = target - edge._prevValue
+          edge._d2 = edge._d1
+          edge._d1 = d
+          edge._prevValue = target
+
+          let dHat = Math.abs(d)
+          let error = Math.abs(d - edge._d2) / 8
+          if (leaderMotion !== null && leaderMotion._manifoldDeviation() > MANIFOLD_GATE * dHat) {
+            const accel = Math.abs(leaderMotion._acceleration())
+            const speed = Math.abs(leaderMotion.velocity)
+            dHat = Math.max(dHat, speed * dt + 0.5 * accel * dt * dt)
+            error = Math.max(error, (accel * dt * dt) / 8)
+          }
+
+          // The budget floors at the follower's resting quantum: coupling
+          // finer than rest can resolve buys nothing.
+          const tol = Math.max(this.#config.restingMagnitude, this.#motions.couplingBudget)
+          // ZOH law inside a cycle and for arrival springs (their
+          // crossings stay closed-form under fixed-target sub-steps);
+          // the FOH sqrt law everywhere a ramp may arm.
+          return edge._cyclic || this.#config.arrival !== 1
+            ? Math.ceil(dHat / (2 * tol))
+            : Math.ceil(Math.sqrt(error / tol))
+        },
+      }
+      this.#motions.graph.addEdge(edge)
+      this.#unsubLeader = () => {
+        unsubUpdate()
+        unsubDispose()
+        this.#motions.graph.removeEdge(this.#motion)
+      }
+      this.#setTarget(api.value)
+      // Anchor the estimator on the target the follow just synced;
+      // plan's first delta then measures leader movement, not wiring.
+      edge._prevValue = this.#target
+      return
     }
     this.#unsubLeader = () => {
       unsubUpdate()

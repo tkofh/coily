@@ -21,6 +21,12 @@ export class Motion {
   _pass = 0
 
   /**
+   * Frame marker written by `MotionSet`: sub-steps share one frame, and
+   * the first advance in it queues the motion for the settle sweep.
+   */
+  _frame = 0
+
+  /**
    * Dependency rank written by `FollowGraph`: motions the follow graph
    * touches count up from 0, leaders before followers; -1 marks a motion
    * outside the graph.
@@ -180,6 +186,27 @@ export class Motion {
     this.position = 0
     this.velocity = 0
     this.tick(0)
+  }
+
+  /**
+   * The sub-step controller's shock signal, read by a follower's `plan`
+   * with this motion as its leader: deviation from the quasi-steady
+   * tracking manifold x = -(damping/tension) * v, where damping/tension
+   * is 2*zeta/wn. Near zero while chasing any smoothly moving target at
+   * any speed; the full displacement after a target teleport;
+   * (damping/tension) * |v| after a fling.
+   */
+  _manifoldDeviation() {
+    const config = this.#config
+    return Math.abs(this.#state.position + (config.damping / config.tension) * this.#state.velocity)
+  }
+
+  /** Acceleration from current state, for `plan`'s kinematic bound on a shock frame. */
+  _acceleration() {
+    const config = this.#config
+    return (
+      -(config.tension * this.#state.position + config.damping * this.#state.velocity) / config.mass
+    )
   }
 
   onUpdate(callback: () => void) {
