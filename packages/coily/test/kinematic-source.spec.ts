@@ -1,7 +1,7 @@
 import { describe, expect, vi } from 'vitest'
 import { defineSpring } from '../src/config.ts'
 import { SpringSourceSymbol, mapSpring } from '../src/spring-source.ts'
-import { accelerationOf, velocityOf } from '../src/kinematic-source.ts'
+import { type KinematicSource, accelerationOf, velocityOf } from '../src/kinematic-source.ts'
 import { advanceUntilResting, test } from './helpers.ts'
 
 const config = defineSpring({ mass: 1, tension: 170, damping: 26 })
@@ -178,6 +178,44 @@ describe('kinematic sources: composites', () => {
     system.advance(1000 / 60)
 
     expect(follower.target).toBe(motion.value + motion.velocity)
+  })
+})
+
+describe('kinematic sources: flattening', () => {
+  test('a wrapper and its source at separate shape leaves subscribe once', ({ system }) => {
+    let current = 3
+    let subscriptions = 0
+    const listeners = new Set<() => void>()
+    const source: KinematicSource = {
+      [SpringSourceSymbol]: {
+        get value() {
+          return current
+        },
+        // Fixed derivatives keep the combined read easy to assert.
+        velocity: 7,
+        acceleration: 0,
+        onUpdate: (callback) => {
+          subscriptions++
+          listeners.add(callback)
+          return () => listeners.delete(callback)
+        },
+        onDispose: () => () => {},
+      },
+    }
+
+    const follower = system.createSpring(0)
+    follower.target = mapSpring(
+      { pos: source, vel: velocityOf(source) },
+      ({ pos, vel }) => pos + vel,
+    )
+
+    // `velocityOf` flattens to its source, so both leaves share one root.
+    expect(subscriptions).toBe(1)
+    expect(follower.target).toBe(10)
+
+    current = 20
+    for (const callback of listeners) callback()
+    expect(follower.target).toBe(27)
   })
 })
 

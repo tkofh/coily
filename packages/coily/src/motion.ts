@@ -4,6 +4,8 @@ import { State } from './state.ts'
 import { CriticallyDampedSolver, OverdampedSolver, UnderdampedSolver } from './solver.ts'
 import { invariant } from './util.ts'
 
+let nextMotionId = 0
+
 /**
  * One spring simulation in displacement space: position is measured from
  * the target (0 means settled), so retargeting is a rebase performed by
@@ -11,6 +13,9 @@ import { invariant } from './util.ts'
  * damping regime and emits update/start/stop/dispose events.
  */
 export class Motion {
+  /** Monotone creation id: breaks ties wherever motions need a deterministic order. */
+  readonly _id = nextMotionId++
+
   /** Tick-pass marker written by `MotionSet` so a motion re-added mid-pass isn't ticked twice. */
   _pass = 0
 

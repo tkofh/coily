@@ -79,8 +79,8 @@ export type SourceShape<T> = 0 extends 1 & T
 export type SourceValues<T> =
   T extends SpringSource<infer V> ? V : { readonly [K in keyof T]: SourceValues<T[K]> }
 
-/** A mapped source's flattened recipe: read the base, run the pipeline. */
-interface MappedRecipe {
+/** A derived source's flattened recipe: read the base, run the pipeline. */
+export interface MappedRecipe {
   /** Deduplicated subscription targets — the chain's true roots. */
   readonly sources: readonly SpringSource<unknown>[]
   /** Reads the value the pipeline starts from — for a shape, a live mirror reused across reads. */
@@ -89,11 +89,28 @@ interface MappedRecipe {
   readonly fns: readonly ((value: unknown) => unknown)[]
 }
 
-// Mapped sources flatten when composed: the registry lets `mapSpring`
-// recognize its own results and extend their recipe instead of nesting
+// Derived sources flatten when composed: the registry lets `mapSpring`
+// recognize derived results and extend their recipe instead of nesting
 // getters, so reads stay iterative and chain depth never approaches the
-// call stack.
+// call stack. `velocityOf`/`accelerationOf` register their wrappers too,
+// and `resolveLeaderMotions` walks recipe roots to find the springs
+// behind any derivation.
 const RECIPES = new WeakMap<object, MappedRecipe>()
+
+/** The flattened recipe behind `source`, when it is a derived source. */
+export function recipeOf(source: object): MappedRecipe | undefined {
+  return RECIPES.get(source)
+}
+
+/**
+ * Registers a derived source's recipe. Every source built on other
+ * sources must register at creation: `mapSpring` composition and
+ * `resolveLeaderMotions` both reach a derivation's roots through the
+ * registry rather than through the wrapper object.
+ */
+export function registerRecipe(source: object, recipe: MappedRecipe): void {
+  RECIPES.set(source, recipe)
+}
 
 function applyFns(fns: readonly ((value: unknown) => unknown)[], value: unknown): unknown {
   let result = value

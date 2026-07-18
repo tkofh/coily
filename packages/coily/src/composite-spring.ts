@@ -13,6 +13,7 @@ import {
 import { Spring, type Purpose } from './spring.ts'
 import { type SpringSource, SpringSourceSymbol, isSpringSource } from './spring-source.ts'
 import type { KinematicSource, KinematicSourceApi } from './kinematic-source.ts'
+import { registerBacking } from './follow-graph.ts'
 import { invariant, isNumber, isRecordOrArray, RESOLVED } from './util.ts'
 
 /**
@@ -277,6 +278,7 @@ export class CompositeSpring<in out T extends object> implements KinematicSource
           new Spring(motions, leafValue, undefined, purposeByPath?.get(path) ?? 'motion'),
       ),
     )
+    registerBacking(this, this.#tree.leaves)
     if (config !== undefined) {
       this.#tree.root.broadcast(config, resolveConfigNode, assignConfig, 'config')
     }

@@ -3,6 +3,7 @@ import {
   type SpringSourceApi,
   SpringSourceSymbol,
   isSpringSource,
+  registerRecipe,
 } from './spring-source.ts'
 import { invariant } from './util.ts'
 
@@ -79,6 +80,9 @@ export function velocityOf<T>(source: KinematicSource<T>): SpringSource<T> {
       onDispose: (callback: () => void) => api.onDispose(callback),
     }),
   })
+  // The recipe makes the wrapper transparent: `mapSpring` flattens
+  // through it, and leader resolution reaches `source` directly.
+  registerRecipe(velocity, { sources: [source], read: () => api.velocity, fns: [] })
   return velocity
 }
 
@@ -117,5 +121,8 @@ export function accelerationOf<T>(source: KinematicSource<T>): SpringSource<T> {
       onDispose: (callback: () => void) => api.onDispose(callback),
     }),
   })
+  // The recipe makes the wrapper transparent: `mapSpring` flattens
+  // through it, and leader resolution reaches `source` directly.
+  registerRecipe(acceleration, { sources: [source], read: () => api.acceleration, fns: [] })
   return acceleration
 }

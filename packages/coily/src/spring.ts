@@ -3,6 +3,7 @@ import type { MotionSet } from './motion-set.ts'
 import { Motion } from './motion.ts'
 import { type SpringSource, SpringSourceSymbol, isSpringSource } from './spring-source.ts'
 import type { KinematicSource, KinematicSourceApi } from './kinematic-source.ts'
+import { registerBacking } from './follow-graph.ts'
 import { invariant, RESOLVED } from './util.ts'
 
 /**
@@ -70,6 +71,7 @@ export class Spring implements KinematicSource {
     this.#target = value
     this.#purpose = purpose
     this.#motion = new Motion(this.#config, 0, 0)
+    registerBacking(this, this.#motion)
     // An 'appearance' spring opts out of reduced motion: its own writes
     // stay animated (below), and MotionSet.finishAll leaves it running.
     this.#motion.respectsReducedMotion = purpose === 'motion'
