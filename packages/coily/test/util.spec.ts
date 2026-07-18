@@ -73,6 +73,42 @@ describe('computeTimeRemaining', () => {
     }
   })
 
+  test('the solved time is tight against brute force in every regime', () => {
+    const configs = {
+      'bouncy (zeta 0.1)': defineSpring({ tension: 300, bounce: 0.9 }),
+      'underdamped (zeta 0.3)': defineSpring({ tension: 170, dampingRatio: 0.3 }),
+      'underdamped (zeta 0.7)': defineSpring({ tension: 170, dampingRatio: 0.7 }),
+      critical: defineSpring({ tension: 170, dampingRatio: 1 }),
+      overdamped: defineSpring({ tension: 170, dampingRatio: 2 }),
+    }
+
+    for (const [regime, config] of Object.entries(configs)) {
+      const solved = config.computeTimeRemaining({ position: 100, velocity: 0 })
+
+      const system = createSpringSystem()
+      const spring = system.createSpring(100, config)
+      spring.target = 0
+
+      let actual = 0
+      while (!spring.isResting && actual < 60_000) {
+        system.advance(0.5)
+        actual += 0.5
+      }
+
+      // Never later than the solved time (within a step), and at most
+      // one pulse earlier — the fine stepping catches the first dip.
+      expect(actual, `${regime} rests by the solved time`).toBeLessThanOrEqual(solved + 0.5)
+      expect(solved, `${regime} solved time is tight`).toBeLessThanOrEqual(actual * 1.1)
+    }
+  })
+
+  test('duration tuning and computeTimeRemaining invert each other', () => {
+    for (const dampingRatio of [0.3, 0.5, 1, 2]) {
+      const config = defineSpring({ duration: 750, dampingRatio, displacement: 100 })
+      expect(config.computeTimeRemaining({ position: 100, velocity: 0 })).toBeCloseTo(750, 4)
+    }
+  })
+
   test('larger displacement produces longer settling time', () => {
     const config = defineSpring({ mass: 1, tension: 170, damping: 10 })
     const small = config.computeTimeRemaining({ position: 10, velocity: 0 })

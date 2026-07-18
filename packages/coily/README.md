@@ -41,15 +41,17 @@ defineSpring({ tension: 500, dampingRatio: 0.7 }) // damping derived
 defineSpring({ tension: 500, bounce: 0.3 }) // bounce = 1 - dampingRatio
 defineSpring({ duration: 750, dampingRatio: 1 }) // tuned to settle in ~750ms
 defineSpring({ duration: 750, bounce: 0.5 })
+defineSpring({ tension: 500, bounce: 0.9, arrival: 'stop' }) // dead-stop at the target, no overshoot
 ```
 
 - **`tension`**: stiffness (> 0)
 - **`damping`**: friction (>= 0)
 - **`dampingRatio`**: 0 = undamped, < 1 = bouncy, 1 = critically damped, > 1 = overdamped
 - **`bounce`**: a friendlier alias for damping ratio, from -1 (overdamped) to 1 (max bounce)
-- **`duration`**: target settle time in ms. Assumes an initial displacement of 1. Pass `displacement` matching your animation range for accurate timing
+- **`duration`**: settle time in ms — the spring rests at this time, within a frame (a bouncy config can rest up to one oscillation earlier). Assumes an initial displacement of 1. Pass `displacement` matching your animation range for accurate timing
 - **`mass`**: defaults to 1
 - **`precision`**: decimal places of the resting threshold (default 2). A spring is _resting_ once its remaining motion cannot reach half a unit in the last place (0.005 at the default). Coily never rounds values. Set `precision` to match your domain's resolution (see [PRECISION.md](https://github.com/tkofh/coily/blob/main/PRECISION.md))
+- **`arrival`**: what the motion does when the value reaches the target. `'passthrough'` (default) swings through and settles; `'stop'` ends the motion exactly on the target the first time it gets there, however bouncy the config; a number between -1 and 1 scales the velocity at every crossing — negative values rebound. Crossings are solved exactly, never sampled frame by frame (see [PRECISION.md](https://github.com/tkofh/coily/blob/main/PRECISION.md))
 
 Without a config, springs are critically damped with a ~500ms settle time.
 
@@ -60,7 +62,7 @@ Without a config, springs are critically damped with a ~500ms settle time.
 - `spring.velocity`: current velocity, writable to fling
 - `spring.jumpTo(v)`: snap to a value with no animation
 - `spring.config`: assign a new `SpringDefinition`, or `null` to revert to the default
-- `spring.isResting`, `spring.timeRemaining`: settle state and estimated ms until rest
+- `spring.isResting`, `spring.timeRemaining`: settle state and ms until rest — solved from the motion, not estimated (see [PRECISION.md](https://github.com/tkofh/coily/blob/main/PRECISION.md))
 - `spring.settled`: a promise that resolves when the spring next comes to rest (immediately if already resting). Retargeting mid-flight extends the wait; disposing resolves it. `await spring.settled` to sequence animations
 - `spring.onUpdate(cb)` / `onStart(cb)` / `onStop(cb)` / `onDispose(cb)`: subscribe. Each returns an unsubscribe function. `start` fires when the spring leaves rest, `stop` when it settles. The two always alternate, and retargeting mid-flight fires neither
 - `spring.dispose()`: release the spring (calling it twice is a no-op)

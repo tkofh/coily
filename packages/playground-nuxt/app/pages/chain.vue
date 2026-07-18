@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { CompositeSpringRef } from 'coily/vue'
+
 const count = 512
 const playgroundRef = ref<HTMLElement | null>(null)
 const { width: winW, height: winH } = useElementSize(playgroundRef)
@@ -67,7 +69,9 @@ onMounted(() => {
 
 onBeforeUnmount(() => clearTimeout(autoTimer))
 
-const chainConfig = defineSpring({ bounce: -1, duration: 500, precision: 3 })
+// Tuned when duration carried a 2x safety margin; 265 under the exact
+// derivation reproduces the same dynamics (wn ~79) so links stay tight.
+const chainConfig = defineSpring({ bounce: -1, duration: 400, precision: 3 })
 
 // Build chain: first spring follows mouse, each subsequent spring follows the previous
 const springs: CompositeSpringRef<{ x: number; y: number }>[] = []
