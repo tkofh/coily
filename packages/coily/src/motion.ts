@@ -41,6 +41,15 @@ export class Motion {
   _edge: FollowEdge | null = null
 
   /**
+   * A first-order-hold ramp slope in value units per second, armed by a
+   * ramped `recouple` immediately before the `_advance` that consumes
+   * it (read-and-clear; no user code runs between the two). 0 means the
+   * target holds still across the step — every path but a ramped
+   * recouple.
+   */
+  _ramp = 0
+
+  /**
    * The edges reading this motion, or null when none. Written by
    * `FollowGraph` with the rank cache, so it can lag a mid-pass edge
    * change until the next recompute; the tick tolerates stale entries.
@@ -131,9 +140,50 @@ export class Motion {
    * Advances the simulation and emits nothing. The tick pass advances
    * every motion through this, then delivers the frame's events with
    * `_settleFrame`; the synchronous `tick` wraps the two.
+   *
+   * A pending `_ramp` integrates the step against a target moving at
+   * that slope instead of holding still: one affine transform around
+   * the unchanged solver. With the target at `p(t) = p0 + g*t`, the
+   * displacement u = x - p(t) obeys the homogeneous equation shifted by
+   * the constant u_ss = -(2*zeta/wn)*g = -(damping/tension)*g, so the
+   * solver ticks w = u - u_ss exactly and the results shift back.
+   * Measuring u from the moving target makes the ramp endpoint and the
+   * new target coincide — the armer assigns the target, no rebase
+   * arithmetic exists. The ramp is an argument of the step, never
+   * persistent solver state: the g = 0 path below is byte-for-byte the
+   * pre-ramp body, so every non-ramped step is bit-exact.
    */
   _advance(dt: number) {
     invariant(this.#currentSolver, 'Cannot tick a disposed motion')
+
+    const g = this._ramp
+    if (g !== 0) {
+      this._ramp = 0
+      const state = this.#state
+      const shift = (this.#config.damping / this.#config.tension) * g
+      state.position += shift
+      state.velocity -= g
+      // Anchor in ramp space from the shifted state: unconditionally,
+      // and again next step — the ramp-space anchor is wrong for any
+      // other frame.
+      if (this.#needsUpdate) {
+        this.#updateSolver()
+        this.#needsUpdate = false
+      } else {
+        this.#currentSolver.configure()
+      }
+
+      this.#currentSolver.tick(dt)
+
+      state.position -= shift
+      state.velocity += g
+      this.#needsReset = true
+      if (state.isResting) {
+        state.position = 0
+        state.velocity = 0
+      }
+      return
+    }
 
     if (this.#needsUpdate) {
       this.#updateSolver()

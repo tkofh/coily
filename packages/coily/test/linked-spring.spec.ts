@@ -856,6 +856,68 @@ describe('Spring: following', () => {
       }
     })
 
+    test('a smoothly driven follower tracks its finely-stepped reference', () => {
+      // First-order hold: the follower integrates against the leader's
+      // actual within-frame move, so even 30fps frames stay within a
+      // fraction of a unit of the finely-coupled trajectory.
+      const chase = (sub: number): number[] => {
+        const system = createSpringSystem()
+        const leader = system.createSpring(0, stiff)
+        const follower = system.createSpring(0, stiff)
+        follower.target = leader
+        const trail: number[] = []
+        for (let frame = 0; frame < 60; frame++) {
+          leader.target = 200 * Math.sin((2 * Math.PI * 0.75 * frame * 33) / 1000)
+          for (let i = 0; i < sub; i++) system.advance(33 / sub)
+          trail.push(follower.value)
+        }
+        return trail
+      }
+
+      // Measured 0.79; the same drive at frame-grain held-target
+      // coupling sits in the tens.
+      expect(maxGap(chase(1), chase(16))).toBeLessThan(1)
+    })
+
+    test('a mid-flight jumpTo stays a step at event time', () => {
+      const system = createSpringSystem()
+      const leader = system.createSpring(0, stiff)
+      const follower = system.createSpring(0, stiff)
+      follower.target = leader
+      leader.target = 200
+      system.advance(33)
+
+      const before = follower.value
+      leader.jumpTo(50)
+
+      // The retarget lands synchronously and exactly; the follower's
+      // value moves only by animating — no ramp smears the jump across
+      // the next frame.
+      expect(follower.target).toBe(50)
+      expect(follower.value).toBe(before)
+    })
+
+    test('an arrival follower never overshoots while following', () => {
+      // arrival: 0 clamps at the target via closed-form crossings, which
+      // only exist against a held target: the ramp fence must route this
+      // follower to sub-stepped holds. An armed ramp would shift the
+      // crossing equation and let the follower punch through.
+      const system = createSpringSystem()
+      const leader = system.createSpring(0, stiff)
+      const follower = system.createSpring(
+        0,
+        defineSpring({ bounce: 0.4, duration: 500, arrival: 0 }),
+      )
+      follower.target = leader
+
+      leader.target = 200
+      for (let frame = 0; frame < 90; frame++) {
+        system.advance(33)
+        expect(follower.value).toBeLessThanOrEqual(follower.target + 1e-9)
+      }
+      expect(follower.value).toBeCloseTo(200, 0)
+    })
+
     test('updates still fire once per spring per frame while sub-stepping', () => {
       const system = createSpringSystem()
       const leader = system.createSpring(0, stiff)

@@ -416,8 +416,34 @@ export class Spring implements KinematicSource {
         _prevValue: 0,
         _d1: 0,
         _d2: 0,
-        recouple: () => {
-          this.#setTarget(api.value)
+        recouple: (h) => {
+          // A ramp may arm only where it is safe: never inside a cycle
+          // (delayed velocity feedback around a loop is negative damping
+          // — FOH destabilizes cycles that are stable held), never on an
+          // arrival spring (its crossings are closed-form only against a
+          // held target), and never where the retarget must jump or
+          // rebase exactly — reduced motion, a zero-length step. Those
+          // keep the exact step path.
+          if (
+            edge._cyclic ||
+            h === 0 ||
+            this.#config.arrival !== 1 ||
+            (this.#motions.reduced && this.#purpose === 'motion')
+          ) {
+            this.#setTarget(api.value)
+            return
+          }
+          const value = api.value
+          invariant(Number.isFinite(value), 'Spring target must be a finite number')
+          if (value === this.#target) return
+          this.#motions.add(this.#motion)
+          // The delta is tick-path by construction: sync writes already
+          // landed as steps through the emitter before this pass. The
+          // position stays measured from the old target — the ramp's
+          // start — and the ramped advance ends it measured from the
+          // new one.
+          this.#motion._ramp = (value - this.#target) / h
+          this.#target = value
         },
         plan: (dt) => {
           const target = this.#target
@@ -433,22 +459,27 @@ export class Spring implements KinematicSource {
           // passthrough (the common case), a slope ~1 heuristic through
           // map code.
           let dHat = Math.abs(d)
+          let error = Math.abs(d - edge._d2) / 8
           for (const leader of leaders) {
             if (leader._manifoldDeviation() > MANIFOLD_GATE * Math.abs(d)) {
               const accel = Math.abs(leader._acceleration())
               const speed = Math.abs(leader.velocity)
               dHat = Math.max(dHat, speed * dt + 0.5 * accel * dt * dt)
+              error = Math.max(error, (accel * dt * dt) / 8)
             }
           }
 
           // The budget floors at the follower's resting quantum: coupling
           // finer than rest can resolve buys nothing.
           const tol = Math.max(this.#config.restingMagnitude, this.#motions.couplingTolerance)
-          // Held-target coupling leaves half a sub-step of leader travel
-          // as tracking error, so the demand is linear in the frame's
-          // move. The FOH sqrt law returns with the ramp (hybrid plan
-          // stage 4); until then every edge holds, cycles included.
-          return Math.ceil(dHat / (2 * tol))
+          // Where recouple holds the target (cycles, arrival), half a
+          // sub-step of leader travel remains as tracking error: demand
+          // is linear in the frame's move. Where it ramps, only the
+          // curvature residual remains — the second difference — and it
+          // shrinks with the square of the sub-step.
+          return edge._cyclic || this.#config.arrival !== 1
+            ? Math.ceil(dHat / (2 * tol))
+            : Math.ceil(Math.sqrt(error / tol))
         },
       }
       this.#motions.graph.addEdge(edge)
