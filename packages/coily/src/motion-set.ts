@@ -1,6 +1,58 @@
 import { FlushQueue } from './flush-queue.ts'
-import { FollowGraph } from './follow-graph.ts'
+import { type FollowEdge, FollowGraph } from './follow-graph.ts'
 import type { Motion } from './motion.ts'
+
+function compareMotions(a: Motion, b: Motion): number {
+  return a._rank - b._rank || a._id - b._id
+}
+
+/**
+ * A binary min-heap over (rank, creation id): the ordered pass worklist.
+ * Duplicate pushes are expected — the tick's pass marker deduplicates at
+ * pop.
+ */
+class MotionHeap {
+  readonly #items: Motion[] = []
+
+  clear(): void {
+    this.#items.length = 0
+  }
+
+  push(motion: Motion): void {
+    const items = this.#items
+    let hole = items.length
+    items.push(motion)
+    while (hole > 0) {
+      const parent = (hole - 1) >> 1
+      if (compareMotions(items[parent]!, motion) <= 0) break
+      items[hole] = items[parent]!
+      hole = parent
+    }
+    items[hole] = motion
+  }
+
+  pop(): Motion | undefined {
+    const items = this.#items
+    if (items.length === 0) return undefined
+    const top = items[0]!
+    const last = items.pop()!
+    if (items.length > 0) {
+      let hole = 0
+      for (;;) {
+        const left = 2 * hole + 1
+        if (left >= items.length) break
+        const right = left + 1
+        const child =
+          right < items.length && compareMotions(items[right]!, items[left]!) < 0 ? right : left
+        if (compareMotions(last, items[child]!) <= 0) break
+        items[hole] = items[child]!
+        hole = child
+      }
+      items[hole] = last
+    }
+    return top
+  }
+}
 
 /**
  * The set of motions currently moving. Motions leave the set as they
@@ -14,6 +66,12 @@ export class MotionSet {
   /** Follow edges registered by following springs, with the dependency rank over their motions. */
   readonly graph = new FollowGraph()
   readonly #motions = new Set<Motion>()
+  readonly #heap = new MotionHeap()
+  readonly #advanced: Motion[] = []
+  /** The live pass worklist while an advance phase runs, so mid-phase wakes join it. */
+  #activeHeap: MotionHeap | null = null
+  /** Whether any tick is on the stack, settle sweep included — a reentrant advance must not share the pass structures. */
+  #inTick = false
   readonly #debug: boolean
   #lastSize = 0
   #pass = 0
@@ -29,6 +87,9 @@ export class MotionSet {
   add(motion: Motion) {
     const wasEmpty = this.#motions.size === 0
     this.#motions.add(motion)
+    // A wake during an ordered pass joins the live worklist, so the
+    // motion still advances this frame — at its rank position.
+    this.#activeHeap?.push(motion)
     if (wasEmpty) {
       this.onWake?.()
     }
@@ -51,23 +112,19 @@ export class MotionSet {
 
   tick(dt: number) {
     this.#pass++
+    const reentrant = this.#inTick
+    this.#inTick = true
     this.flushes.enter()
 
     try {
-      for (const motion of this.#motions) {
-        // A motion that rested out of the set and was re-added by a
-        // handler in the same pass (a follower disturbed by its leader's
-        // update) reappears later in the Set iteration; the pass marker
-        // keeps it from advancing twice.
-        if (motion._pass === this.#pass) continue
-        motion._pass = this.#pass
-
-        motion.tick(dt)
-        if (motion.isResting) {
-          this.#motions.delete(motion)
-        }
+      this.graph.ensureOrder()
+      if (this.graph.isEmpty) {
+        this.#tickUnordered(dt, reentrant)
+      } else {
+        this.#tickOrdered(dt, reentrant)
       }
     } finally {
+      this.#inTick = reentrant
       this.flushes.exit()
     }
 
@@ -75,5 +132,98 @@ export class MotionSet {
       this.#lastSize = this.#motions.size
       console.log(`coily: ${this.#lastSize} active motions`)
     }
+  }
+
+  /** The no-edge fast path: nothing constrains order, so insertion order serves for free. */
+  #tickUnordered(dt: number, reentrant: boolean) {
+    const advanced = reentrant ? [] : this.#advanced
+    advanced.length = 0
+    for (const motion of this.#motions) {
+      // Advancing runs no user code, so nothing enters the set
+      // mid-loop; the marker only guards a reentrant advance.
+      if (motion._pass === this.#pass) continue
+      motion._pass = this.#pass
+
+      motion._advance(dt)
+      advanced.push(motion)
+      if (motion.isResting) {
+        this.#motions.delete(motion)
+      }
+    }
+
+    this.#settle(advanced)
+  }
+
+  // Advances motions in dependency order — every follower after its
+  // leaders, ranks from the follow graph — so a follower integrates
+  // against its leader's current-frame value no matter how construction
+  // order or rest/wake churn arranged the set.
+  #tickOrdered(dt: number, reentrant: boolean) {
+    // A reentrant advance (user code stepping the system from inside a
+    // callback) gets private worklists so the outer pass's survive.
+    const heap = reentrant ? new MotionHeap() : this.#heap
+    const advanced = reentrant ? [] : this.#advanced
+    const previous = this.#activeHeap
+    this.#activeHeap = heap
+    heap.clear()
+    advanced.length = 0
+    for (const motion of this.#motions) {
+      heap.push(motion)
+    }
+
+    try {
+      for (let motion = heap.pop(); motion !== undefined; motion = heap.pop()) {
+        if (motion._pass === this.#pass) continue
+
+        // Pull coupling — with events deferred to the settle sweep,
+        // this is what couples followers mid-pass. Skipped when every
+        // leader is resting and unadvanced: their values cannot have
+        // changed since the last retarget, which also keeps user map
+        // code uncalled on frames where its inputs are still.
+        const edge = this.graph.edgeOf(motion)
+        if (edge !== undefined && this.#shouldRecouple(edge)) {
+          edge.recouple(dt)
+        }
+        // The wake walk pushes followers whether or not they wake; a
+        // speculative pop that stayed at rest must skip unmarked, so a
+        // later wake this pass can still advance it.
+        if (!this.#motions.has(motion)) continue
+
+        motion._pass = this.#pass
+        motion._advance(dt)
+        advanced.push(motion)
+        if (motion.isResting) {
+          this.#motions.delete(motion)
+        }
+        for (const out of this.graph.followersOf(motion)) {
+          heap.push(out.follower)
+        }
+      }
+    } finally {
+      // Restored before the sweep: a motion woken by a settle callback
+      // advances from the next frame, not this one.
+      this.#activeHeap = previous
+    }
+
+    this.#settle(advanced)
+  }
+
+  // Phase 2: deliver the frame's events after every motion has
+  // advanced, in the order they advanced — update callbacks read
+  // frame-final values everywhere. Skipped for motions after a throwing
+  // callback, like the rest of any aborted pass.
+  #settle(advanced: readonly Motion[]) {
+    for (const motion of advanced) {
+      motion._settleFrame()
+    }
+  }
+
+  #shouldRecouple(edge: FollowEdge): boolean {
+    for (const leader of edge.leaders) {
+      if (leader._pass === this.#pass || this.#motions.has(leader)) {
+        return true
+      }
+    }
+    return false
   }
 }

@@ -97,6 +97,21 @@ export class Motion {
   }
 
   tick(dt: number, emit = true) {
+    this._advance(dt)
+
+    if (emit) {
+      this._settleFrame()
+    } else {
+      this.#reconcileRunning()
+    }
+  }
+
+  /**
+   * Advances the simulation and emits nothing. The tick pass advances
+   * every motion through this, then delivers the frame's events with
+   * `_settleFrame`; the synchronous `tick` wraps the two.
+   */
+  _advance(dt: number) {
     invariant(this.#currentSolver, 'Cannot tick a disposed motion')
 
     if (this.#needsUpdate) {
@@ -119,11 +134,22 @@ export class Motion {
       this.#state.velocity = 0
       this.#needsReset = true
     }
+  }
 
-    if (emit) {
-      this.#emitter.emit('update')
-    }
+  /**
+   * Emits the frame's `update`, then reconciles `stop`/`start`. The tick
+   * pass calls this in dependency order after every motion has advanced,
+   * so update callbacks read frame-final values everywhere.
+   */
+  _settleFrame() {
+    this.#emitter.emit('update')
+    this.#reconcileRunning()
+  }
 
+  // Reads state fresh rather than caching around the update emit: an
+  // update callback can re-displace the motion, and a stale boolean
+  // would emit a bogus 'stop'.
+  #reconcileRunning() {
     if (this.#state.isResting) {
       if (this.#running) {
         this.#running = false

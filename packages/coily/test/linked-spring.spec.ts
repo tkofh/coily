@@ -602,4 +602,127 @@ describe('Spring: following', () => {
       }).toThrow('A spring can only follow a scalar SpringSource')
     })
   })
+
+  describe('tick order', () => {
+    test('a chain wired tail-first propagates in the same frame', ({ system }) => {
+      const a = system.createSpring(0, config)
+      const b = system.createSpring(0)
+      const c = system.createSpring(0)
+      // Wire the tail before the head: dependency order must come from
+      // the graph, not from wiring order.
+      c.target = b
+      b.target = a
+
+      a.target = 100
+      system.advance(1000 / 60)
+
+      expect(b.value).not.toBe(0)
+      expect(c.isResting).toBe(false)
+    })
+
+    test('wiring order does not change trajectories', ({ system }) => {
+      const a1 = system.createSpring(0, config)
+      const b1 = system.createSpring(0)
+      const c1 = system.createSpring(0)
+      b1.target = a1
+      c1.target = b1
+
+      const a2 = system.createSpring(0, config)
+      const b2 = system.createSpring(0)
+      const c2 = system.createSpring(0)
+      c2.target = b2
+      b2.target = a2
+
+      a1.target = 100
+      a2.target = 100
+      for (let i = 0; i < 60; i++) {
+        system.advance(1000 / 60)
+        expect(b2.value).toBe(b1.value)
+        expect(c2.value).toBe(c1.value)
+      }
+    })
+
+    test('rest and wake churn cannot invert the update order', ({ system }) => {
+      const stiff = defineSpring({ mass: 1, tension: 800, damping: 80 })
+      const soft = defineSpring({ mass: 1, tension: 2, damping: 4 })
+      const a = system.createSpring(0, stiff)
+      const b = system.createSpring(0, stiff)
+      const c = system.createSpring(0, soft)
+      b.target = a
+      c.target = b
+
+      const order: string[] = []
+      a.onUpdate(() => order.push('a'))
+      b.onUpdate(() => order.push('b'))
+      c.onUpdate(() => order.push('c'))
+
+      // Let the stiff links rest while the soft tail is still settling:
+      // in an insertion-ordered set, the re-wakes below would land after
+      // `c` and lag it by a frame from then on.
+      a.target = 100
+      system.advance(1000 / 60)
+      expect(b.isResting).toBe(false)
+      for (let i = 0; i < 600 && !b.isResting; i++) system.advance(1000 / 60)
+      expect(b.isResting).toBe(true)
+      expect(c.isResting).toBe(false)
+
+      a.target = 200
+      system.advance(1000 / 60)
+
+      order.length = 0
+      system.advance(1000 / 60)
+      expect(order).toEqual(['a', 'b', 'c'])
+    })
+
+    test('update callbacks observe frame-final values across springs', ({ system }) => {
+      const leader = system.createSpring(0, config)
+      const follower = system.createSpring(0)
+      follower.target = leader
+
+      const seen: Array<{ at: string; leader: number; follower: number }> = []
+      leader.onUpdate(() => {
+        seen.push({ at: 'leader', leader: leader.value, follower: follower.value })
+      })
+      follower.onUpdate(() => {
+        seen.push({ at: 'follower', leader: leader.value, follower: follower.value })
+      })
+
+      leader.target = 100
+      system.advance(1000 / 60)
+
+      // Events fire after every motion has advanced, leaders first: no
+      // callback can catch another spring mid-frame.
+      expect(seen.length).toBe(2)
+      expect(seen[0]!.at).toBe('leader')
+      for (const snap of seen) {
+        expect(snap.leader).toBe(leader.value)
+        expect(snap.follower).toBe(follower.value)
+      }
+    })
+
+    test('a spring woken by an update callback advances from the next frame', ({ system }) => {
+      const driver = system.createSpring(0, config)
+      const bystander = system.createSpring(0, config)
+
+      let woken = false
+      driver.onUpdate(() => {
+        if (!woken) {
+          woken = true
+          bystander.target = 100
+        }
+      })
+
+      driver.target = 50
+      system.advance(1000 / 60)
+
+      // The callback ran at frame end, with no frame time left: the
+      // write lands, the first advance comes next frame.
+      expect(bystander.target).toBe(100)
+      expect(bystander.value).toBe(0)
+      expect(bystander.isResting).toBe(false)
+
+      system.advance(1000 / 60)
+      expect(bystander.value).not.toBe(0)
+    })
+  })
 })

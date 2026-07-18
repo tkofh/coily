@@ -71,6 +71,8 @@ export interface FollowEdge {
   recouple(h: number): void
 }
 
+const NO_EDGES: readonly FollowEdge[] = []
+
 /**
  * The follow graph as a walkable structure: one edge per following
  * motion, and a cached dependency rank over every motion the edges
@@ -79,13 +81,28 @@ export interface FollowEdge {
  */
 export class FollowGraph {
   readonly #edges = new Map<Motion, FollowEdge>()
+  readonly #followers = new Map<Motion, FollowEdge[]>()
   /** Motions holding a rank from the last recompute, so stale ranks reset to -1. */
   #ranked: readonly Motion[] = []
   #dirty = false
 
+  /** Whether no edges are registered, letting the tick skip ordering work entirely. */
+  get isEmpty(): boolean {
+    return this.#edges.size === 0
+  }
+
   /** The edge whose follower is `motion`, if one is registered. */
   edgeOf(motion: Motion): FollowEdge | undefined {
     return this.#edges.get(motion)
+  }
+
+  /**
+   * The edges reading `motion` — the tick's wake walk. Rebuilt with the
+   * rank cache, so it can lag a mid-pass edge change until the next
+   * `ensureOrder`; consumers must tolerate edges already unregistered.
+   */
+  followersOf(motion: Motion): readonly FollowEdge[] {
+    return this.#followers.get(motion) ?? NO_EDGES
   }
 
   /**
@@ -122,6 +139,18 @@ export class FollowGraph {
   #recompute(): void {
     for (const motion of this.#ranked) {
       motion._rank = -1
+    }
+
+    this.#followers.clear()
+    for (const edge of this.#edges.values()) {
+      for (const leader of edge.leaders) {
+        const list = this.#followers.get(leader)
+        if (list === undefined) {
+          this.#followers.set(leader, [edge])
+        } else {
+          list.push(edge)
+        }
+      }
     }
 
     const nodes = new Set<Motion>()
