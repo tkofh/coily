@@ -14,6 +14,7 @@ const stiff = useSpring(mouse, defineSpring({ dampingRatio: 1.5, duration: 500 }
     <nav class="nav">
       <NuxtLink to="/chain" class="nav-link">Chain Demo →</NuxtLink>
       <NuxtLink to="/arrival" class="nav-link">Arrival Demo →</NuxtLink>
+      <NuxtLink to="/css" class="nav-link">CSS Demo →</NuxtLink>
     </nav>
     <div class="ball bouncy" :style="{ '--x': bouncy.x, '--y': bouncy.y }" />
     <div class="ball stiff" :style="{ '--x': stiff.x, '--y': stiff.y }" />
