@@ -60,7 +60,10 @@ function simulateToSettling(
 
   const dt = est / iterations
 
-  for (let i = 0; i < iterations; i++) {
+  // Two ticks past the solved rest time: the bound is exact, so a sum of
+  // dt-sized steps can land an ulp short of it, and rest waits for the
+  // first tick at or after the bound.
+  for (let i = 0; i < iterations + 2; i++) {
     system.advance(dt)
   }
 

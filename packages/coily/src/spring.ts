@@ -222,6 +222,11 @@ export class Spring implements KinematicSource {
     return this.#config.precision
   }
 
+  /** The config's arrival multiplier. */
+  get arrival() {
+    return this.#config.arrival
+  }
+
   set config(value: SpringDefinition | null) {
     const next = value ?? SpringDefinition.default
     if (this.#config === next) return
@@ -234,9 +239,12 @@ export class Spring implements KinematicSource {
   }
 
   /**
-   * Estimated milliseconds until the spring rests: 0 while resting,
-   * Infinity when undamped. The estimate carries a safety margin, so
-   * actual rest usually lands earlier.
+   * Milliseconds until the spring rests: 0 while resting, Infinity when
+   * the motion never settles. The time is solved from the motion, not
+   * estimated — the spring is resting at the first tick at or after it,
+   * and a bouncy spring can rest up to one oscillation earlier when a
+   * frame samples a low pulse. When the config's `arrival` is 0, it is
+   * capped at the exact ms of the first target crossing.
    */
   get timeRemaining() {
     return this.#motion.timeRemaining

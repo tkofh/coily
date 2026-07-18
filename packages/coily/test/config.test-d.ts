@@ -28,6 +28,17 @@ defineSpring({ damping: 26, bounce: 0.1, duration: 500 })
 // Explicit undefined is equivalent to absence (exactOptionalPropertyTypes)
 defineSpring({ mass: undefined, tension: 170, damping: 26 })
 
+// ── `arrival` joins every shape family ───────────────────────────────
+
+defineSpring({ tension: 170, damping: 26, arrival: 'stop' })
+defineSpring({ tension: 170, dampingRatio: 0.8, arrival: 'passthrough' })
+defineSpring({ mass: 2, tension: 170, bounce: 0.2, arrival: -0.75 })
+defineSpring({ dampingRatio: 1, duration: 500, arrival: 0.5 })
+defineSpring({ tension: 170, damping: 26, arrival: undefined })
+
+// @ts-expect-error arrival names are only 'passthrough' and 'stop'
+defineSpring({ tension: 170, damping: 26, arrival: 'rebound' })
+
 // ── Shapes where mass is derived reject it ──────────────────────────
 
 // @ts-expect-error mass is derived from tension, damping, and dampingRatio

@@ -664,8 +664,10 @@ describe('Spring: dispose', () => {
 })
 
 describe('Spring: duration-based settle time', () => {
-  test('settles at or before the requested duration when displacement matches the range', () => {
-    for (const dampingRatio of [0.5, 1, 2]) {
+  test('rests on the requested duration when displacement matches the range', () => {
+    // Non-oscillating regimes rest at the first frame at or after the
+    // requested duration — duration means duration, not "well within".
+    for (const dampingRatio of [1, 2]) {
       const system = createSpringSystem()
       const spring = system.createSpring(
         0,
@@ -680,8 +682,30 @@ describe('Spring: duration-based settle time', () => {
       }
 
       expect(spring.isResting).toBe(true)
-      expect(elapsed).toBeLessThanOrEqual(750)
+      expect(elapsed).toBeGreaterThanOrEqual(750 - 1000 / 60)
+      expect(elapsed).toBeLessThanOrEqual(750 + 2 * (1000 / 60))
     }
+  })
+
+  test('a bouncy duration config rests at or shortly before the requested duration', () => {
+    // The rest amplitude pulses, so a frame can catch a dip inside the
+    // threshold up to one oscillation early — never late.
+    const system = createSpringSystem()
+    const spring = system.createSpring(
+      0,
+      defineSpring({ duration: 750, dampingRatio: 0.5, displacement: 300 }),
+    )
+    spring.target = 300
+
+    let elapsed = 0
+    while (!spring.isResting && elapsed < 5000) {
+      system.advance(1000 / 60)
+      elapsed += 1000 / 60
+    }
+
+    expect(spring.isResting).toBe(true)
+    expect(elapsed).toBeGreaterThanOrEqual(0.8 * 750)
+    expect(elapsed).toBeLessThanOrEqual(750 + 2 * (1000 / 60))
   })
 })
 
