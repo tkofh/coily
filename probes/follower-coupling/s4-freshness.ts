@@ -35,7 +35,6 @@
 // over-stepping), and solver evaluations including peeks (cost).
 import { defineSpring } from '../../packages/coily/src/index.ts'
 import {
-  type Chain,
   type Phys,
   type Truth,
   chainValue,
