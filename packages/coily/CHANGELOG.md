@@ -1,5 +1,162 @@
 # Change Log
 
+## 0.15.0
+
+### Minor Changes
+
+- 00ac093: Add `arrival` to spring configs: what the motion does when the value
+  reaches the target, as a velocity multiplier applied at every crossing.
+  `'passthrough'` (the default) keeps today's behavior. `'stop'` ends the
+  motion exactly on the target the first time the value gets there — an
+  exit animation can pick up speed with maximum bounce and still land
+  dead, with no overshoot. A number between -1 and 1 sets the multiplier
+  directly: negative values rebound off the target with that fraction of
+  the speed, values between 0 and 1 pass through slowed.
+
+  Crossings are solved in closed form from the spring's own solution
+  rather than sampled frame by frame, so a stop lands `value === target`
+  bit-for-bit at any step size, and `timeRemaining` reports the exact
+  crossing time for stopping springs. An `arrival: 'stop'` config also
+  rests an undamped spring (`dampingRatio: 0`), which otherwise never
+  settles.
+
+  ```ts
+  const exit = defineSpring({ tension: 300, bounce: 0.9, arrival: 'stop' })
+  spring.config = exit
+  spring.target = 0
+  await spring.settled // resolves the instant the value first reaches 0
+  ```
+
+- 15c6e4c: Add `coily/css`: turn a spring config into static CSS. A spring released
+  from rest has a displacement-independent normalized curve, so its shape is
+  a pure function of the config — which is exactly what a CSS `linear()`
+  easing wants. The module is pure (no DOM, no ticker), so it runs at build
+  time or once up front rather than per frame.
+
+  - `springToLinear(config, options?)` samples the trajectory into a
+    `linear()` easing and the duration in ms to pair it with. The duration
+    comes from `computeTimeRemaining`, so a duration-tuned config's easing
+    spans exactly the time it was tuned for.
+  - `springToWaapi(config, spec | specs)` returns `{ keyframes, options }`
+    for `element.animate`.
+  - `springToCss(config, spec | specs, { name })` returns a `@keyframes`
+    rule and an `animation` shorthand value.
+  - `springToTransition(config, spec | specs)` returns a `transition` value
+    for springing a `:hover` or class change.
+  - `springFromState(config, state)` and `springStateAt(config, state,
+elapsedMs)` regenerate an animation from a spring caught mid-flight, so
+    an interrupted Web Animations API animation carries momentum instead of
+    restarting from rest. A `velocity` on a spec routes `springToWaapi`
+    through the same from-state path.
+
+  An array of specs drives several properties from one spring, sharing a
+  single easing so they settle in sync; specs on the same property (several
+  `transform` functions) space-join into one value. A pure undamped spring
+  (`dampingRatio: 0`) has no rest to settle at, so it becomes a seamless
+  infinite loop instead: the easing spans one half period and the animation
+  runs `infinite alternate`.
+
+  ```ts
+  import { defineSpring } from 'coily'
+  import { springToWaapi } from 'coily/css'
+
+  const { keyframes, options } = springToWaapi(defineSpring({ bounce: 0.5, duration: 500 }), {
+    property: 'translate',
+    from: 0,
+    to: 300,
+    unit: 'px',
+  })
+  element.animate(keyframes, options)
+  ```
+
+- 2c94919: Follower chains now advance in dependency order. Every frame, each
+  spring moves after the springs it follows — regardless of creation
+  order, wiring order, or springs resting and waking mid-chain — so a
+  follower always chases its leader's current value instead of last
+  frame's. Deep chains that turned bumpy when frames slowed are steady
+  now: that wobble came from followers reading one-frame-stale leaders
+  after rest/wake churn silently reordered the update loop. Springs that
+  follow nothing are unaffected. The guarantee covers wrapper sources
+  too: following an object that hands out another source's api — a Vue
+  `SpringRef`, or your own wrapper honoring the `SpringSource` contract —
+  orders the follower after the spring behind it.
+
+  Update events are delivered once per spring per frame, after the whole
+  frame has advanced, in that same leader-first order. Two visible
+  consequences: a callback that reads other springs sees their final
+  values for the frame, never a half-advanced mix, and a spring
+  retargeted from inside an update callback applies the write immediately
+  but takes its first step on the next frame — the callback runs at frame
+  end, with no frame time left to consume. Synchronous writes (`target`,
+  `value`, `jumpTo`) still notify immediately, exactly as before.
+
+  Cycles advance members in creation order, with the edge that closes the
+  loop chasing one frame behind — now a guarantee rather than an accident
+  of construction order.
+
+- 00ac093: Duration-based configs now rest at the requested `duration` instead of
+  comfortably inside it. The same 2x margin that inflated `timeRemaining`
+  was baked into the duration tuning, so a `duration: 750` config
+  actually rested around 500ms — and the default config, advertised as
+  settling in about 500ms, rested around 350ms. Motion now uses the full
+  advertised window: rest lands within a frame of `duration`
+  (non-oscillating configs), or up to one oscillation earlier (bouncy
+  configs).
+
+  Every duration-tuned spring, the default included, is noticeably more
+  relaxed as a result. To keep a spring's previous feel, scale its
+  `duration` down: the factor depends on the damping ratio and
+  displacement — about 0.7 for the default config, down to roughly 0.5
+  for configs far from critical damping (a `bounce: -1` chain wants
+  ~0.53). Springs that follow each other are the most visible case:
+  softer links lag each other further, so retune chained configs first.
+
+- 50a398b: Following is now accurate at any frame rate. Within a frame, a follower
+  integrates against the path its leader actually traveled — a linear
+  ramp through the leader's real motion, which the closed-form solvers
+  handle exactly — instead of a value sampled once at the frame boundary.
+  And when a single frame carries more motion than the coupling tolerance
+  allows (a dropped frame, a teleported target), the system splits that
+  frame into up to 8 internal sub-steps. Quiet frames take one step and
+  cost what they always did; update events still fire once per spring per
+  frame.
+
+  Two long-standing frame-rate artifacts in follow cycles are fixed: a
+  mutual-follow pair released from displacement now settles at its true
+  midpoint instead of drifting below it on slow frames, and a self-follow
+  fling travels the same distance at 30fps as at 60fps.
+
+  New: `couplingTolerance` — a `createSpringSystem` option, a live
+  `SpringSystem` property, and a nuxt module option — sets how far a
+  follower may trail its source within one frame, in the value's own
+  units. The default is 0.1; smaller is tighter and spends more solver
+  work; it never goes finer than the follower's resting precision.
+
+  Follower trajectories change with this release: they sit closer to the
+  continuous ideal everywhere, most visibly in deep chains on slow
+  frames. Springs that follow nothing are bit-for-bit unchanged, and
+  synchronous writes (`target`, `value`, `jumpTo`) still land exactly at
+  write time.
+
+- 00ac093: `Spring.timeRemaining` and `SpringDefinition.computeTimeRemaining` are
+  now solved, not estimated. The old value followed the decay envelope
+  with a 2x safety margin and over-reported by roughly that factor; the
+  new value is the exact time the motion's decay bound enters the resting
+  threshold. The spring is resting at the first tick at or after it, and
+  a bouncy spring can rest at most one oscillation earlier when a frame
+  samples a low pulse. Expect reported times roughly half of what they
+  were.
+
+  `arrival` folds in exactly: a multiplier of 0 caps the time at the
+  first target crossing (as before), and rebounds or slowdowns now add
+  their per-crossing velocity loss to the effective decay rate — an
+  undamped spring with such a multiplier reports a finite time instead of
+  Infinity, and honors it.
+
+  The time is solved from the live state on read, and nothing is
+  maintained per tick: springs whose `timeRemaining` is never read pay
+  nothing for it, however often they move.
+
 ## 0.14.0
 
 ### Minor Changes
