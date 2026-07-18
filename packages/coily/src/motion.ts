@@ -1,8 +1,11 @@
 import { SpringDefinition } from './config.ts'
 import { Emitter } from './emitter.ts'
+import type { FollowEdge } from './follow-graph.ts'
 import { State } from './state.ts'
 import { CriticallyDampedSolver, OverdampedSolver, UnderdampedSolver } from './solver.ts'
 import { invariant } from './util.ts'
+
+let nextMotionId = 0
 
 /**
  * One spring simulation in displacement space: position is measured from
@@ -11,8 +14,32 @@ import { invariant } from './util.ts'
  * damping regime and emits update/start/stop/dispose events.
  */
 export class Motion {
+  /** Monotone creation id: breaks ties wherever motions need a deterministic order. */
+  readonly _id = nextMotionId++
+
   /** Tick-pass marker written by `MotionSet` so a motion re-added mid-pass isn't ticked twice. */
   _pass = 0
+
+  /**
+   * Dependency rank written by `FollowGraph`: motions the follow graph
+   * touches count up from 0, leaders before followers; -1 marks a motion
+   * outside the graph.
+   */
+  _rank = -1
+
+  /**
+   * The edge this motion follows through, or null. Written by
+   * `FollowGraph` on edge add/remove so the tick's hot loop reads a
+   * field instead of a map.
+   */
+  _edge: FollowEdge | null = null
+
+  /**
+   * The edges reading this motion, or null when none. Written by
+   * `FollowGraph` with the rank cache, so it can lag a mid-pass edge
+   * change until the next recompute; the tick tolerates stale entries.
+   */
+  _followers: FollowEdge[] | null = null
 
   // Set by the owning Spring from its `purpose`; `MotionSet.finishAll`
   // leaves motions that don't respect reduced motion running, so
@@ -85,6 +112,21 @@ export class Motion {
   }
 
   tick(dt: number, emit = true) {
+    this._advance(dt)
+
+    if (emit) {
+      this._settleFrame()
+    } else {
+      this.#reconcileRunning()
+    }
+  }
+
+  /**
+   * Advances the simulation and emits nothing. The tick pass advances
+   * every motion through this, then delivers the frame's events with
+   * `_settleFrame`; the synchronous `tick` wraps the two.
+   */
+  _advance(dt: number) {
     invariant(this.#currentSolver, 'Cannot tick a disposed motion')
 
     if (this.#needsUpdate) {
@@ -107,11 +149,22 @@ export class Motion {
       this.#state.velocity = 0
       this.#needsReset = true
     }
+  }
 
-    if (emit) {
-      this.#emitter.emit('update')
-    }
+  /**
+   * Emits the frame's `update`, then reconciles `stop`/`start`. The tick
+   * pass calls this in dependency order after every motion has advanced,
+   * so update callbacks read frame-final values everywhere.
+   */
+  _settleFrame() {
+    this.#emitter.emit('update')
+    this.#reconcileRunning()
+  }
 
+  // Reads state fresh rather than caching around the update emit: an
+  // update callback can re-displace the motion, and a stale boolean
+  // would emit a bogus 'stop'.
+  #reconcileRunning() {
     if (this.#state.isResting) {
       if (this.#running) {
         this.#running = false

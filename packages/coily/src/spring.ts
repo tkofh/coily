@@ -3,6 +3,7 @@ import type { MotionSet } from './motion-set.ts'
 import { Motion } from './motion.ts'
 import { type SpringSource, SpringSourceSymbol, isSpringSource } from './spring-source.ts'
 import type { KinematicSource, KinematicSourceApi } from './kinematic-source.ts'
+import { registerBacking, resolveLeaderMotions } from './follow-graph.ts'
 import { invariant, RESOLVED } from './util.ts'
 
 /**
@@ -38,6 +39,12 @@ export type Purpose = 'motion' | 'appearance'
 export class Spring implements KinematicSource {
   /** Brands the spring as a `KinematicSource` whose api is the spring itself. */
   get [SpringSourceSymbol](): KinematicSourceApi<number> {
+    // Backing registers on first use as a source, not at construction:
+    // a per-creation entry kept every spring in the weak registry, and
+    // major GCs walking that ephemeron set cost 8x on creation. Every
+    // follow path reads this api before resolving leaders, so
+    // resolution always finds the entry.
+    registerBacking(this, this.#motion)
     return this
   }
 
@@ -390,9 +397,25 @@ export class Spring implements KinematicSource {
     const unsubDispose = api.onDispose(() => {
       this.#unfollow()
     })
+    // The edge mirrors the update subscription for the system: it names
+    // the leader motions ordering needs, and `recouple` performs the
+    // same retarget as the handler above. A foreign source resolves to
+    // no motions and registers nothing — it couples through the emitter
+    // alone.
+    const leaders = resolveLeaderMotions(source)
+    if (leaders.length > 0) {
+      this.#motions.graph.addEdge({
+        follower: this.#motion,
+        leaders,
+        recouple: () => {
+          this.#setTarget(api.value)
+        },
+      })
+    }
     this.#unsubLeader = () => {
       unsubUpdate()
       unsubDispose()
+      this.#motions.graph.removeEdge(this.#motion)
     }
 
     this.#setTarget(api.value)

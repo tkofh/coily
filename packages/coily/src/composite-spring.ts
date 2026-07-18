@@ -13,6 +13,7 @@ import {
 import { Spring, type Purpose } from './spring.ts'
 import { type SpringSource, SpringSourceSymbol, isSpringSource } from './spring-source.ts'
 import type { KinematicSource, KinematicSourceApi } from './kinematic-source.ts'
+import { registerBacking } from './follow-graph.ts'
 import { invariant, isNumber, isRecordOrArray, RESOLVED } from './util.ts'
 
 /**
@@ -200,6 +201,9 @@ const followChannel = (mine: Spring, theirs: Spring) => {
 export class CompositeSpring<in out T extends object> implements KinematicSource<ReadonlyShape<T>> {
   /** Brands the composite as a `KinematicSource` whose api is the composite itself. */
   get [SpringSourceSymbol](): KinematicSourceApi<ReadonlyShape<T>> {
+    // Backing registers on first use as a source — see `Spring`'s brand
+    // getter for why registration is lazy.
+    registerBacking(this, this.#tree.leaves)
     return this
   }
 
