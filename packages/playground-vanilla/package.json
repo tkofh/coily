@@ -8,7 +8,7 @@
     "preview": "vite preview"
   },
   "devDependencies": {
-    "coily": "workspace:^0.14.0",
+    "coily": "workspace:^0.15.0",
     "typescript": "catalog:",
     "vite": "catalog:"
   }
