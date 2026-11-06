@@ -6,6 +6,7 @@ export {
   type CompositeSpringOptions,
 } from './system.ts'
 export type { Spring, SpringTarget, Purpose } from './spring.ts'
+export type { Ramp, RampOptions } from './ramp.ts'
 export { mapSpring, type SpringSource, SpringSourceSymbol } from './spring-source.ts'
 export {
   velocityOf,

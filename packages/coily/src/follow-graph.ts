@@ -1,4 +1,5 @@
-import { Motion } from './motion.ts'
+import type { Motion } from './motion.ts'
+import type { TickMember } from './tick-member.ts'
 import { SpringSourceSymbol, isSpringSource, recipeOf } from './spring-source.ts'
 
 // What advances a registered source: its own motion, or the sources it
@@ -7,7 +8,7 @@ import { SpringSourceSymbol, isSpringSource, recipeOf } from './spring-source.ts
 // it. A source with no entry is foreign — a user-authored object
 // honoring the `SpringSource` contract — and contributes no ordering
 // constraint.
-const MOTION_BACKING = new WeakMap<object, Motion | readonly object[]>()
+const MOTION_BACKING = new WeakMap<object, TickMember | readonly object[]>()
 
 /**
  * Records what advances `source`: its own `Motion` for a scalar spring,
@@ -17,7 +18,7 @@ const MOTION_BACKING = new WeakMap<object, Motion | readonly object[]>()
  * springs never used as sources stay out of the weak registry, and
  * idempotently, so repeated reads just overwrite the entry.
  */
-export function registerBacking(source: object, backing: Motion | readonly object[]): void {
+export function registerBacking(source: object, backing: TickMember | readonly object[]): void {
   MOTION_BACKING.set(source, backing)
 }
 
@@ -28,15 +29,15 @@ export function registerBacking(source: object, backing: Motion | readonly objec
  * source resolves to nothing: it imposes no tick-ordering constraint and
  * couples through its emitter alone.
  */
-export function resolveLeaderMotions(source: object): readonly Motion[] {
-  const leaders = new Set<Motion>()
+export function resolveLeaderMotions(source: object): readonly TickMember[] {
+  const leaders = new Set<TickMember>()
   collectInto(source, leaders)
   return [...leaders]
 }
 
 // Recipe roots and backings only reference sources created before their
 // owner, so the walk follows creation order and cannot cycle.
-function collectInto(source: object, leaders: Set<Motion>): void {
+function collectInto(source: object, leaders: Set<TickMember>): void {
   const recipe = recipeOf(source)
   if (recipe) {
     for (const root of recipe.sources) collectInto(root, leaders)
@@ -64,14 +65,14 @@ function collectInto(source: object, leaders: Set<Motion>): void {
     }
   }
   if (backing === undefined) return
-  if (backing instanceof Motion) {
-    leaders.add(backing)
+  if (Array.isArray(backing)) {
+    for (const part of backing as readonly object[]) collectInto(part, leaders)
   } else {
-    for (const part of backing) collectInto(part, leaders)
+    leaders.add(backing as TickMember)
   }
 }
 
-const NO_LEADERS: readonly Motion[] = []
+const NO_LEADERS: readonly TickMember[] = []
 
 /**
  * The sub-step controller's shock gate: an edge's fresh kinematic terms
@@ -92,12 +93,12 @@ export interface FollowEdge {
   /** The motion that retargets when its leaders advance. */
   readonly follower: Motion
   /** The distinct motions behind the followed source, per `resolveLeaderMotions`. */
-  readonly leaders: readonly Motion[]
+  readonly leaders: readonly TickMember[]
   /**
    * Whether the follower shares a Tarjan SCC with any of its leaders,
    * self-follow included. Written by `FollowGraph` on recompute. Routes
    * `plan` to the ZOH sub-step law: FOH destabilizes cycles that are
-   * stable under ZOH, so no ramp may ever arm inside an SCC.
+   * stable under ZOH, so no slope may ever arm inside an SCC.
    */
   _cyclic: boolean
   /** The follower's target as of the last `plan` call. */
@@ -109,9 +110,9 @@ export interface FollowEdge {
   /**
    * Re-anchors the follower to the followed source's current value.
    * `h` is the step the follower is about to advance by, in seconds
-   * (the internal tick unit). On an edge where a ramp may arm —
+   * (the internal tick unit). On an edge where a slope may arm —
    * acyclic, passthrough arrival, `h > 0`, not a reduced-motion jump —
-   * it retargets and arms the follower's `_ramp` with the delta over
+   * it retargets and arms the follower's `_slope` with the delta over
    * `h`, so the coming advance integrates against the leader's motion.
    * Every other edge retargets with the exact semantics of the
    * leader-update handler (finite guard, reduced-motion jump).
@@ -137,11 +138,11 @@ export interface FollowEdge {
  * this class is their writer.
  */
 export class FollowGraph {
-  readonly #edges = new Map<Motion, FollowEdge>()
+  readonly #edges = new Map<TickMember, FollowEdge>()
   /** Motions holding a rank from the last recompute, so stale ranks reset to -1. */
-  #ranked: readonly Motion[] = []
+  #ranked: readonly TickMember[] = []
   /** Motions holding a follower list from the last recompute, so stale lists reset to null. */
-  #withFollowers: readonly Motion[] = []
+  #withFollowers: readonly TickMember[] = []
   /** Edge list mirroring the map, rebuilt with the ranks, so the per-frame plan pass iterates an array. */
   #edgeList: readonly FollowEdge[] = []
   #dirty = false
@@ -197,7 +198,7 @@ export class FollowGraph {
     for (const motion of this.#withFollowers) {
       motion._followers = null
     }
-    const withFollowers: Motion[] = []
+    const withFollowers: TickMember[] = []
     for (const edge of this.#edges.values()) {
       for (const leader of edge.leaders) {
         if (leader._followers === null) {
@@ -209,7 +210,7 @@ export class FollowGraph {
     }
     this.#withFollowers = withFollowers
 
-    const nodes = new Set<Motion>()
+    const nodes = new Set<TickMember>()
     for (const [follower, edge] of this.#edges) {
       nodes.add(follower)
       for (const leader of edge.leaders) {
@@ -224,12 +225,12 @@ export class FollowGraph {
     // Iterative Tarjan over follower -> leader adjacency. An SCC
     // completes only after every SCC it reads from, so completion order
     // is dependency order and ranks assign as SCCs finish.
-    const indexOf = new Map<Motion, number>()
-    const lowOf = new Map<Motion, number>()
-    const onStack = new Set<Motion>()
-    const stack: Motion[] = []
-    const ranked: Motion[] = []
-    const sccOf = new Map<Motion, number>()
+    const indexOf = new Map<TickMember, number>()
+    const lowOf = new Map<TickMember, number>()
+    const onStack = new Set<TickMember>()
+    const stack: TickMember[] = []
+    const ranked: TickMember[] = []
+    const sccOf = new Map<TickMember, number>()
     let index = 0
     let rank = 0
     let scc = 0
@@ -270,8 +271,8 @@ export class FollowGraph {
             // frame.node roots a finished SCC: pop its members and rank
             // them in ascending creation id — the cycle policy, stable
             // across passes and churn.
-            const members: Motion[] = []
-            let member: Motion
+            const members: TickMember[] = []
+            let member: TickMember
             do {
               member = stack.pop()!
               onStack.delete(member)
@@ -302,7 +303,7 @@ export class FollowGraph {
     this.#edgeList = edgeList
   }
 
-  #leadersOf(motion: Motion): readonly Motion[] {
+  #leadersOf(motion: TickMember): readonly TickMember[] {
     return this.#edges.get(motion)?.leaders ?? NO_LEADERS
   }
 }

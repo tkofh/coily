@@ -417,7 +417,7 @@ export class Spring implements TargetedSource {
         _d1: 0,
         _d2: 0,
         recouple: (h) => {
-          // A ramp may arm only where it is safe: never inside a cycle
+          // A slope may arm only where it is safe: never inside a cycle
           // (delayed velocity feedback around a loop is negative damping
           // — FOH destabilizes cycles that are stable held), never on an
           // arrival spring (its crossings are closed-form only against a
@@ -439,10 +439,10 @@ export class Spring implements TargetedSource {
           this.#motions.add(this.#motion)
           // The delta is tick-path by construction: sync writes already
           // landed as steps through the emitter before this pass. The
-          // position stays measured from the old target — the ramp's
-          // start — and the ramped advance ends it measured from the
+          // position stays measured from the old target — the slope's
+          // start — and the sloped advance ends it measured from the
           // new one.
-          this.#motion._ramp = (value - this.#target) / h
+          this.#motion._slope = (value - this.#target) / h
           this.#target = value
         },
         plan: (dt) => {
@@ -461,6 +461,10 @@ export class Spring implements TargetedSource {
           let dHat = Math.abs(d)
           let error = Math.abs(d - edge._d2) / 8
           for (const leader of leaders) {
+            // A kink the leader can schedule, such as a ramp arriving
+            // mid-frame, is invisible to history: a held slope would
+            // spread the change over the whole frame, so take the cap.
+            if (leader._kinksWithin(dt)) return Number.POSITIVE_INFINITY
             if (leader._manifoldDeviation() > MANIFOLD_GATE * Math.abs(d)) {
               const accel = Math.abs(leader._acceleration())
               const speed = Math.abs(leader.velocity)
@@ -474,7 +478,7 @@ export class Spring implements TargetedSource {
           const tol = Math.max(this.#config.restingMagnitude, this.#motions.couplingTolerance)
           // Where recouple holds the target (cycles, arrival), half a
           // sub-step of leader travel remains as tracking error: demand
-          // is linear in the frame's move. Where it ramps, only the
+          // is linear in the frame's move. Where it slopes, only the
           // curvature residual remains — the second difference — and it
           // shrinks with the square of the sub-step.
           return edge._cyclic || this.#config.arrival !== 1

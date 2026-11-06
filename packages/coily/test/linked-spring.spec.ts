@@ -891,7 +891,7 @@ describe('Spring: following', () => {
       leader.jumpTo(50)
 
       // The retarget lands synchronously and exactly; the follower's
-      // value moves only by animating — no ramp smears the jump across
+      // value moves only by animating — no slope smears the jump across
       // the next frame.
       expect(follower.target).toBe(50)
       expect(follower.value).toBe(before)
@@ -899,8 +899,8 @@ describe('Spring: following', () => {
 
     test('an arrival follower never overshoots while following', () => {
       // arrival: 0 clamps at the target via closed-form crossings, which
-      // only exist against a held target: the ramp fence must route this
-      // follower to sub-stepped holds. An armed ramp would shift the
+      // only exist against a held target: the slope fence must route this
+      // follower to sub-stepped holds. An armed slope would shift the
       // crossing equation and let the follower punch through.
       const system = createSpringSystem()
       const leader = system.createSpring(0, stiff)

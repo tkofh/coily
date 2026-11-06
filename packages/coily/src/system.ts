@@ -8,6 +8,7 @@ import {
   type Shape,
   CompositeSpring,
 } from './composite-spring.ts'
+import { Ramp, type RampOptions } from './ramp.ts'
 import { Ticker, type TickerOptions } from './ticker.ts'
 import { invariant } from './util.ts'
 
@@ -98,10 +99,7 @@ class SpringSystemImpl implements SpringSystem {
   }
 
   #applyReducedMotion(reduced: boolean) {
-    this.#motion.reduced = reduced
-    if (reduced) {
-      this.#motion.finishAll()
-    }
+    this.#motion.setReduced(reduced)
   }
 
   get reducedMotion() {
@@ -161,6 +159,10 @@ class SpringSystemImpl implements SpringSystem {
       config as ConfigShape<Record<string, number>> | undefined,
       (options as CompositeSpringOptions<Record<string, number>> | undefined)?.purpose,
     )
+  }
+
+  createRamp(from: number, options: RampOptions): Ramp {
+    return new Ramp(this.#motion, from, options)
   }
 
   advance(dt: number) {
@@ -246,8 +248,30 @@ export interface SpringSystem {
     options?: CompositeSpringOptions<T>,
   ): CompositeSpring<T>
   /**
-   * Advances every moving spring by `dt` milliseconds. For manual
-   * stepping in place of `start()` — tests, custom loops, offline
+   * Creates a ramp at `from`: a value that moves toward `options.target`
+   * at `options.rate` value units per second, in a straight line, and
+   * stops there. A spring that follows a ramp tracks its steady motion
+   * exactly. Without a target the ramp starts at rest; `Infinity` or
+   * `-Infinity` makes it endless.
+   *
+   * ```ts
+   * // An endless spin at 270 deg/s, with a spring lagging behind it.
+   * const sweep = system.createRamp(0, { rate: 270, target: Infinity })
+   * const ring = system.createSpring(sweep)
+   *
+   * // A clock: 0 to 600 over 600 ms, mapped into a pulse.
+   * const clock = system.createRamp(0, { rate: 1000, target: 600 })
+   * const pulse = system.createSpring(mapSpring(clock, (ms) => Math.sin((Math.PI * ms) / 600)))
+   * ```
+   *
+   * `options.purpose` marks what the ramp drives: a `'motion'` ramp (the
+   * default) jumps to a bounded target under reduced motion and holds
+   * still on an endless one, and a `'nonmotion'` ramp keeps moving.
+   */
+  createRamp(from: number, options: RampOptions): Ramp
+  /**
+   * Advances every moving spring and ramp by `dt` milliseconds. For
+   * manual stepping in place of `start()` — tests, custom loops, offline
    * rendering.
    */
   advance(dt: number): void

@@ -5,6 +5,7 @@ import { type FollowEdge, FollowGraph, resolveLeaderMotions } from '../src/follo
 import { accelerationOf, velocityOf } from '../src/kinematic-source.ts'
 import { Motion } from '../src/motion.ts'
 import { MotionSet } from '../src/motion-set.ts'
+import type { TickMember } from '../src/tick-member.ts'
 import { Spring } from '../src/spring.ts'
 import { SpringSourceSymbol, mapSpring } from '../src/spring-source.ts'
 import { makeSource, test } from './helpers.ts'
@@ -12,7 +13,7 @@ import { makeSource, test } from './helpers.ts'
 const config = defineSpring({ mass: 1, tension: 170, damping: 26 })
 
 /** Resolved motions as sorted creation ids, for same-set comparisons. */
-function idsOf(motions: readonly Motion[]): number[] {
+function idsOf(motions: readonly TickMember[]): number[] {
   return motions.map((motion) => motion._id).sort((a, b) => a - b)
 }
 
@@ -37,7 +38,7 @@ function link(graph: FollowGraph, follower: Motion, ...leaders: Motion[]): Follo
 
 /** The single motion behind a scalar spring. */
 function motionOf(spring: Spring): Motion {
-  return resolveLeaderMotions(spring)[0]!
+  return resolveLeaderMotions(spring)[0] as Motion
 }
 
 describe('resolveLeaderMotions', () => {

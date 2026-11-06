@@ -162,6 +162,22 @@ describe('linked spring chains', () => {
     return springs
   }
 
+  // Runs first in the group, so the chains below tick with a ramp's
+  // class already seen at the tick's call sites.
+  bench('64-spring chain led by an endless ramp: 60 frames', () => {
+    const system = createSpringSystem()
+    const ramp = system.createRamp(0, { rate: 270, target: Infinity })
+    let prev = system.createSpring(ramp)
+    for (let i = 1; i < 64; i++) {
+      const next = system.createSpring(prev.value)
+      next.target = prev
+      prev = next
+    }
+    for (let i = 0; i < 60; i++) {
+      system.advance(FRAME)
+    }
+  })
+
   bench('64-spring chain: 60 frames of continuous motion', () => {
     const system = createSpringSystem()
     const springs = createChain(system, 64)
@@ -172,7 +188,7 @@ describe('linked spring chains', () => {
   })
 
   // The same run with sub-stepping pinned off isolates the coupling
-  // controller's standing overhead (plan pass + ramp arming) from the
+  // controller's standing overhead (plan pass + slope arming) from the
   // sub-steps it chooses to spend.
   bench('64-spring chain: 60 frames, coupling pinned to one step per frame', () => {
     const system = createSpringSystem({ couplingTolerance: 1e9 })

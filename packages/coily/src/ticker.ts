@@ -42,11 +42,16 @@ const cancel = (id: number): void => {
   }
 }
 
+const now = (): number => performance.now()
+
 /**
  * Drives a `MotionSet` from animation frames. Schedules frames only
  * while motions exist — otherwise it sleeps and the set's `onWake`
  * rearms it — paces fps caps to whole display frames, and clamps lag
- * gaps.
+ * gaps. While started and asleep it counts idle wall time onto the
+ * set's clock, leaving out time the document spends hidden: frames
+ * stop in a hidden tab, and a set that kept stepping through the spell
+ * would see it replaced with `adjustedLag`, not counted in full.
  */
 export class Ticker {
   #fps: number
@@ -68,6 +73,13 @@ export class Ticker {
   #stopped = true
   #sleeping = false
 
+  /** Wall ms when the current idle spell began, or null outside one. */
+  #idleSince: number | null = null
+  /** Hidden ms already closed out within the current idle spell. */
+  #hiddenIdle = 0
+  /** Wall ms when the document was last hidden, or null while visible. */
+  #hiddenSince: number | null = null
+
   constructor(motions: MotionSet, options?: TickerOptions) {
     this.#motion = motions
 
@@ -88,6 +100,12 @@ export class Ticker {
     this.#adjustedLag = Math.min(adjustedLag, this.#lagThreshold)
 
     motions.onWake = () => this.#wake()
+    motions.idleTime = () => this.#idleMs(now()) / 1000
+
+    if (typeof document !== 'undefined') {
+      if (document.visibilityState === 'hidden') this.#hiddenSince = now()
+      document.addEventListener('visibilitychange', () => this.#onVisibilityChange())
+    }
   }
 
   get fps() {
@@ -145,7 +163,7 @@ export class Ticker {
       this.#stopped = false
       this.#primed = false
       this.#acc = 0
-      this.#schedule()
+      this.#schedule(now())
     }
   }
 
@@ -156,6 +174,8 @@ export class Ticker {
       }
       this.#stopped = true
       this.#sleeping = false
+      // A stopped system freezes its clock, as it holds its springs.
+      this.#creditIdle(now())
     }
   }
 
@@ -163,10 +183,14 @@ export class Ticker {
     this.#step(this.#gap)
   }
 
-  #schedule() {
+  #schedule(timestamp: number) {
     if (this.#motion.size === 0) {
       this.#sleeping = true
       this.#acc = 0
+      if (this.#idleSince === null) {
+        this.#idleSince = timestamp
+        this.#hiddenIdle = 0
+      }
     } else {
       this.#sleeping = false
       this.#id = request((t) => this.#onFrame(t))
@@ -176,7 +200,7 @@ export class Ticker {
   #wake() {
     if (!this.#stopped && this.#sleeping) {
       this.#primed = false
-      this.#schedule()
+      this.#schedule(now())
     }
   }
 
@@ -200,8 +224,10 @@ export class Ticker {
         }
       } else {
         // The first frame after start or wake only records a baseline
-        // timestamp; stepping begins on the second.
+        // timestamp; stepping begins on the second. Idle time runs up
+        // to this frame, so the clock moves on without a gap.
         this.#primed = true
+        this.#creditIdle(timestamp)
       }
     } finally {
       this.#lastWallTime = timestamp
@@ -210,8 +236,36 @@ export class Ticker {
       // the loop keeps running. Skip only when a listener stopped the
       // ticker mid-step.
       if (!this.#stopped) {
-        this.#schedule()
+        this.#schedule(timestamp)
       }
+    }
+  }
+
+  // Idle wall ms since the spell began, less the time the document was
+  // hidden within it.
+  #idleMs(timestamp: number): number {
+    const since = this.#idleSince
+    if (since === null) return 0
+    let hidden = this.#hiddenIdle
+    if (this.#hiddenSince !== null) hidden += timestamp - Math.max(this.#hiddenSince, since)
+    return Math.max(0, timestamp - since - hidden)
+  }
+
+  #creditIdle(timestamp: number) {
+    if (this.#idleSince === null) return
+    this.#motion.credit(this.#idleMs(timestamp) / 1000)
+    this.#idleSince = null
+  }
+
+  #onVisibilityChange() {
+    const timestamp = now()
+    if (document.visibilityState === 'hidden') {
+      this.#hiddenSince ??= timestamp
+    } else if (this.#hiddenSince !== null) {
+      if (this.#idleSince !== null) {
+        this.#hiddenIdle += Math.max(0, timestamp - Math.max(this.#hiddenSince, this.#idleSince))
+      }
+      this.#hiddenSince = null
     }
   }
 

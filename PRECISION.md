@@ -157,8 +157,8 @@ into trajectories, and two mechanisms keep it out.
 
 **First-order hold.** On a passthrough edge — a follower outside any
 follow cycle, with the default `arrival` — each step integrates
-against a linear ramp through the leader's actual motion for that
-step, not a value held from the step boundary. The ramp keeps the
+against a straight line through the leader's actual motion for that
+step, not a value held from the step boundary. The slope keeps the
 closed forms closed: a target moving at constant slope `g` shifts the
 equilibrium by the constant `-(damping/tension) * g`, so the solver
 ticks the shifted state exactly and shifts back. A linearly moving
@@ -176,11 +176,22 @@ and dropped frames sub-step. The estimate is a calibrated heuristic,
 not a proven bound, and the tolerance targets local per-frame error —
 accumulated error over a long trajectory runs a small multiple of it.
 
-Ramps never arm inside a cycle — a ramp's velocity coupling is
+Slopes never arm inside a cycle — a slope's velocity coupling is
 necessarily one step stale around a loop, which can destabilize cycles
 that are unconditionally stable under held targets — and never for an
 `arrival` spring, whose crossings are closed-form only against a held
 target. Those edges couple through a target held per sub-step instead.
+
+**Following a ramp.** A ramp (`createRamp`) moves at exactly constant
+speed, so its change over any sub-step is `rate * h` and the
+first-order hold integrates against it exactly: a spring following a
+ramp matches the continuous-time motion to rounding at any frame rate.
+Two cases leave error the controller budgets. A curved map of a ramp,
+such as `mapSpring(clock, (ms) => Math.sin(ms / 100))`, carries the
+curvature residual of any curving leader. A bounded ramp's arrival is
+a kink inside a frame, which history cannot see coming; the ramp knows
+its arrival time, so that frame takes the full 8 sub-steps, and what
+remains is the error of an arrival between sub-step boundaries.
 
 What following preserves bit-for-bit:
 

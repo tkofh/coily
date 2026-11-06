@@ -1,11 +1,19 @@
 import { SpringDefinition } from './config.ts'
 import { Emitter } from './emitter.ts'
-import type { FollowEdge } from './follow-graph.ts'
 import { State } from './state.ts'
 import { CriticallyDampedSolver, OverdampedSolver, UnderdampedSolver } from './solver.ts'
+import type { FollowEdge } from './follow-graph.ts'
+import type { TickMember } from './tick-member.ts'
 import { invariant } from './util.ts'
 
-let nextMotionId = 0
+// Shared by every kind of tick member. It lives here, beside the member
+// created in bulk, so `Motion` increments a module-local binding.
+let nextId = 0
+
+/** The next tick-member creation id, for members other than `Motion`. */
+export function nextTickMemberId(): number {
+  return nextId++
+}
 
 /**
  * One spring simulation in displacement space: position is measured from
@@ -13,53 +21,28 @@ let nextMotionId = 0
  * the owning `Spring`. Picks the closed-form solver for the config's
  * damping regime and emits update/start/stop/dispose events.
  */
-export class Motion {
-  /** Monotone creation id: breaks ties wherever motions need a deterministic order. */
-  readonly _id = nextMotionId++
-
-  /** Tick-pass marker written by `MotionSet` so a motion re-added mid-pass isn't ticked twice. */
+export class Motion implements TickMember {
+  // Tick bookkeeping; see `TickMember` for what each field means.
+  readonly _id = nextId++
   _pass = 0
-
-  /**
-   * Frame marker written by `MotionSet`: sub-steps share one frame, and
-   * the first advance in it queues the motion for the settle sweep.
-   */
   _frame = 0
-
-  /**
-   * Dependency rank written by `FollowGraph`: motions the follow graph
-   * touches count up from 0, leaders before followers; -1 marks a motion
-   * outside the graph.
-   */
   _rank = -1
-
-  /**
-   * The edge this motion follows through, or null. Written by
-   * `FollowGraph` on edge add/remove so the tick's hot loop reads a
-   * field instead of a map.
-   */
   _edge: FollowEdge | null = null
-
-  /**
-   * A first-order-hold ramp slope in value units per second, armed by a
-   * ramped `recouple` immediately before the `_advance` that consumes
-   * it (read-and-clear; no user code runs between the two). 0 means the
-   * target holds still across the step — every path but a ramped
-   * recouple.
-   */
-  _ramp = 0
-
-  /**
-   * The edges reading this motion, or null when none. Written by
-   * `FollowGraph` with the rank cache, so it can lag a mid-pass edge
-   * change until the next recompute; the tick tolerates stale entries.
-   */
   _followers: FollowEdge[] | null = null
 
   // Set by the owning Spring from its `purpose`; `MotionSet.finishAll`
   // leaves motions that don't respect reduced motion running, so
   // 'nonmotion' springs keep animating when it turns on.
   respectsReducedMotion = true
+
+  /**
+   * A first-order-hold slope in value units per second, armed by a
+   * sloped `recouple` immediately before the `_advance` that consumes
+   * it (read-and-clear; no user code runs between the two). 0 means the
+   * target holds still across the step — every path but a sloped
+   * recouple.
+   */
+  _slope = 0
 
   #config: SpringDefinition
   readonly #state: State
@@ -141,30 +124,31 @@ export class Motion {
    * every motion through this, then delivers the frame's events with
    * `_settleFrame`; the synchronous `tick` wraps the two.
    *
-   * A pending `_ramp` integrates the step against a target moving at
+   * A pending `_slope` integrates the step against a target moving at
    * that slope instead of holding still: one affine transform around
    * the unchanged solver. With the target at `p(t) = p0 + g*t`, the
    * displacement u = x - p(t) obeys the homogeneous equation shifted by
    * the constant u_ss = -(2*zeta/wn)*g = -(damping/tension)*g, so the
    * solver ticks w = u - u_ss exactly and the results shift back.
-   * Measuring u from the moving target makes the ramp endpoint and the
+   * Measuring u from the moving target makes the slope endpoint and the
    * new target coincide — the armer assigns the target, no rebase
-   * arithmetic exists. The ramp is an argument of the step, never
+   * arithmetic exists. The slope is an argument of the step, never
    * persistent solver state: g = 0 takes the plain step below, so a
-   * motion that never ramps steps bit-exactly like an isolated spring.
+   * motion never armed with a slope steps bit-exactly like an isolated
+   * spring.
    */
   _advance(dt: number) {
     invariant(this.#currentSolver, 'Cannot tick a disposed motion')
 
-    const g = this._ramp
+    const g = this._slope
     if (g !== 0) {
-      this._ramp = 0
+      this._slope = 0
       const state = this.#state
       const shift = (this.#config.damping / this.#config.tension) * g
       state.position += shift
       state.velocity -= g
-      // Anchor in ramp space from the shifted state: unconditionally,
-      // and again next step — the ramp-space anchor is wrong for any
+      // Anchor in slope space from the shifted state: unconditionally,
+      // and again next step — the slope-space anchor is wrong for any
       // other frame.
       if (this.#needsUpdate) {
         this.#updateSolver()
@@ -257,6 +241,11 @@ export class Motion {
     return (
       -(config.tension * this.#state.position + config.damping * this.#state.velocity) / config.mass
     )
+  }
+
+  /** A spring's slope never changes at a moment known in advance. */
+  _kinksWithin(_dt: number) {
+    return false
   }
 
   onUpdate(callback: () => void) {

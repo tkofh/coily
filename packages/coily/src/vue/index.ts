@@ -1,4 +1,5 @@
 export { useSpring, type SpringRef } from './spring.ts'
+export { useRamp, type RampRef, type UseRampOptions } from './ramp.ts'
 export type { CompositeSpringRef } from './composite-spring.ts'
 export { useSpringPool, type SpringPool } from './pool.ts'
 export { SpringValue, type SpringValueProps, type SpringValueSlots } from './component.ts'

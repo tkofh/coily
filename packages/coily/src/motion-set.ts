@@ -1,8 +1,9 @@
 import { FlushQueue } from './flush-queue.ts'
 import { type FollowEdge, FollowGraph } from './follow-graph.ts'
-import type { Motion } from './motion.ts'
+import type { RampMotion } from './ramp.ts'
+import type { TickMember } from './tick-member.ts'
 
-function compareMotions(a: Motion, b: Motion): number {
+function compareMotions(a: TickMember, b: TickMember): number {
   return a._rank - b._rank || a._id - b._id
 }
 
@@ -18,13 +19,13 @@ const MAX_SUBSTEPS = 8
  * pop.
  */
 class MotionHeap {
-  readonly #items: Motion[] = []
+  readonly #items: TickMember[] = []
 
   clear(): void {
     this.#items.length = 0
   }
 
-  push(motion: Motion): void {
+  push(motion: TickMember): void {
     const items = this.#items
     let hole = items.length
     items.push(motion)
@@ -37,7 +38,7 @@ class MotionHeap {
     items[hole] = motion
   }
 
-  pop(): Motion | undefined {
+  pop(): TickMember | undefined {
     const items = this.#items
     if (items.length === 0) return undefined
     const top = items[0]!
@@ -78,9 +79,15 @@ export class MotionSet {
   readonly flushes = new FlushQueue()
   /** Follow edges registered by following springs, with the dependency rank over their motions. */
   readonly graph = new FollowGraph()
-  readonly #motions = new Set<Motion>()
+  /**
+   * The ramps a change of reduced motion reaches: every `'motion'` ramp
+   * that is moving or holding, whether or not it ticks. Ramps keep their
+   * own membership current.
+   */
+  readonly ramps = new Set<RampMotion>()
+  readonly #motions = new Set<TickMember>()
   readonly #heap = new MotionHeap()
-  readonly #advanced: Motion[] = []
+  readonly #advanced: TickMember[] = []
   /** The live pass worklist while an advance phase runs, so mid-phase wakes join it. */
   #activeHeap: MotionHeap | null = null
   /** Whether any tick is on the stack, settle sweep included — a reentrant advance must not share the pass structures. */
@@ -90,6 +97,18 @@ export class MotionSet {
   #pass = 0
   /** Ordered-frame counter: sub-steps share one id, deduplicating the settle list. */
   #frame = 0
+  /** Stepped time in seconds: the sum of every tick's `dt`, plus idle time the ticker credits. */
+  #clock = 0
+  /** Counts ticks, so `advancing` can name the one in its advance phase. */
+  #ticks = 0
+  #advancing = 0
+
+  /**
+   * Seconds of idle wall time not yet credited to the clock, or null when
+   * nothing counts idle time. The ticker installs it while it drives the
+   * set and credits the total with `credit` when it next steps.
+   */
+  idleTime: (() => number) | null = null
 
   constructor(debug = false) {
     this.#debug = debug
@@ -99,7 +118,31 @@ export class MotionSet {
     return this.#motions.size
   }
 
-  add(motion: Motion) {
+  /**
+   * The system clock in seconds. It moves only forward: by each tick's
+   * `dt` when the advance phase ends, and by idle wall time while the
+   * ticker sleeps. Ramps read their position from it.
+   */
+  get time(): number {
+    const idle = this.idleTime
+    return idle === null ? this.#clock : this.#clock + idle()
+  }
+
+  /**
+   * The id of the tick whose advance phase is running, or 0 between
+   * phases. A ramp steps a cached value through the sub-steps of the
+   * phase and reads its anchor formula everywhere else.
+   */
+  get advancing(): number {
+    return this.#advancing
+  }
+
+  /** Adds idle wall time to the clock, in seconds. */
+  credit(seconds: number) {
+    this.#clock += seconds
+  }
+
+  add(motion: TickMember) {
     const wasEmpty = this.#motions.size === 0
     this.#motions.add(motion)
     // A wake during an ordered pass joins the live worklist, so the
@@ -110,8 +153,25 @@ export class MotionSet {
     }
   }
 
-  remove(motion: Motion) {
+  remove(motion: TickMember) {
     this.#motions.delete(motion)
+  }
+
+  /**
+   * Applies a change of the reduced-motion setting: ramps first, since
+   * their jumps retarget followers, then, when it turns on, every member
+   * that respects it finishes.
+   */
+  setReduced(reduced: boolean) {
+    this.reduced = reduced
+    this.flushes.batch(() => {
+      // Ramps leave the registry as they come to rest; Set iteration
+      // tolerates the deletes.
+      for (const ramp of this.ramps) {
+        ramp._applyReduced(reduced)
+      }
+      if (reduced) this.finishAll()
+    })
   }
 
   finishAll() {
@@ -150,22 +210,29 @@ export class MotionSet {
 
   /** The no-edge fast path: nothing constrains order, so insertion order serves for free. */
   #tickUnordered(dt: number, reentrant: boolean) {
+    const previous = this.#advancing
+    this.#advancing = ++this.#ticks
     this.#pass++
-    const advanced = reentrant ? [] : this.#advanced
+    const advanced: TickMember[] = reentrant ? [] : this.#advanced
     advanced.length = 0
-    for (const motion of this.#motions) {
-      // Advancing runs no user code, so nothing enters the set
-      // mid-loop; the marker only guards a reentrant advance.
-      if (motion._pass === this.#pass) continue
-      motion._pass = this.#pass
+    try {
+      for (const motion of this.#motions) {
+        // Advancing runs no user code, so nothing enters the set
+        // mid-loop; the marker only guards a reentrant advance.
+        if (motion._pass === this.#pass) continue
+        motion._pass = this.#pass
 
-      motion._advance(dt)
-      advanced.push(motion)
-      if (motion.isResting) {
-        this.#motions.delete(motion)
+        motion._advance(dt)
+        advanced.push(motion)
+        if (motion.isResting) {
+          this.#motions.delete(motion)
+        }
       }
+    } finally {
+      this.#advancing = previous
     }
 
+    this.#clock += dt
     this.#settle(advanced)
   }
 
@@ -179,9 +246,11 @@ export class MotionSet {
     // A reentrant advance (user code stepping the system from inside a
     // callback) gets private worklists so the outer pass's survive.
     const heap = reentrant ? new MotionHeap() : this.#heap
-    const advanced = reentrant ? [] : this.#advanced
+    const advanced: TickMember[] = reentrant ? [] : this.#advanced
     const previous = this.#activeHeap
     this.#activeHeap = heap
+    const previousAdvancing = this.#advancing
+    this.#advancing = ++this.#ticks
     advanced.length = 0
     const frame = ++this.#frame
 
@@ -212,8 +281,12 @@ export class MotionSet {
       // Restored before the sweep: a motion woken by a settle callback
       // advances from the next frame, not this one.
       this.#activeHeap = previous
+      this.#advancing = previousAdvancing
     }
 
+    // The clock moves before any event fires, so callbacks read it at
+    // the frame's end.
+    this.#clock += dt
     this.#settle(advanced)
   }
 
@@ -225,7 +298,7 @@ export class MotionSet {
     h: number,
     first: boolean,
     heap: MotionHeap,
-    advanced: Motion[],
+    advanced: TickMember[],
     frame: number,
   ) {
     this.#pass++
@@ -277,7 +350,7 @@ export class MotionSet {
   // advanced, in the order they advanced — update callbacks read
   // frame-final values everywhere. Skipped for motions after a throwing
   // callback, like the rest of any aborted pass.
-  #settle(advanced: readonly Motion[]) {
+  #settle(advanced: readonly TickMember[]) {
     for (const motion of advanced) {
       motion._settleFrame()
     }

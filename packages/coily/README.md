@@ -141,9 +141,36 @@ follower.target = {
 }
 ```
 
+### Ramps
+
+A ramp is a value that moves toward its target at a fixed speed, in a straight line, and stops there. It is a source like a spring, so a spring can follow it:
+
+```ts
+// An endless spin at 270 deg/s; the spring trails it like an object with inertia.
+const sweep = system.createRamp(0, { rate: 270, target: Infinity })
+const ring = system.createSpring(sweep)
+
+// A heading that turns at no more than 400 deg/s: retarget the ramp, not the spring.
+const slew = system.createRamp(0, { rate: 400 })
+const core = system.createSpring(slew)
+slew.target = 180
+
+// A clock in ms, mapped into a 600 ms pulse.
+const clock = system.createRamp(0, { rate: 1000, target: 600 })
+const pulse = system.createSpring(mapSpring(clock, (ms) => Math.sin((Math.PI * ms) / 600)))
+```
+
+Following a ramp is exact: the spring integrates against the ramp's steady motion, where a target written once per frame would reach it as a staircase about half a frame behind.
+
+A ramp carries the spring surface where it applies. `value` (writable: the ramp carries on from where you put it), `target` (`Infinity` or `-Infinity` for endless), `rate` (units per second), read-only `velocity`, `isResting`, `timeRemaining`, `settled`, `jumpTo`, `dispose`, and the same four events. `velocityOf`, `accelerationOf`, and `targetOf` accept it.
+
+A ramp's value is a function of time, so it costs nothing per frame unless something listens frame by frame: an update listener (every follower is one) or, on a bounded ramp, a stop listener or a pending `settled`. An unwatched ramp keeps moving on the system's clock and reports where it is when read. The clock counts frames, `advance` calls, and the time a started system sleeps, and stops while the system is stopped or the page is hidden.
+
 ## Reduced motion
 
 Coily respects `prefers-reduced-motion` by default. When it's active, springs snap to their targets instead of animating: retargets and value writes apply instantly, and springs ignore velocity impulses. Events stay coherent (one `update` per change, no `start`/`stop`, and `settled` resolves immediately), so code written against the animated path keeps working.
+
+Ramps follow the same rule: a ramp jumps to a bounded target, and an endless ramp holds still, resuming when reduced motion turns off. Values that move nothing on screen, such as a cross-fade, a color, or a clock that drives logic, take `purpose: 'nonmotion'` and keep animating.
 
 Control it with the `reducedMotion` system option: `'always'`, `'never'`, or the default `'user'`, which follows the OS setting — a live change finishes in-flight animations instantly. Read `system.reducedMotion` to gate decorative effects (particles, flourishes) in your own code.
 
@@ -180,6 +207,13 @@ A `SpringRef` is also a `SpringSource`, and `useSpring` follows any source: chai
 
 Numeric shapes work the same way: pass a record or array (plain, ref, or getter) and get a `CompositeSpringRef`. Reads are the deep-readonly composite value, writes take partial shapes, options accept reactive per-channel config shapes, and passing another `CompositeSpringRef` follows it channel-wise. Deeply reactive targets retarget on nested mutation. For several _independent_ scalar springs, map over the targets (composables are loop-safe): `targets.map((t) => useSpring(t))`.
 
+`useRamp(target, rate, { from, purpose })` returns a `RampRef`, a writable ref of a ramp's value with `velocity`, `isResting`, and `timeRemaining` refs, `settled`, and `jumpTo()`. `target` and `rate` take numbers, refs, or getters, and `from` (needed when the target starts infinite) defaults to the initial target. Reading the ref keeps the ramp in the frame loop while something reads it, and `useSpring(rampRef)` follows the ramp directly:
+
+```ts
+const angle = useRamp(Infinity, 270, { from: 0 })
+const ring = useSpring(angle, { duration: 300, dampingRatio: 1 })
+```
+
 There's also a renderless `<SpringValue :target="n">` component exposing `{ value, velocity, isResting, timeRemaining, jumpTo }` through its default slot.
 
 `useSpringPool()` covers imperative work: a dynamic set of springs created and disposed at arbitrary times (particles, per-item effects). It returns `createSpring` bound to the provided system. The pool disposes every spring created through it when the component's scope is torn down, so leaked motions are structurally impossible. Disposing a spring manually before that is fine.
@@ -196,7 +230,7 @@ export default defineNuxtConfig({
 })
 ```
 
-The module provides a spring system for the whole app (started on the client), auto-imports `useSpring`, `useSpringSystem`, `useSpringPool`, and `defineSpring`, and registers the `SpringValue` component.
+The module provides a spring system for the whole app (started on the client), auto-imports `useSpring`, `useRamp`, `useSpringSystem`, `useSpringPool`, `defineSpring`, `mapSpring`, `velocityOf`, `accelerationOf`, and `targetOf`, and registers the `SpringValue` component.
 
 ## Timing
 

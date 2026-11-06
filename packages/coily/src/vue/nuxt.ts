@@ -78,9 +78,9 @@ export default defineNuxtPlugin((nuxtApp) => {
 /**
  * The Nuxt module: creates an app-wide spring system (started on the
  * client), auto-imports the composables and helpers `useSpring`,
- * `useSpringSystem`, `useSpringPool`, `defineSpring`, `mapSpring`,
- * `velocityOf`, `accelerationOf`, and `targetOf`, and registers the `SpringValue`
- * component. Types are left out — they would be noise in most apps.
+ * `useRamp`, `useSpringSystem`, `useSpringPool`, `defineSpring`,
+ * `mapSpring`, `velocityOf`, `accelerationOf`, and `targetOf`, and
+ * registers the `SpringValue` component. Types are left out — they would be noise in most apps.
  */
 const coilyModule: NuxtModule = defineNuxtModule<CoilyModuleOptions>({
   meta: {
@@ -102,6 +102,7 @@ const coilyModule: NuxtModule = defineNuxtModule<CoilyModuleOptions>({
     // pull them in on demand.
     addImports([
       { from: 'coily/vue', name: 'useSpring' },
+      { from: 'coily/vue', name: 'useRamp' },
       { from: 'coily/vue', name: 'useSpringSystem' },
       { from: 'coily/vue', name: 'useSpringPool' },
       { from: 'coily', name: 'defineSpring' },
