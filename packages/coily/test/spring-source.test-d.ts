@@ -10,6 +10,7 @@ import {
   mapSpring,
   velocityOf,
   accelerationOf,
+  targetOf,
   type Spring,
   type SpringDefinition,
   type SpringSystem,
@@ -17,6 +18,7 @@ import {
   type SpringSource,
   SpringSourceSymbol,
   type KinematicSource,
+  type TargetedSource,
 } from '../src/index.ts'
 
 declare const a: Spring
@@ -128,6 +130,26 @@ velocityOf(bridged)
 velocityOf(mapSpring(a, (value) => value * 2))
 // @ts-expect-error the derived velocity source has no motion of its own
 accelerationOf(velocityOf(a))
+
+// ── targetOf derives a source from a spring's target
+
+// Springs and composites carry their target in the api
+a satisfies TargetedSource
+composite satisfies TargetedSource<{ readonly x: number; readonly y: number }>
+
+targetOf(a) satisfies SpringSource<number>
+follower.target = targetOf(a)
+mapSpring({ value: a, target: targetOf(a) }, ({ value, target }) => target - value)
+targetOf(composite) satisfies SpringSource<{ readonly x: number; readonly y: number }>
+mapSpring(targetOf(composite), ({ x, y }) => Math.hypot(x, y))
+// @ts-expect-error a target shape is not a scalar source, so it cannot be followed
+follower.target = targetOf(composite)
+// @ts-expect-error a mapped source has no target
+targetOf(mapSpring(a, (value) => value * 2))
+// @ts-expect-error a bridged source in motion still has no target
+targetOf(bridgedKinematic)
+// @ts-expect-error a derived target has no target of its own
+targetOf(targetOf(a))
 
 // Followers read through the slot, and its value is read-only
 const api = custom[SpringSourceSymbol]

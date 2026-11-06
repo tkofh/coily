@@ -7,7 +7,14 @@
  * is self-validating: tsc fails if the line stops erroring.
  */
 import { type Ref, ref } from 'vue'
-import type { SpringDefinition } from '../../src/index.ts'
+import {
+  type SpringDefinition,
+  type SpringSource,
+  type TargetedSource,
+  accelerationOf,
+  targetOf,
+  velocityOf,
+} from '../../src/index.ts'
 import { type SpringRef, useSpring } from '../../src/vue/spring.ts'
 import type { CompositeSpringRef } from '../../src/vue/composite-spring.ts'
 import { useSpringPool } from '../../src/vue/pool.ts'
@@ -35,6 +42,24 @@ obj.value = { z: 1 }
 
 useSpring(ref({ x: 0, y: 0 }))
 useSpring(() => ({ x: 0, y: 0 }))
+
+// ── Refs derive sources like the springs they wrap ──────────────────
+
+declare const scalarRef: SpringRef
+scalarRef satisfies TargetedSource
+velocityOf(scalarRef) satisfies SpringSource<number>
+accelerationOf(scalarRef) satisfies SpringSource<number>
+targetOf(scalarRef) satisfies SpringSource<number>
+useSpring(targetOf(scalarRef))
+
+obj satisfies TargetedSource<{
+  readonly position: { readonly x: number; readonly y: number }
+  readonly opacity: number
+}>
+targetOf(obj) satisfies SpringSource<{
+  readonly position: { readonly x: number; readonly y: number }
+  readonly opacity: number
+}>
 
 // ── Array shapes create object springs too — in every wrapping ──────
 

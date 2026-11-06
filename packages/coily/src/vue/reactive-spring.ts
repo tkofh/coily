@@ -10,7 +10,8 @@ import {
   watchSyncEffect,
 } from 'vue'
 import { SpringDefinition, type SpringDefinitionOptions } from '../config.ts'
-import { type SpringSource, type SpringSourceApi, SpringSourceSymbol } from '../spring-source.ts'
+import type { TargetedSource, TargetedSourceApi } from '../kinematic-source.ts'
+import { SpringSourceSymbol } from '../spring-source.ts'
 import type { SpringSystem } from '../system.ts'
 import { injectLocal } from './local.ts'
 import { SpringSystemKey } from './system.ts'
@@ -27,7 +28,7 @@ export type UseSpringConfig = MaybeRefOrGetter<
 
 /** The spring surface the reactive wrapper needs — satisfied by both `Spring` and `CompositeSpring`. */
 interface SpringLike<V, W, C> {
-  readonly [SpringSourceSymbol]: SpringSourceApi<V>
+  readonly [SpringSourceSymbol]: TargetedSourceApi<V>
   get value(): V
   set value(next: W)
   get velocity(): V
@@ -54,12 +55,13 @@ interface SpringLike<V, W, C> {
  *
  * The ref is also a `SpringSource`: it goes anywhere a source does —
  * another `useSpring`, a `mapSpring` leaf, a composite channel target.
- * Followers read the backing spring through `SpringSourceSymbol`, never
+ * It is a `TargetedSource` too, so `velocityOf`, `accelerationOf`, and
+ * `targetOf` accept it as they accept the spring it wraps. Followers read the backing spring through `SpringSourceSymbol`, never
  * through the ref's tracked getter, so following registers no Vue
  * dependencies — an effect that touches a follower's leader stays
  * independent of the leader's animation.
  */
-export interface ReactiveSpringRef<V, W = V> extends Ref<V, W>, SpringSource<V> {
+export interface ReactiveSpringRef<V, W = V> extends Ref<V, W>, TargetedSource<V> {
   /**
    * The current velocity in value units per second, as a writable ref.
    * Writing flings the spring; it settles back to its target.

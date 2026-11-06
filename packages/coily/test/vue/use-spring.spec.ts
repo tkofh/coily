@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { defineComponent, h, nextTick, ref, watchSyncEffect } from 'vue'
 import { mount } from '@vue/test-utils'
-import { createSpringSystem, mapSpring } from '../../src/index.ts'
+import { createSpringSystem, mapSpring, targetOf, velocityOf } from '../../src/index.ts'
 import { SpringSystemKey } from '../../src/vue/system.ts'
 import { useSpring, type SpringRef } from '../../src/vue/spring.ts'
 import type { MaybeRefOrGetter } from 'vue'
@@ -226,6 +226,42 @@ describe('useSpring', () => {
       if (leader.isResting.value && follower.isResting.value) break
     }
     expect(follower.value).toBe(110)
+  })
+
+  test('spring refs derive target and velocity sources like their springs', async () => {
+    const system = createSpringSystem({ reducedMotion: 'never' })
+    const target = ref(0)
+    let body!: SpringRef
+    let remaining!: SpringRef
+    let speed!: SpringRef
+    mount(
+      defineComponent({
+        setup() {
+          body = useSpring(target)
+          remaining = useSpring(
+            mapSpring({ value: body, target: targetOf(body) }, (v) => v.target - v.value),
+          )
+          speed = useSpring(velocityOf(body))
+          return {}
+        },
+        render: () => h('div'),
+      }),
+      { global: { provide: { [SpringSystemKey as symbol]: system } } },
+    )
+
+    target.value = 100
+    await nextTick()
+    system.advance(16)
+    expect(body.value).toBeGreaterThan(0)
+    expect(remaining.velocity.value).not.toBe(0)
+    expect(speed.velocity.value).not.toBe(0)
+
+    for (let i = 0; i < 1000; i++) {
+      system.advance(16)
+      if (body.isResting.value && remaining.isResting.value && speed.isResting.value) break
+    }
+    expect(remaining.value).toBe(0)
+    expect(speed.value).toBe(0)
   })
 
   test('spring refs compose as mapSpring leaves', async () => {

@@ -71,7 +71,7 @@ onBeforeUnmount(() => clearTimeout(autoTimer))
 
 // Tuned when duration carried a 2x safety margin; 265 under the exact
 // derivation reproduces the same dynamics (wn ~79) so links stay tight.
-const chainConfig = defineSpring({ bounce: -1, duration: 400, precision: 3 })
+const chainConfig = defineSpring({ bounce: 0.15, duration: 300, precision: 3 })
 
 // Build chain: first spring follows mouse, each subsequent spring follows the previous
 const springs: CompositeSpringRef<{ x: number; y: number }>[] = []

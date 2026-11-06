@@ -38,6 +38,13 @@ interface BaseOptions {
    *   its speed, at every return. Values between 0 and 1 pass through
    *   slowed.
    *
+   * The multiplier acts only at crossings, so a motion that never
+   * crosses ignores it. A spring with `dampingRatio` 1 or above (`bounce`
+   * 0 or below) never overshoots: retargeted from rest, it closes in from
+   * one side and its `arrival` changes nothing. It crosses only when it
+   * starts with enough velocity toward the target, or when the target
+   * moves past it.
+   *
    * Crossings are solved from the motion's closed form, never sampled
    * frame by frame, so a `'stop'` lands the value exactly on the target
    * whatever the frame timing. See

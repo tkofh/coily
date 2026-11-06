@@ -29,8 +29,9 @@ export interface SpringSourceApi<T = number> {
  * assigned to `Spring.target`, which then tracks it momentum intact.
  *
  * Every `Spring` is a `SpringSource`, every `CompositeSpring` is a
- * `SpringSource` of its value shape, and `mapSpring`, `velocityOf`, and
- * `accelerationOf` derive fresh sources from existing ones. You take
+ * `SpringSource` of its value shape, and `mapSpring`, `velocityOf`,
+ * `accelerationOf`, and `targetOf` derive fresh sources from existing
+ * ones. You take
  * sources from those APIs and pass them wherever one is accepted; the
  * type names such a value in your own signatures.
  */
@@ -92,7 +93,7 @@ export interface MappedRecipe {
 // Derived sources flatten when composed: the registry lets `mapSpring`
 // recognize derived results and extend their recipe instead of nesting
 // getters, so reads stay iterative and chain depth never approaches the
-// call stack. `velocityOf`/`accelerationOf` register their wrappers too,
+// call stack. `velocityOf`/`accelerationOf`/`targetOf` register their wrappers too,
 // and `resolveLeaderMotions` walks recipe roots to find the springs
 // behind any derivation.
 const RECIPES = new WeakMap<object, MappedRecipe>()

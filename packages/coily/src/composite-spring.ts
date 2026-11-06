@@ -12,7 +12,7 @@ import {
 } from './shape-tree.ts'
 import { Spring, type Purpose } from './spring.ts'
 import { type SpringSource, SpringSourceSymbol, isSpringSource } from './spring-source.ts'
-import type { KinematicSource, KinematicSourceApi } from './kinematic-source.ts'
+import type { TargetedSource, TargetedSourceApi } from './kinematic-source.ts'
 import { registerBacking } from './follow-graph.ts'
 import { invariant, isNumber, isRecordOrArray, RESOLVED } from './util.ts'
 
@@ -198,9 +198,9 @@ const followChannel = (mine: Spring, theirs: Spring) => {
  * throw with the channel's path (`position.z`), and so do non-finite
  * channel values.
  */
-export class CompositeSpring<in out T extends object> implements KinematicSource<ReadonlyShape<T>> {
-  /** Brands the composite as a `KinematicSource` whose api is the composite itself. */
-  get [SpringSourceSymbol](): KinematicSourceApi<ReadonlyShape<T>> {
+export class CompositeSpring<in out T extends object> implements TargetedSource<ReadonlyShape<T>> {
+  /** Brands the composite as a `TargetedSource` whose api is the composite itself. */
+  get [SpringSourceSymbol](): TargetedSourceApi<ReadonlyShape<T>> {
     // Backing registers on first use as a source — see `Spring`'s brand
     // getter for why registration is lazy.
     registerBacking(this, this.#tree.leaves)

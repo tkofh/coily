@@ -2,7 +2,7 @@ import { SpringDefinition } from './config.ts'
 import type { MotionSet } from './motion-set.ts'
 import { Motion } from './motion.ts'
 import { type SpringSource, SpringSourceSymbol, isSpringSource } from './spring-source.ts'
-import type { KinematicSource, KinematicSourceApi } from './kinematic-source.ts'
+import type { TargetedSource, TargetedSourceApi } from './kinematic-source.ts'
 import {
   type FollowEdge,
   MANIFOLD_GATE,
@@ -41,9 +41,9 @@ export type Purpose = 'motion' | 'appearance'
  * https://github.com/tkofh/coily/blob/main/PRECISION.md for the
  * numerical contract.
  */
-export class Spring implements KinematicSource {
-  /** Brands the spring as a `KinematicSource` whose api is the spring itself. */
-  get [SpringSourceSymbol](): KinematicSourceApi<number> {
+export class Spring implements TargetedSource {
+  /** Brands the spring as a `TargetedSource` whose api is the spring itself. */
+  get [SpringSourceSymbol](): TargetedSourceApi<number> {
     // Backing registers on first use as a source, not at construction:
     // a per-creation entry kept every spring in the weak registry, and
     // major GCs walking that ephemeron set cost 8x on creation. Every

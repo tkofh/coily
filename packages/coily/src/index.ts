@@ -7,7 +7,13 @@ export {
 } from './system.ts'
 export type { Spring, SpringTarget, Purpose } from './spring.ts'
 export { mapSpring, type SpringSource, SpringSourceSymbol } from './spring-source.ts'
-export { velocityOf, accelerationOf, type KinematicSource } from './kinematic-source.ts'
+export {
+  velocityOf,
+  accelerationOf,
+  targetOf,
+  type KinematicSource,
+  type TargetedSource,
+} from './kinematic-source.ts'
 export type {
   ConfigShape,
   PurposeShape,

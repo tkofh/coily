@@ -24,7 +24,7 @@ export function registerBacking(source: object, backing: Motion | readonly objec
 /**
  * Resolves the motions behind `source`, deduplicated: every spring
  * reached through any chain of derivations — `mapSpring` pipelines,
- * `velocityOf`/`accelerationOf` wrappers, composite channels. A foreign
+ * `velocityOf`/`accelerationOf`/`targetOf` wrappers, composite channels. A foreign
  * source resolves to nothing: it imposes no tick-ordering constraint and
  * couples through its emitter alone.
  */
