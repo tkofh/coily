@@ -21,13 +21,13 @@ export type SpringTarget = number | SpringSource
 /**
  * What a spring animates, which decides whether reduced motion applies to
  * it. `'motion'` moves something on screen — position, scale, rotation —
- * and snaps to its target under reduced motion. `'appearance'` changes
- * how something looks without moving it — a cross-fade, a color, a blur —
- * and keeps animating under reduced motion, since it carries no motion to
- * reduce. Fixed when the spring is created; read it back from
+ * and snaps to its target under reduced motion. `'nonmotion'` moves
+ * nothing: a cross-fade, a color, a blur, or a number that never reaches
+ * the screen. It keeps animating under reduced motion, since it carries no
+ * motion to reduce. Fixed when the spring is created; read it back from
  * `Spring.purpose`.
  */
-export type Purpose = 'motion' | 'appearance'
+export type Purpose = 'motion' | 'nonmotion'
 
 /**
  * One animated number, driven toward its target with damped spring
@@ -74,15 +74,15 @@ export class Spring implements TargetedSource {
   ) {
     invariant(Number.isFinite(value), 'Spring value must be a finite number')
     invariant(
-      purpose === 'motion' || purpose === 'appearance',
-      "Spring purpose must be 'motion' or 'appearance'",
+      purpose === 'motion' || purpose === 'nonmotion',
+      "Spring purpose must be 'motion' or 'nonmotion'",
     )
     this.#motions = motions
     this.#config = config ?? SpringDefinition.default
     this.#target = value
     this.#purpose = purpose
     this.#motion = new Motion(this.#config, 0, 0)
-    // An 'appearance' spring opts out of reduced motion: its own writes
+    // A 'nonmotion' spring opts out of reduced motion: its own writes
     // stay animated (below), and MotionSet.finishAll leaves it running.
     this.#motion.respectsReducedMotion = purpose === 'motion'
   }
@@ -99,7 +99,7 @@ export class Spring implements TargetedSource {
    *   makes this spring follow the source's live value.
    *
    * Under reduced motion, retargets apply instantly — unless `purpose` is
-   * `'appearance'`, in which case they animate as normal.
+   * `'nonmotion'`, in which case they animate as normal.
    */
   get target(): number {
     return this.#target
@@ -127,7 +127,7 @@ export class Spring implements TargetedSource {
    * from the written value, notifying update listeners synchronously.
    * Writing the current value is a no-op. Under reduced motion a write
    * jumps the spring — target included — to the written value, unless
-   * `purpose` is `'appearance'`, in which case it displaces as normal.
+   * `purpose` is `'nonmotion'`, in which case it displaces as normal.
    */
   get value() {
     return this.#target + this.#motion.position
@@ -155,7 +155,7 @@ export class Spring implements TargetedSource {
    *
    * Writing flings the spring: motion continues from the current value
    * with the written velocity, then settles back to the target. Under
-   * reduced motion writes are ignored, unless `purpose` is `'appearance'`,
+   * reduced motion writes are ignored, unless `purpose` is `'nonmotion'`,
    * in which case the fling applies as normal.
    */
   get velocity() {
@@ -186,8 +186,8 @@ export class Spring implements TargetedSource {
   }
 
   /**
-   * What the spring animates — `'motion'` or `'appearance'` — fixed when
-   * it was created. An `'appearance'` spring opts out of reduced motion:
+   * What the spring animates — `'motion'` or `'nonmotion'` — fixed when
+   * it was created. A `'nonmotion'` spring opts out of reduced motion:
    * it keeps animating where a `'motion'` spring snaps to its target. See
    * `Purpose`.
    */

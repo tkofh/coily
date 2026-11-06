@@ -127,7 +127,7 @@ function resolveConfigNode(node: unknown, path: string): Coverage<SpringDefiniti
 // ── Purpose resolution ──────────────────────────────────────────────
 
 function invalidPurpose(path: string): string {
-  return `Invalid purpose for ${describePath(path)}: expected 'motion', 'appearance', or a purpose shape matching the value`
+  return `Invalid purpose for ${describePath(path)}: expected 'motion', 'nonmotion', or a purpose shape matching the value`
 }
 
 /**
@@ -136,7 +136,7 @@ function invalidPurpose(path: string): string {
  * anything else is invalid.
  */
 function resolvePurposeNode(node: unknown, path: string): Coverage<Purpose> {
-  if (node === 'motion' || node === 'appearance') return node
+  if (node === 'motion' || node === 'nonmotion') return node
   if (isRecordOrArray(node)) return BRANCH
   throw new Error(invalidPurpose(path))
 }
@@ -344,7 +344,7 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
    * each keeps its target and springs back from the written value, with
    * one coalesced `update` fired synchronously. Under reduced motion a
    * write jumps the named channels — targets included — except channels
-   * whose `purpose` is `'appearance'`, which displace as normal.
+   * whose `purpose` is `'nonmotion'`, which displace as normal.
    */
   get value(): ReadonlyShape<T> {
     this.#valueView.refresh()
@@ -364,7 +364,7 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
    *
    * Assignment takes a partial shape and flings the channels it names;
    * the rest are untouched. Under reduced motion writes are ignored,
-   * except on channels whose `purpose` is `'appearance'`.
+   * except on channels whose `purpose` is `'nonmotion'`.
    */
   get velocity(): ReadonlyShape<T> {
     const view = (this.#velocityView ??= new ShapeView(this.#tree.root, readVelocity))
@@ -417,7 +417,7 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
   /**
    * The shared purpose when every channel resolves to the same `Purpose`,
    * and `null` when they differ. Fixed when the spring is created — an
-   * `'appearance'` channel opts out of reduced motion. See `Purpose`.
+   * `'nonmotion'` channel opts out of reduced motion. See `Purpose`.
    */
   get purpose(): Purpose | null {
     const channels = this.#tree.leaves

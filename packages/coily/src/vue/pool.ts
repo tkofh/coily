@@ -17,7 +17,7 @@ export interface SpringPool {
   /**
    * Creates a pooled spring at rest at `value`. Without `config`, the
    * default applies. `options.purpose` sets reduced-motion behavior —
-   * `'appearance'` keeps animating, `'motion'` (default) snaps.
+   * `'nonmotion'` keeps animating, `'motion'` (default) snaps.
    */
   createSpring(value: number, config?: SpringDefinition, options?: SpringOptions): Spring
   /**

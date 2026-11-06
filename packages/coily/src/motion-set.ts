@@ -117,7 +117,7 @@ export class MotionSet {
   finishAll() {
     this.flushes.batch(() => {
       for (const motion of this.#motions) {
-        // 'appearance' motions opt out of reduced motion and keep running.
+        // 'nonmotion' motions opt out of reduced motion and keep running.
         if (!motion.respectsReducedMotion) continue
         motion.finish()
         this.#motions.delete(motion)

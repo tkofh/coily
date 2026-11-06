@@ -58,7 +58,7 @@ export class Motion {
 
   // Set by the owning Spring from its `purpose`; `MotionSet.finishAll`
   // leaves motions that don't respect reduced motion running, so
-  // 'appearance' springs keep animating when it turns on.
+  // 'nonmotion' springs keep animating when it turns on.
   respectsReducedMotion = true
 
   #config: SpringDefinition

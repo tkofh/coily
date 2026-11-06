@@ -129,14 +129,14 @@ describe('reduced motion: always', () => {
   })
 })
 
-describe("reduced motion: purpose 'appearance'", () => {
+describe("reduced motion: purpose 'nonmotion'", () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
 
-  test('an appearance spring animates a retarget under reduced motion', () => {
+  test('an nonmotion spring animates a retarget under reduced motion', () => {
     const system = createSpringSystem({ reducedMotion: 'always' })
-    const spring = system.createSpring(0, config, { purpose: 'appearance' })
+    const spring = system.createSpring(0, config, { purpose: 'nonmotion' })
 
     spring.target = 100
     expect(spring.isResting).toBe(false)
@@ -146,56 +146,56 @@ describe("reduced motion: purpose 'appearance'", () => {
     expect(spring.value).toBeLessThan(100)
   })
 
-  test('value and velocity writes apply on an appearance spring under reduced motion', () => {
+  test('value and velocity writes apply on an nonmotion spring under reduced motion', () => {
     const system = createSpringSystem({ reducedMotion: 'always' })
 
-    const displaced = system.createSpring(0, config, { purpose: 'appearance' })
+    const displaced = system.createSpring(0, config, { purpose: 'nonmotion' })
     displaced.value = 50
     expect(displaced.value).toBe(50)
     expect(displaced.target).toBe(0)
     system.advance(1000 / 60)
     expect(displaced.value).toBeLessThan(50)
 
-    const flung = system.createSpring(0, config, { purpose: 'appearance' })
+    const flung = system.createSpring(0, config, { purpose: 'nonmotion' })
     flung.velocity = 500
     system.advance(1000 / 60)
     expect(flung.value).toBeGreaterThan(0)
   })
 
-  test('appearance springs keep animating when the preference changes to reduce', () => {
+  test('nonmotion springs keep animating when the preference changes to reduce', () => {
     const media = stubMatchMedia(false)
     const system = createSpringSystem()
     const motion = system.createSpring(0, config)
-    const appearance = system.createSpring(0, config, { purpose: 'appearance' })
+    const nonmotion = system.createSpring(0, config, { purpose: 'nonmotion' })
     motion.target = 100
-    appearance.target = 100
+    nonmotion.target = 100
 
     system.advance(1000 / 60)
-    expect(appearance.isResting).toBe(false)
+    expect(nonmotion.isResting).toBe(false)
 
     media.setMatches(true)
 
-    // The motion spring snapped; the appearance spring is untouched.
+    // The motion spring snapped; the nonmotion spring is untouched.
     expect(motion.value).toBe(100)
     expect(motion.isResting).toBe(true)
-    expect(appearance.isResting).toBe(false)
-    expect(appearance.value).toBeLessThan(100)
+    expect(nonmotion.isResting).toBe(false)
+    expect(nonmotion.value).toBeLessThan(100)
 
-    advanceUntilResting(system, appearance)
-    expect(appearance.value).toBeCloseTo(100)
-    expect(appearance.isResting).toBe(true)
+    advanceUntilResting(system, nonmotion)
+    expect(nonmotion.value).toBeCloseTo(100)
+    expect(nonmotion.isResting).toBe(true)
   })
 
   test('purpose reads back from the spring', () => {
     const system = createSpringSystem()
     expect(system.createSpring(0).purpose).toBe('motion')
-    expect(system.createSpring(0, config, { purpose: 'appearance' }).purpose).toBe('appearance')
+    expect(system.createSpring(0, config, { purpose: 'nonmotion' }).purpose).toBe('nonmotion')
   })
 
   test('a purpose shape exempts named channels only', () => {
     const system = createSpringSystem({ reducedMotion: 'always' })
     const spring = system.createSpring({ x: 0, y: 0, opacity: 1 }, config, {
-      purpose: { opacity: 'appearance' },
+      purpose: { opacity: 'nonmotion' },
     })
 
     spring.target = { x: 100, y: 200, opacity: 0 }
@@ -203,7 +203,7 @@ describe("reduced motion: purpose 'appearance'", () => {
     system.advance(1000 / 60)
 
     const value = spring.value
-    // Motion channels snapped; the appearance channel is still fading.
+    // Motion channels snapped; the nonmotion channel is still fading.
     expect(value.x).toBe(100)
     expect(value.y).toBe(200)
     expect(value.opacity).toBeLessThan(1)
@@ -214,7 +214,7 @@ describe("reduced motion: purpose 'appearance'", () => {
 
   test('a single purpose covers every channel', () => {
     const system = createSpringSystem({ reducedMotion: 'always' })
-    const spring = system.createSpring({ x: 0, y: 0 }, config, { purpose: 'appearance' })
+    const spring = system.createSpring({ x: 0, y: 0 }, config, { purpose: 'nonmotion' })
 
     spring.target = { x: 100, y: 200 }
     system.advance(1000 / 60)
@@ -224,7 +224,7 @@ describe("reduced motion: purpose 'appearance'", () => {
     expect(value.x).toBeLessThan(100)
     expect(value.y).toBeGreaterThan(0)
     expect(value.y).toBeLessThan(200)
-    expect(spring.purpose).toBe('appearance')
+    expect(spring.purpose).toBe('nonmotion')
   })
 
   test('an invalid purpose in a shape throws with the channel path', () => {
@@ -233,6 +233,18 @@ describe("reduced motion: purpose 'appearance'", () => {
       // @ts-expect-error — 'wiggle' is not a Purpose
       system.createSpring({ x: 0 }, config, { purpose: { x: 'wiggle' } }),
     ).toThrow(/purpose.*'x'/)
+  })
+
+  test("the removed 'appearance' purpose throws, naming the accepted words", () => {
+    const system = createSpringSystem()
+    expect(() =>
+      // @ts-expect-error — 'appearance' was renamed to 'nonmotion'
+      system.createSpring(0, config, { purpose: 'appearance' }),
+    ).toThrow("Spring purpose must be 'motion' or 'nonmotion'")
+    expect(() =>
+      // @ts-expect-error — 'appearance' was renamed to 'nonmotion'
+      system.createSpring({ x: 0 }, config, { purpose: 'appearance' }),
+    ).toThrow("expected 'motion', 'nonmotion', or a purpose shape")
   })
 })
 

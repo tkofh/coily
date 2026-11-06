@@ -194,22 +194,22 @@ void composite
 
 // A single purpose covers every channel; a shape sets it per channel, at
 // any level. Purposes ride in the third options argument, past `config`.
-system.createSpring({ x: 0, y: 0 }, cfg, { purpose: 'appearance' })
-system.createSpring({ x: 0, y: 0 }, undefined, { purpose: { x: 'appearance' } })
-system.createSpring({ x: 0, y: 0 }, undefined, { purpose: { x: 'motion', y: 'appearance' } })
+system.createSpring({ x: 0, y: 0 }, cfg, { purpose: 'nonmotion' })
+system.createSpring({ x: 0, y: 0 }, undefined, { purpose: { x: 'nonmotion' } })
+system.createSpring({ x: 0, y: 0 }, undefined, { purpose: { x: 'motion', y: 'nonmotion' } })
 system.createSpring({ position: { x: 0, y: 0 }, opacity: 1 }, undefined, {
-  purpose: { position: 'motion', opacity: 'appearance' },
+  purpose: { position: 'motion', opacity: 'nonmotion' },
 })
-const scalarAppearance: Spring = system.createSpring(5, undefined, { purpose: 'appearance' })
-void scalarAppearance
+const scalarNonmotion: Spring = system.createSpring(5, undefined, { purpose: 'nonmotion' })
+void scalarNonmotion
 
-// @ts-expect-error a purpose is 'motion' or 'appearance', nothing else
+// @ts-expect-error a purpose is 'motion' or 'nonmotion', nothing else
 system.createSpring({ x: 0, y: 0 }, undefined, { purpose: 'wiggle' })
 // @ts-expect-error unknown channels in purpose shapes are rejected
 system.createSpring({ x: 0, y: 0 }, undefined, { purpose: { z: 'motion' } })
 // @ts-expect-error invalid purpose values are rejected at the leaf
 system.createSpring({ x: 0, y: 0 }, undefined, { purpose: { x: 'wiggle' } })
-// @ts-expect-error scalar purposes are 'motion' or 'appearance', nothing else
+// @ts-expect-error scalar purposes are 'motion' or 'nonmotion', nothing else
 system.createSpring(5, undefined, { purpose: 'wiggle' })
 
 // `purpose` reads back per spring: scalar is a `Purpose`, composite is

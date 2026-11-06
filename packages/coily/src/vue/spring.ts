@@ -59,7 +59,7 @@ function hasSpringInstance(value: unknown): value is SpringRefWithInstance {
  * is disposed with the component's scope, and composables are loop-safe:
  * map over targets for several independent springs.
  *
- * `options.purpose` marks what the spring animates — `'appearance'`
+ * `options.purpose` marks what the spring animates — `'nonmotion'`
  * (a cross-fade, a color) keeps animating under reduced motion, `'motion'`
  * (the default) snaps. It is read once, so unlike `config` it is not
  * reactive.
@@ -70,7 +70,7 @@ function hasSpringInstance(value: unknown): value is SpringRefWithInstance {
  * const x = useSpring(target, { duration: 500, bounce: 0.3 })
  * // template: <div :style="{ translate: `${x}px 0` }" @click="target = 300" />
  *
- * const opacity = useSpring(shown ? 1 : 0, undefined, { purpose: 'appearance' })
+ * const opacity = useSpring(shown ? 1 : 0, undefined, { purpose: 'nonmotion' })
  * ```
  */
 export function useSpring(

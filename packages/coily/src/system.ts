@@ -18,7 +18,7 @@ import { invariant } from './util.ts'
 export interface SpringOptions {
   /**
    * What the spring animates, which decides whether reduced motion applies
-   * to it. `'appearance'` — a cross-fade, a color, a blur — keeps
+   * to it. `'nonmotion'` — a cross-fade, a color, a blur — keeps
    * animating under reduced motion; `'motion'` snaps to the target. Fixed
    * for the spring's life. See `Purpose`.
    * @default 'motion'
@@ -216,7 +216,7 @@ export interface SpringSystem {
    * the default: critically damped, settling in about 500ms. To follow
    * another spring from birth, pass it in place of `value`.
    *
-   * `options.purpose` marks what the spring animates: `'appearance'`
+   * `options.purpose` marks what the spring animates: `'nonmotion'`
    * keeps animating under reduced motion, `'motion'` (the default) snaps.
    */
   createSpring(value: number, config?: SpringDefinition, options?: SpringOptions): Spring
@@ -226,7 +226,7 @@ export interface SpringSystem {
    * so nothing moves until the source does; equivalent to creating a
    * spring at that value and assigning `source` to its `target`.
    *
-   * `options.purpose` marks what the spring animates: `'appearance'`
+   * `options.purpose` marks what the spring animates: `'nonmotion'`
    * keeps animating under reduced motion, `'motion'` (the default) snaps.
    */
   createSpring(source: SpringSource, config?: SpringDefinition, options?: SpringOptions): Spring
@@ -238,7 +238,7 @@ export interface SpringSystem {
    * `config` applies per channel: a single `SpringDefinition` for every
    * channel, or a shape mirroring the value with configs at any level.
    * `options.purpose` marks reduced-motion behavior the same way, per
-   * channel — an `'appearance'` channel keeps animating.
+   * channel — a `'nonmotion'` channel keeps animating.
    */
   createSpring<T extends object>(
     value: T & Shape<T>,
@@ -270,7 +270,7 @@ export interface SpringSystem {
    * Whether springs currently snap instead of animating, per the
    * `reducedMotion` option and, in `'user'` mode, the live OS setting.
    * Read it to gate purely decorative effects of your own. Springs
-   * created with `purpose: 'appearance'` animate regardless.
+   * created with `purpose: 'nonmotion'` animate regardless.
    */
   readonly reducedMotion: boolean
   /**

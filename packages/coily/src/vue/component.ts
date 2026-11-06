@@ -13,8 +13,8 @@ export interface SpringValueProps {
    */
   config?: SpringDefinitionOptions | SpringDefinition
   /**
-   * What the spring animates — `'motion'` (default) or `'appearance'`.
-   * `'appearance'` (a cross-fade, a color) keeps animating under reduced
+   * What the spring animates — `'motion'` (default) or `'nonmotion'`.
+   * `'nonmotion'` (a cross-fade, a color) keeps animating under reduced
    * motion. Read once at mount; later changes are ignored.
    * @default 'motion'
    */
@@ -48,7 +48,7 @@ export type SpringValueSlots = SlotsType<{ default: SpringValueSlotScope }>
  *
  * @example
  * ```vue
- * <SpringValue :target="expanded ? 1 : 0" purpose="appearance" v-slot="{ value }">
+ * <SpringValue :target="expanded ? 1 : 0" purpose="nonmotion" v-slot="{ value }">
  *   <div :style="{ opacity: value }" />
  * </SpringValue>
  * ```
