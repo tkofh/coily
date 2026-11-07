@@ -18,8 +18,7 @@ jobs:
     name: Version PR / publish gate
     runs-on: ubuntu-latest
     permissions:
-      contents: write # push the changeset-release/main branch
-      pull-requests: write # open and update the Version Packages PR
+      contents: read
     outputs:
       has-changesets: ${{ steps.changesets.outputs.hasChangesets }}
       needs-publish: ${{ steps.gate.outputs.needs-publish }}
@@ -29,6 +28,7 @@ jobs:
         with:
           # Full history so Changesets attributes changelog entries to the right commits.
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Check whether the version on main is already published
         id: gate
@@ -54,14 +54,24 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Events made with GITHUB_TOKEN never start other workflows, so a Version
+      # Packages PR opened with it gets no CI. An app token's events do.
+      - name: Mint release app token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write # push the changeset-release/main branch
+          permission-pull-requests: write # open and update the Version Packages PR
+
       - name: Maintain Version Packages PR
         id: changesets
         uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
         with:
           version: pnpm run version-packages
           commitMode: github-api
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ steps.app-token.outputs.token }}
 
   publish:
     name: Publish to npm
