@@ -5,10 +5,9 @@ import { FRAME, advanceUntilResting, flush, test } from './helpers.ts'
 
 /**
  * The `arrival` multiplier: what a spring does to its velocity when the
- * value crosses the target. Crossings are solved in closed form, so the
- * behaviors pinned here are exact. A stop lands `toBe` the target with
- * no rendered overshoot at any step size, and rebounds never visit the
- * far side of the target.
+ * value crosses the target. Crossings are solved in closed form, so these
+ * pins are exact. A stop lands `toBe` the target with no rendered overshoot
+ * at any step size, and rebounds never visit the far side.
  */
 
 const bouncy = { tension: 300, bounce: 0.9 } as const

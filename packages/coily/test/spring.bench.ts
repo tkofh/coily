@@ -109,7 +109,6 @@ describe('advance to rest', () => {
     while (springs.some((s) => !s.isResting)) {
       system.advance(FRAME)
     }
-    // Read the final values after settling.
     for (const spring of springs) {
       void spring.value
     }
@@ -187,9 +186,8 @@ describe('linked spring chains', () => {
     }
   })
 
-  // The same run with sub-stepping pinned off. It isolates the fixed
-  // overhead of the coupling controller (the plan pass and slope arming)
-  // from the sub-steps that the controller chooses to spend.
+  // Sub-stepping pinned off, isolating the coupling controller's fixed
+  // overhead (plan pass, slope arming) from the sub-steps it spends.
   bench('64-spring chain: 60 frames, coupling pinned to one step per frame', () => {
     const system = createSpringSystem({ couplingTolerance: 1e9 })
     const springs = createChain(system, 64)

@@ -17,8 +17,8 @@ import { injectSpringSystem } from './reactive-spring.ts'
 /** Options for `useRamp`, read once at creation. */
 export interface UseRampOptions {
   /**
-   * The value the ramp starts from. Required when the initial target is
-   * infinite.
+   * The value the ramp starts from. Must be finite, so it is required
+   * when the initial target is infinite.
    * @default the initial target, so the ramp starts at rest
    */
   from?: number | undefined
@@ -32,18 +32,16 @@ export interface UseRampOptions {
 }
 
 /**
- * The reactive handle `useRamp` returns. It is a writable ref of the
- * ramp's value. It carries `velocity`, `timeRemaining`, and `isResting`
- * refs, plus `settled` and `jumpTo`. Writing the main ref places the
- * ramp at the written value, and the ramp continues toward its target
- * from there.
+ * The writable ref `useRamp` returns, carrying `velocity`,
+ * `timeRemaining`, and `isResting` refs plus `settled` and `jumpTo`.
+ * Writing it places the ramp at the written value, and the ramp
+ * continues toward its target from there.
  *
- * A read of any of the refs puts the ramp in the frame loop. The ramp
- * leaves the loop when nothing reads the refs. A ramp shown in a
- * template updates every frame while the template renders. A ramp read
- * only in an event handler stays in the loop for about two frames after
- * each read. A ramp that nothing reads still moves, and the next read
- * returns its current value.
+ * Reading any of the refs puts the ramp in the frame loop, and it leaves
+ * when reads stop. In a rendering template it updates every frame. Read
+ * only in an event handler, it stays in the loop for about two frames
+ * after each read. Unread, it still moves, and the next read returns its
+ * current value.
  *
  * The ref is a `TargetedSource`, so `useSpring` can follow it, and
  * `velocityOf` and `targetOf` accept it. Followers subscribe to the
@@ -78,21 +76,19 @@ export interface RampRef extends Ref<number>, TargetedSource<number> {
 }
 
 /**
- * Creates a ramp and returns it as a `RampRef`. A ramp is a value that
- * moves toward `target` in a straight line at `rate` value units per
- * second, and stops there. A target of `Infinity` or `-Infinity` makes
- * it endless. A spring that follows the ref with the default `arrival`
- * tracks its steady motion exactly, with no frame-to-frame steps. A
- * spring that follows an endless ramp makes a spin that lags behind it
- * like a heavy object.
+ * Creates a ramp and returns it as a `RampRef`. A ramp moves toward
+ * `target` in a straight line at `rate` value units per second, and
+ * stops there. A target of `Infinity` or `-Infinity` makes it endless.
+ * A spring following the ref with the default `arrival` tracks its
+ * steady motion exactly, with no frame-to-frame steps. On an endless
+ * ramp, that spring lags behind like a heavy spinning object.
  *
- * `target` and `rate` are numbers, or refs or getters of a number. A new
- * target sends the ramp there from its current value. A new rate applies
- * from the current value on.
+ * A new `target` sends the ramp there from its current value. A new
+ * `rate` applies from the current value on.
  *
- * Call it during `setup()` below a provided spring system: the
- * coily/nuxt module, or `useSpringSystem()` in an ancestor. The ramp is
- * disposed with the component's scope.
+ * Call it during `setup()` below a provided spring system (the coily/nuxt
+ * module, or `useSpringSystem()` in an ancestor). It throws without one.
+ * The ramp is disposed with the component's scope.
  *
  * @example
  * ```ts
@@ -136,12 +132,11 @@ export function useRamp(
   return ref
 }
 
-// A customRef cannot see when its last reader goes away, so the ref
-// infers it. Every update triggers the read refs and marks them unread,
-// and any read clears the mark. If an update finds the mark still set,
-// no effect re-ran on the last trigger. Nothing tracks the refs, so the
-// ramp's subscription lapses. Real frames run after Vue flushes its
-// effects, so a tracked ref is always read between two updates.
+// A customRef cannot see its last reader leave, so the ref infers it.
+// Each update triggers the read refs and marks them unread, and a read
+// clears the mark. An update that finds the mark still set means no
+// effect re-ran, so the subscription lapses. Real frames run after Vue
+// flushes effects, so a tracked ref is always read between two updates.
 function createRampRef(ramp: Ramp): RampRef {
   const triggers = new Set<() => void>()
   let unread = false
@@ -166,9 +161,9 @@ function createRampRef(ramp: Ramp): RampRef {
     unread = false
     if (unsubscribe === null) {
       const offUpdate = ramp.onUpdate(onUpdate)
-      // A write can start or stop the ramp without an update, for example
-      // a rate of 0, or reduced motion that holds an endless ramp. Start
-      // and stop still change `isResting`, `velocity`, and `timeRemaining`.
+      // A write can start or stop the ramp without an update (a rate of 0,
+      // or reduced motion holding an endless ramp), and that still changes
+      // `isResting`, `velocity`, and `timeRemaining`.
       const offStart = ramp.onStart(triggerAll)
       const offStop = ramp.onStop(triggerAll)
       unsubscribe = () => {
@@ -211,8 +206,7 @@ function createRampRef(ramp: Ramp): RampRef {
   Object.defineProperty(ref, 'settled', {
     get: () => ramp.settled,
   })
-  // The source slot gives followers the ramp itself, so their reads and
-  // subscriptions skip the refs above.
+  // Followers get the ramp's own api, so they skip the refs above.
   Object.defineProperty(ref, SpringSourceSymbol, { value: ramp[SpringSourceSymbol] })
 
   return ref

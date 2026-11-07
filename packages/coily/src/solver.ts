@@ -2,20 +2,15 @@ import type { SpringDefinition } from './config.ts'
 import type { State } from './state.ts'
 
 // Closed-form solutions of the damped spring equation, one class per
-// damping regime. Each solver anchors its constants c1 and c2 from the
-// state at configure time. It then evaluates position and velocity at
-// absolute time t from that anchor. Nothing integrates numerically, so
-// error never accumulates. `configure()` with no argument re-anchors at
-// the current state after an external write. With a config, it also
-// adopts the config's constants.
+// damping regime. `configure` anchors c1 and c2 at the current state, and
+// `tick` evaluates at absolute time t since that anchor, so error never
+// accumulates. Bare `configure()` re-anchors after an external write. With
+// a config, it also adopts the config's constants.
 //
-// A config whose `arrival` multiplier is not 1 adds one more output at
-// anchor time: the first strictly future time the position crosses 0.
-// `tick` splits at that time. It evaluates there, writes the position as
-// an exact 0, scales the velocity by the multiplier, and re-anchors.
-// Then it spends what remains of the step from the new anchor. If the
-// state rests at a crossing, the tick ends there and leaves the state for
-// `SpringMotion` to snap.
+// When `arrival` is not 1, anchoring also solves the first strictly future
+// crossing of 0. `tick` splits there: it writes position exactly 0, scales
+// velocity by `arrival`, re-anchors, and spends the rest of the step. A
+// tick that rests at a crossing ends there, leaving `SpringMotion` to snap.
 
 /** dampingRatio < 1: decaying oscillation, x(t) = exp(-sigma*t) * (c1*cos(wd*t) + c2*sin(wd*t)). */
 export class UnderdampedSolver {
@@ -71,8 +66,7 @@ export class UnderdampedSolver {
   #arrive() {
     this.#t = this.#crossing
     this.#evaluate()
-    // The crossing is x = 0 by construction. Write it exactly rather than
-    // keep the evaluation residue.
+    // x = 0 by construction. Write it exactly, dropping evaluation residue.
     this.#state.position = 0
     this.#state.velocity *= this.#arrival
     this.configure()
@@ -121,10 +115,9 @@ export class CriticallyDampedSolver {
     if (this.#arrival === 1) {
       this.#crossing = Infinity
     } else {
-      // (c1 + c2*t) has one root, -c1/c2. It is a strictly future
-      // crossing only when the velocity opposes the displacement hard
-      // enough to punch through. NaN (an anchor at rest) compares false
-      // and becomes Infinity.
+      // (c1 + c2*t) has one root, -c1/c2, strictly future only when the
+      // velocity opposes the displacement hard enough to punch through.
+      // NaN (an anchor at rest) compares false and becomes Infinity.
       const t = -this.#c1 / this.#c2
       this.#crossing = t > 0 ? t : Infinity
     }
@@ -144,8 +137,7 @@ export class CriticallyDampedSolver {
   #arrive() {
     this.#t = this.#crossing
     this.#evaluate()
-    // The crossing is x = 0 by construction. Write it exactly rather than
-    // keep the evaluation residue.
+    // x = 0 by construction. Write it exactly, dropping evaluation residue.
     this.#state.position = 0
     this.#state.velocity *= this.#arrival
     this.configure()
@@ -196,10 +188,9 @@ export class OverdampedSolver {
       this.#crossing = Infinity
     } else {
       // c1*sinh(wd*t) + c2*cosh(wd*t) crosses zero where
-      // tanh(wd*t) = -c2/c1. The root is strictly future only when the
-      // velocity term dominates with the opposite sign. Otherwise atanh
-      // yields NaN or a non-positive value, which compares false and
-      // becomes Infinity.
+      // tanh(wd*t) = -c2/c1, strictly future only when the velocity term
+      // dominates with the opposite sign. Otherwise atanh yields NaN or
+      // <= 0, which becomes Infinity.
       const theta = Math.atanh(-this.#c2 / this.#c1)
       this.#crossing = theta > 0 ? theta / this.#dampedFrequency : Infinity
     }
@@ -219,8 +210,7 @@ export class OverdampedSolver {
   #arrive() {
     this.#t = this.#crossing
     this.#evaluate()
-    // The crossing is x = 0 by construction. Write it exactly rather than
-    // keep the evaluation residue.
+    // x = 0 by construction. Write it exactly, dropping evaluation residue.
     this.#state.position = 0
     this.#state.velocity *= this.#arrival
     this.configure()
@@ -231,13 +221,11 @@ export class OverdampedSolver {
     const wdt = wd * this.#t
 
     if (wdt > TAIL) {
-      // The curve is a slow mode exp((wd - sigma) * t) plus a fast mode
-      // exp(-(wd + sigma) * t). Past TAIL the fast mode is below
-      // exp(-2 * TAIL) of the slow one, under one ulp, so the slow mode
-      // alone is the exact value. Its exponent is negative, so it never
-      // overflows the way sinh and cosh do near 710. The slow mode decays
-      // at sigma - wd, about wn / (2 * dampingRatio), so a heavily damped
-      // spring still has much of its displacement left here.
+      // Slow mode exp((wd - sigma) * t) plus fast mode exp(-(wd + sigma) * t).
+      // Past TAIL the fast mode is under exp(-2 * TAIL) of the slow one,
+      // below an ulp, so the slow mode alone is exact and never overflows
+      // the way sinh and cosh do near 710. It decays at sigma - wd, about
+      // wn / (2 * dampingRatio), so a heavy spring reaches TAIL still moving.
       const slowRate = wd - this.#decayRate
       const position = ((this.#c1 + this.#c2) / (2 * wd)) * Math.exp(slowRate * this.#t)
       this.#state.position = position

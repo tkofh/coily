@@ -5,10 +5,9 @@ import { FRAME, advanceUntilResting, test } from './helpers.ts'
 
 /**
  * Adversarial graphs and listeners: self-reference, cycles, thrown user
- * code, reentrant writes, and depth. These tests pin the containment
- * properties that the tick already relies on: retargets never re-emit,
- * and passes recover after a throw. No dedicated guard code exists for
- * them to exercise.
+ * code, reentrant writes, and depth. These pin containment properties the
+ * tick relies on without dedicated guard code: retargets never re-emit,
+ * and passes recover after a throw.
  */
 
 const config = defineSpring({ mass: 1, tension: 170, damping: 26 })
@@ -280,8 +279,7 @@ describe('pathological depth', () => {
     const tail = links[links.length - 1]!
 
     head.target = 100
-    // The tail starts at rest, so wait for the whole chain. The motion
-    // takes many frames to reach the far end.
+    // The tail starts at rest, so wait for the whole chain, not the tail.
     for (let i = 0; i < 3000; i++) {
       system.advance(FRAME)
       if (links.every((link) => link.isResting)) break

@@ -5,11 +5,10 @@ import { State } from '../src/state.ts'
 import { OverdampedSolver } from '../src/solver.ts'
 
 /**
- * The textbook character of each damping regime, checked through the public
- * API with fixed, readable parameters. The random-input laws these springs
- * obey (convergence, symmetry, no NaN, overdamped monotonicity, underdamped
- * energy decay) live in `properties.spec.ts`. This file pins only the
- * qualitative behavior that tells one regime from another.
+ * The textbook behavior that tells each damping regime apart, pinned
+ * through the public API with fixed parameters. The random-input laws
+ * (convergence, symmetry, no NaN, overdamped monotonicity, underdamped
+ * energy decay) live in `properties.spec.ts`.
  */
 
 /** Simulates a spring at a fixed step and returns a value and velocity snapshot per frame. */
@@ -59,7 +58,6 @@ describe('physics: regime character', () => {
       3000,
     )
 
-    // Starting at 100 targeting 0, an underdamped spring crosses past zero.
     expect(snapshots.some((snap) => snap.value < -0.5)).toBe(true)
   })
 
@@ -71,7 +69,7 @@ describe('physics: regime character', () => {
       5000,
     )
 
-    // From 100 toward 0, values stay non-negative (tiny numerical tolerance).
+    // Never below 0, within numerical tolerance.
     for (const snap of snapshots) {
       expect(snap.value).toBeGreaterThanOrEqual(-0.02)
     }

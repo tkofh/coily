@@ -5,22 +5,18 @@ import type { Purpose } from './spring.ts'
 import { invariant } from './util.ts'
 
 /**
- * A ramp's motion in the system: a value that moves toward its target
- * at a fixed speed, read from an anchor on the system clock.
+ * A ramp's motion, computed from an anchor on the system clock.
  *
- * The anchor is the source of truth. At clock time `t` the value is
- * `anchorValue + speed * (t - anchorTime)` toward the target, clamped
- * at the target. Every write re-anchors at the current value first, so
- * a write changes only what happens from then on. The ramp joins the
- * tick only while something needs it frame by frame: an update
- * listener, or a stop listener on a bounded ramp. Outside the tick it
- * still moves, because the formula reads the clock, but it emits no
- * frame events, not even `stop` on arrival.
+ * At clock time `t` the value is `anchorValue + speed * (t - anchorTime)`
+ * toward the target, clamped there. Every write re-anchors at the
+ * current value first. The ramp joins the tick only while an update
+ * listener, or a stop listener on a bounded ramp, needs it per frame.
+ * Outside the tick it still moves, but emits no frame events, not even
+ * `stop` on arrival.
  *
- * Inside an advance phase the tick steps a cached value by `speed * h`
- * per sub-step, so a follower that recouples mid-frame reads the ramp
- * where the sub-step leaves it. Between phases, reads use the formula
- * again.
+ * Within an advance phase, `advance` steps a cached value by `speed * h`
+ * per sub-step, so a follower recoupling mid-frame reads the sub-step's
+ * position. Between phases, reads use the formula.
  */
 export class RampMotion extends Motion {
   readonly #motions: MotionSet
@@ -105,9 +101,8 @@ export class RampMotion extends Motion {
     if (value === this.value) return
     this.#anchorValue = value
     this.#anchorTime = this.#motions.time
-    // A write under reduced motion lands at rest where it was written,
-    // as a spring's does. An endless ramp keeps its direction and
-    // resumes from here when reduced motion turns off.
+    // Under reduced motion a write rests where it lands, as a spring's
+    // does. An endless ramp resumes from here when reduced motion ends.
     if (this.#reduces && this.#motions.reduced && Number.isFinite(this.#target)) {
       this.#target = value
     }
@@ -190,9 +185,8 @@ export class RampMotion extends Motion {
   }
 
   endFrame() {
-    // Sub-steps sum to the frame's dt only up to rounding. An arrival
-    // that the steps reached is pinned in the anchor, so the formula sees
-    // it too.
+    // Sub-steps sum to dt only up to rounding, so pin an arrival the
+    // steps reached into the anchor for the formula to see.
     if (this.#stepped === this.#target && this.#anchorValue !== this.#target) {
       this.#anchorValue = this.#target
       this.#anchorTime = this.#motions.time
@@ -257,11 +251,9 @@ export class RampMotion extends Motion {
     const speed = this.#speed()
     const remaining = this.#target - this.#anchorValue
     if (speed === 0 || remaining === 0) return this.#anchorValue
-    // A guard. The clock only moves forward, since `advance` rejects a
-    // negative dt and the ticker never credits idle time behind an
-    // earlier read. Idle time still comes from `performance.now()`, so a
-    // wall clock that reads earlier, such as a stubbed one in a test,
-    // must not move the ramp back past its anchor.
+    // The clock only moves forward, but idle time comes from
+    // `performance.now()`, and a wall clock that reads earlier (a test
+    // stub) must not move the ramp back past its anchor.
     const travel = speed * Math.max(0, time - this.#anchorTime)
     return Math.abs(remaining) <= travel
       ? this.#target
@@ -274,17 +266,16 @@ export class RampMotion extends Motion {
     this.#anchorTime = time
   }
 
-  // An unwatched ramp arrives without anyone noticing, so its start/stop
-  // state can lag behind its motion. Settling that first lets the write's
-  // own `start` fire when it moves the ramp off rest.
+  // An unwatched ramp's start/stop state can lag its motion. Settling it
+  // first lets the write's own `start` fire when it moves the ramp off rest.
   #beginWrite() {
     invariant(!this.#disposed, 'Cannot write to a disposed ramp')
     this.#sync()
   }
 
   #listen(type: 'update' | 'stop', callback: () => void): () => void {
-    // Settle any arrival that happened unwatched first, so the new
-    // listener never hears a stale `stop`.
+    // Settle an unwatched arrival first, so the new listener never hears
+    // a stale `stop`.
     this.#sync()
     const off = this.#emitter.on(type, callback)
     if (type === 'update') this.#updateListeners++

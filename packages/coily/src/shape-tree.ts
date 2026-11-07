@@ -24,12 +24,11 @@ export function acceptNumber(input: unknown, path: string): number {
 }
 
 /**
- * What a shape's leaves are, for `ShapeTree`. `match` recognizes a leaf
- * value and constructs the leaf object. When `match` returns `undefined`,
- * `ShapeTree` parses the node as a nested shape instead. `match` can
- * throw for a value it recognizes but rejects, such as a non-finite
- * number. The message builders name the leaf kind in structural errors,
- * so the tree code never needs to know what it holds.
+ * What a shape's leaves are, for `ShapeTree`. `match` builds the leaf
+ * object for a value it recognizes, returns `undefined` to parse the node
+ * as a nested shape, and may throw for a recognized value it rejects (a
+ * non-finite number). The message builders name the leaf kind in
+ * structural errors, so the tree never needs to know what it holds.
  */
 export interface LeafParser<L> {
   match(value: unknown, path: string): L | undefined
@@ -41,8 +40,7 @@ export interface LeafParser<L> {
 
 /**
  * The canonical numeric `LeafParser`: finite-number leaves built through
- * `factory`, named "channels" in structural errors. Composite springs use
- * it for value shapes, whose leaves are all numbers.
+ * `factory`, named "channels" in structural errors.
  */
 export function channelParser<L>(factory: (value: number, path: string) => L): LeafParser<L> {
   return {
@@ -81,9 +79,8 @@ interface ViewSlot<L> {
  * One node of a shape's tree. A `LeafNode` wraps a single leaf object, and
  * `ListNode` and `RecordNode` carry the nesting. The `LeafParser` given to
  * `ShapeTree` decides what a leaf is, such as a channel spring or a source
- * reader. Each node kind implements every traversal as an ordinary
- * method, so call sites dispatch without inspecting nodes. Errors keep
- * their dot paths because each node stores the `path` it was built at.
+ * reader. Each node kind implements every traversal as a method, so call
+ * sites dispatch without inspecting nodes.
  */
 export interface ShapeTreeNode<L> {
   /** This node's dot path from the root (`position.x`), fixed at construction. */
@@ -101,7 +98,7 @@ export interface ShapeTreeNode<L> {
    * Scatters a partial shape into the leaves that the input names.
    * `accept` validates and narrows the value at each named leaf. A leaf
    * is applied as soon as it is reached, so a later error leaves the
-   * earlier leaves written: run a `null` apply first for an
+   * earlier leaves written. Run a `null` apply first for an
    * all-or-nothing write.
    */
   scatter<V>(input: unknown, accept: (input: unknown, path: string) => V, apply: Apply<L, V>): void
@@ -195,9 +192,7 @@ export class ListNode<L> implements ShapeTreeNode<L> {
   ): void {
     const mine: unknown[] = []
     carrier[key] = mine
-    // The slot's carrier type cannot express an array that takes only
-    // number keys. The cast is sound because every key written through
-    // this carrier is a number.
+    // Sound because every key written through this carrier is a number.
     const slotcarrier = mine as unknown as Record<string | number, unknown>
     for (let i = 0; i < this.children.length; i++) {
       this.children[i]!.mirror(read, slots, slotcarrier, i)
@@ -338,13 +333,12 @@ export class RecordNode<L> implements ShapeTreeNode<L> {
 /**
  * A shape parsed into a node tree, paired with its leaves flattened in
  * depth-first shape order. `parser.match` decides leaf or branch at every
- * position below the root. The root must already be a container, and
- * callers validate that with their own message before they build the
- * tree. Nested non-containers and empty nodes throw through
- * `parser.mismatch` and `parser.empty`.
+ * position below the root. The root must already be a container, which
+ * callers validate with their own message. Nested non-containers and
+ * empty nodes throw through `parser.mismatch` and `parser.empty`.
  *
- * The tree has no behavior of its own. Traversals run through `root`, and
- * `new ShapeView(root, read)` makes a live view.
+ * Traversals run through `root`, and `new ShapeView(root, read)` makes a
+ * live view.
  */
 export class ShapeTree<L> {
   readonly root: ShapeTreeNode<L>

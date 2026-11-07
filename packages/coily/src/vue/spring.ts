@@ -18,11 +18,10 @@ import {
 } from './composite-spring.ts'
 
 /**
- * The reactive handle for a scalar spring. It is a writable ref of the
- * animated number. It carries `velocity`, `timeRemaining`, and
- * `isResting` refs, plus `settled` and `jumpTo`. Writing the main ref
- * displaces the spring, and it springs back. To move it, change the
- * target you passed to `useSpring`.
+ * The writable ref a scalar `useSpring` returns, carrying `velocity`,
+ * `timeRemaining`, and `isResting` refs plus `settled` and `jumpTo`.
+ * Writing it displaces the spring, which springs back. To move it,
+ * change the target passed to `useSpring`.
  */
 export interface SpringRef extends ReactiveSpringRef<number> {}
 
@@ -39,32 +38,28 @@ function hasSpringInstance(value: unknown): value is SpringRefWithInstance {
 }
 
 /**
- * Creates a scalar spring and returns it as a `SpringRef`. The target
- * is a number to animate toward, or a `SpringSource` to follow, or a ref
- * or getter of either. A source can be another `useSpring` ref, a
- * `mapSpring` result, or a pooled `Spring`.
+ * Creates a scalar spring and returns it as a `SpringRef`. The target is
+ * a number to animate toward or a `SpringSource` to follow (another
+ * `useSpring` ref, a `mapSpring` result, or a pooled `Spring`), or a ref
+ * or getter of either.
  *
- * When a reactive number changes, it retargets the spring, and the
- * spring keeps its momentum. A getter of a source follows a new source
- * when the getter's own dependencies change, so
- * `useSpring(() => (split.value ? left : right))` switches leaders while
- * they move. When a reactive `config` changes, the spring reconfigures in
- * place. While the spring follows a source, `config` sets the follower's
- * own motion, and the leader's config has no effect on it.
+ * A changed reactive number retargets the spring, which keeps its
+ * momentum. A getter of a source re-follows when its own dependencies
+ * change, so `useSpring(() => (split.value ? left : right))` switches
+ * leaders mid-flight. A changed reactive `config` reconfigures the
+ * spring in place. While following, the spring uses its own `config`,
+ * never the leader's.
  *
- * The spring subscribes to a followed source directly, not through Vue
- * reactivity. Effects and getters therefore never gain a dependency on
- * the leader's animation.
+ * The spring subscribes to a followed source directly, so no effect or
+ * getter gains a dependency on the leader's animation.
  *
- * Call it during `setup()` below a provided spring system: the
- * coily/nuxt module, or `useSpringSystem()` in an ancestor. The spring
- * is disposed with the component's scope. You can call it in a loop to
- * create one independent spring per target.
+ * Call it during `setup()` below a provided spring system (the coily/nuxt
+ * module, or `useSpringSystem()` in an ancestor). It throws without one.
+ * The spring is disposed with the component's scope.
  *
- * `options.purpose` marks what the spring animates. A `'nonmotion'`
- * spring, such as a cross-fade or a color, keeps animating under reduced
- * motion. A `'motion'` spring, the default, snaps. `useSpring` reads it
- * once, so unlike `config` it is not reactive.
+ * `options.purpose` is read once, at creation. Under reduced motion, a
+ * `'motion'` spring, the default, snaps. A `'nonmotion'` spring, such as
+ * a cross-fade or a color, keeps animating.
  *
  * @example
  * ```ts
@@ -82,14 +77,14 @@ export function useSpring(
   options?: SpringOptions,
 ): SpringRef
 /**
- * Creates a composite spring that follows a leader channel by channel
- * and animates toward the leader's live values. The leader is another
- * object `useSpring` ref or a pooled `CompositeSpring` of the same
- * shape. A ref of a leader, such as a `computed`, works too, and the
- * spring follows each new leader the ref holds.
+ * Creates a composite spring that follows a leader channel by channel,
+ * animating toward its live values. The leader is an object `useSpring`
+ * ref or a pooled `CompositeSpring` of the same shape. A ref of a
+ * leader, such as a `computed`, works too, and the spring follows each
+ * new leader the ref holds.
  *
- * Call it during `setup()` below a provided spring system. The springs
- * are disposed with the component's scope.
+ * Call it during `setup()` below a provided spring system. It throws
+ * without one. The springs are disposed with the component's scope.
  */
 export function useSpring<T extends object>(
   target: MaybeRef<CompositeSpringRef<T> | CompositeSpring<T>>,
@@ -99,42 +94,39 @@ export function useSpring<T extends object>(
 /**
  * Creates a composite spring over a numeric shape and returns a
  * `CompositeSpringRef`. The shape is a plain object or array whose
- * leaves are all numbers, or a ref or getter of one. Reads return the
- * deep-readonly composite value, and writes take partial shapes. The
- * shape is fixed at creation.
+ * leaves are all numbers, or a ref or getter of one, and it is fixed at
+ * creation. Reads return the deep-readonly value, and writes take
+ * partial shapes.
  *
- * A reactive target retargets the channels, and they keep their
- * momentum. A ref retargets when you replace its value or mutate a
- * nested channel. A getter retargets when its reactive dependencies
- * change. A reactive `config` takes a per-channel config shape.
+ * A reactive target retargets the channels, which keep their momentum.
+ * A ref retargets when you replace its value or mutate a nested channel.
+ * `config` takes a per-channel config shape and may be reactive.
  *
- * Call it during `setup()` below a provided spring system. The springs
- * are disposed with the component's scope.
+ * Call it during `setup()` below a provided spring system. It throws
+ * without one. The springs are disposed with the component's scope.
  *
  * `options.purpose` sets reduced-motion behavior per channel: one
- * `Purpose` for all channels, or a shape that mirrors the value.
- * `useSpring` reads it once, so unlike `config` it is not reactive.
+ * `Purpose` for all channels, or a shape that mirrors the value. It is
+ * read once, at creation.
  */
 export function useSpring<T extends object>(
   target: MaybeRefOrGetter<T & Shape<T>>,
   config?: UseCompositeSpringConfig<T>,
   options?: CompositeSpringOptions<T>,
 ): CompositeSpringRef<T>
+// Separate from the shape and leader overloads because TypeScript cannot
+// infer `T` through the function member of `MaybeRefOrGetter`.
 /**
- * Creates a composite spring driven by a getter. The getter returns a
- * numeric shape to animate toward, or a leader to follow as in the
- * leader overload above. When the getter's reactive dependencies change,
- * the spring retargets the channels or follows the new leader, so
- * `useSpring(() => (split.value ? left : right))` switches leaders while
- * they move. Every shape and leader must match the spring's shape, which
- * is fixed at creation.
+ * Creates a composite spring driven by a getter that returns a numeric
+ * shape to animate toward, or a leader to follow (an object `useSpring`
+ * ref or a pooled `CompositeSpring`). When the getter's dependencies
+ * change, the spring retargets or follows the new leader, so
+ * `useSpring(() => (split.value ? left : right))` switches leaders
+ * mid-flight. Every shape and leader must match the spring's shape,
+ * which is fixed at creation.
  *
- * This is the getter case of the overloads above. It is a separate
- * overload because TypeScript cannot infer the shape through the
- * function member of `MaybeRefOrGetter`.
- *
- * Call it during `setup()` below a provided spring system. The springs
- * are disposed with the component's scope.
+ * Call it during `setup()` below a provided spring system. It throws
+ * without one. The springs are disposed with the component's scope.
  */
 export function useSpring<T extends object>(
   target: () => (T & Shape<T>) | CompositeSpringRef<T> | CompositeSpring<T>,
@@ -153,9 +145,8 @@ export function useSpring(
       options as SpringOptions | undefined,
     )
   }
-  // A source is followed as itself. A `RampRef` or a `CompositeSpringRef`
-  // is also a ref, and unwrapping it would read its value and retarget
-  // on every update instead of following.
+  // A `RampRef` or `CompositeSpringRef` is also a ref. Unwrapping it would
+  // retarget to its value on every update instead of following it.
   const follow = isSpringSource(target) ? () => target : (target as MaybeRefOrGetter<unknown>)
   const resolved = toValue(follow)
   if (
@@ -168,8 +159,8 @@ export function useSpring(
       options as SpringOptions | undefined,
     )
   }
-  // Shapes and composite leaders. Other shape-valued sources reach here
-  // too, and the composite path rejects them.
+  // Shapes and composite leaders. The composite path rejects any other
+  // shape-valued source that lands here.
   return createCompositeSpringRef(
     follow as MaybeRefOrGetter<AnyShape>,
     config as UseCompositeSpringConfig<AnyShape>,
@@ -184,8 +175,8 @@ function createSpringRef(
 ): SpringRef {
   const system = injectSpringSystem()
   const resolvedConfig = resolveSpringConfig(config)
-  // A source target starts the spring at rest at the source's current
-  // value. The target effect below attaches the follow.
+  // A source starts the spring at rest on its current value. The effect
+  // below attaches the follow.
   const initial = toValue(target)
   const spring = system.createSpring(
     typeof initial === 'number' ? initial : initial[SpringSourceSymbol].value,

@@ -7,11 +7,10 @@ import type { SpringSource } from '../spring-source.ts'
 import { injectSpringSystem } from './reactive-spring.ts'
 
 /**
- * Imperative spring factories bound to the provided system. Use them for
- * sets of springs that you create and dispose at any time, such as
- * particles or per-item effects. When the creating scope stops, the pool
- * disposes every pooled spring that is still alive. You can also dispose
- * a pooled spring yourself before then.
+ * Imperative spring factories bound to the provided system, for springs
+ * you create and dispose at any time, such as particles or per-item
+ * effects. When the creating scope stops, the pool disposes every pooled
+ * spring still alive. You can dispose one yourself before then.
  */
 export interface SpringPool {
   /**
@@ -45,14 +44,13 @@ interface PoolSpring {
 }
 
 /**
- * Returns spring factories bound to the provided spring system. The
- * current effect scope sets the lifetime of each pooled spring: when the
- * scope stops, the pool disposes every pooled spring that is still
- * alive.
+ * Returns spring factories bound to the provided spring system. When
+ * the current effect scope stops, the pool disposes every pooled spring
+ * still alive.
  *
  * Call it during `setup()` or inside an effect scope, below a provided
- * spring system. Outside a scope, nothing disposes pooled springs for
- * you, and you must dispose each one yourself.
+ * spring system. It throws without one. Outside a scope, you must
+ * dispose each pooled spring yourself.
  */
 export function useSpringPool(): SpringPool {
   const system = injectSpringSystem()
@@ -72,12 +70,9 @@ export function useSpringPool(): SpringPool {
     }
   }, true)
 
-  // The pool mirrors the overloads of `system.createSpring` and only adds
-  // each result to the scope's disposer, so every overload would forward
-  // the same args to the same call. `system.createSpring` already
-  // dispatches on the value at runtime. The pool calls it through one
-  // widened signature, bound because it reads `this`, and the outer cast
-  // restores the overloads for callers.
+  // `system.createSpring` dispatches on the value at runtime, so every
+  // overload forwards through one widened signature. It is bound because
+  // it reads `this`, and the outer cast restores the overloads.
   const create = (
     system.createSpring as (
       value: number | SpringSource | Record<string, number>,

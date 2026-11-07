@@ -24,17 +24,15 @@ export interface SpringSourceApi<T = number> {
 }
 
 /**
- * A live value a spring can animate toward or derive from. `T` is the
- * value's type. You can assign a scalar source (`T = number`, the
- * default) to `Spring.target`, and the spring then tracks it with its
- * momentum intact.
+ * A live value of type `T` that a spring can animate toward or derive
+ * from. Assign a scalar source (`T = number`, the default) to
+ * `Spring.target`, and the spring tracks it with its momentum intact.
  *
  * Every `Spring` and `Ramp` is a `SpringSource`, and every
  * `CompositeSpring` is a `SpringSource` of its value shape. `mapSpring`,
  * `velocityOf`, `accelerationOf`, and `targetOf` derive new sources from
- * existing ones. You take sources from those APIs and pass them
- * wherever one is accepted. Use the type to name such a value in your
- * own signatures.
+ * existing ones. Use the type to name such a value in your own
+ * signatures.
  */
 export interface SpringSource<T = number> {
   readonly [SpringSourceSymbol]: SpringSourceApi<T>
@@ -91,12 +89,8 @@ export interface MappedRecipe {
   readonly fns: readonly ((value: unknown) => unknown)[]
 }
 
-// Derived sources flatten when composed. The registry lets `mapSpring`
-// recognize derived results and extend their recipe instead of nesting
-// getters, so reads stay iterative and chain depth never approaches the
-// call stack. `velocityOf`, `accelerationOf`, and `targetOf` register
-// their wrappers too, and `resolveLeaderMotions` walks recipe roots to
-// find the motions behind any derivation.
+// Lets `mapSpring` extend a derived source's recipe instead of nesting
+// getters, so reads stay iterative and chain depth never nears the call stack.
 const RECIPES = new WeakMap<object, MappedRecipe>()
 
 /** The flattened recipe behind `source`, when it is a derived source. */
@@ -127,11 +121,9 @@ function sourceMismatch(path: string): string {
 }
 
 /**
- * Parses a shape of sources into a live view and collects subscription
- * roots along the way. A mapped leaf contributes its recipe's roots and
- * reads through its pipeline. The parse validates structure once, at
- * creation. Reads refresh a stable mirror through the view's slots, so
- * per-update reads do no traversal or allocation.
+ * Parses a shape of sources into a live view, collecting subscription
+ * roots into `roots`. A mapped leaf contributes its recipe's roots and
+ * reads through its pipeline.
  */
 function compileShape(
   shape: Record<string, unknown> | unknown[],
@@ -153,8 +145,7 @@ function compileShape(
     empty: (path) =>
       `Invalid value at ${describePath(path)}: a shape must contain at least one source`,
   }
-  // The leaves go unused. Followers subscribe to the roots collected
-  // through the parser closure, not to the per-leaf read functions.
+  // The leaves go unused. Followers subscribe to the roots the parser collects.
   const { root } = new ShapeTree(shape, parser)
   return new ShapeView(root, (leaf) => leaf())
 }
@@ -162,24 +153,22 @@ function compileShape(
 /**
  * Derives a source from another by a pure function of its value.
  * `mapSpring(leader, (v) => v + 10)` follows 10 above the leader, and
- * `(v) => -v` mirrors it. Maps compose. A mapped source is a
- * `SpringSource` like any other, so you can map it again, use it as a
- * leaf of a shape map, or have several springs follow it at once.
+ * `(v) => -v` mirrors it. Like any `SpringSource`, the result can be
+ * mapped again, used as a leaf of a shape map, or followed by several
+ * springs at once.
  *
  * The result is a stateless view, not a spring. It holds no
- * subscriptions and needs no disposal, and each read computes `map` of
- * the source's current value. `map` must be pure. It runs on every
- * read, and each follower reads on every source update. Nothing
- * re-evaluates it when anything other than `source` changes.
- * Composition is flat: mapping a mapped source extends its pipeline
- * instead of wrapping it, so a chain costs one function call per map,
- * however long it grows.
+ * subscriptions and needs no disposal. `map` runs on every read, and
+ * each follower reads on every source update, so `map` must be pure.
+ * Nothing re-evaluates it when anything other than `source` changes.
+ * Mapping a mapped source extends its pipeline instead of wrapping it,
+ * so a chain costs one function call per map.
  */
 export function mapSpring(source: SpringSource, map: (value: number) => number): SpringSource
 /**
  * Derives a scalar source from several channels by a pure function of
- * their values. `sources` is a shape or a single non-scalar source such
- * as a `CompositeSpring`. A shape is a plain object or array with
+ * their values. `sources` is a single non-scalar source such as a
+ * `CompositeSpring`, or a shape: a plain object or array with
  * `SpringSource` leaves, nested to any depth. `map` receives the
  * matching values. For a shape, that is each leaf's current number
  * (`mapSpring({ x, y }, ({ x, y }) => Math.hypot(x, y))`). For a
@@ -188,13 +177,12 @@ export function mapSpring(source: SpringSource, map: (value: number) => number):
  * throws with its path (`position.z`).
  *
  * The result is a stateless view, not a spring. It holds no
- * subscriptions and needs no disposal, and each read computes `map`
- * over the sources' values. `map` must be pure. It runs on every read,
- * and each follower reads on every source update. `map` must not keep
- * what it receives: every call hands it the same live mirror of the
- * values, refreshed in place. The mapped source is released with the
- * first of its sources. Followers detach then and keep their current
- * target, as they would from a disposed spring.
+ * subscriptions and needs no disposal. `map` runs on every read, and
+ * each follower reads on every source update, so `map` must be pure.
+ * Every call hands it the same live mirror, refreshed in place, so `map`
+ * must not keep what it receives. The mapped source is released with the
+ * first of its sources, and followers then detach and keep their current
+ * target.
  */
 export function mapSpring<const T extends object>(
   sources: T & SourceShape<T>,
@@ -247,8 +235,7 @@ export function mapSpring(source: object, map: (value: never) => number): Spring
       onDispose: single
         ? (callback: () => void) => single.onDispose(callback)
         : (callback: () => void) => {
-            // The first source to dispose releases the derived value. Fire
-            // once, then drop every subscription.
+            // The first source to dispose releases the derived value.
             let fired = false
             const unsubscribes = apis!.map((api) =>
               api.onDispose(() => {

@@ -2,9 +2,9 @@
  * Type-level tests for `mapSpring` source shapes and the `SpringSource`
  * contract surface.
  *
- * This file is compiled by `tsc` but never executed (vitest only picks up
- * `*.spec.ts`, `*.browser.ts`, and `*.bench.ts`). Each `@ts-expect-error`
- * is self-validating: tsc fails if the line stops erroring.
+ * Typechecked by `tsc`, never executed (vitest runs only `*.spec.ts`,
+ * `*.browser.ts`, and `*.bench.ts`). tsc fails if an `@ts-expect-error`
+ * line stops erroring.
  */
 import {
   mapSpring,

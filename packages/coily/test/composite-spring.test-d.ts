@@ -2,9 +2,9 @@
  * Type-level tests for composite spring value shapes, partial writes,
  * following, config shapes, purpose shapes, and mixed targets.
  *
- * This file is compiled by `tsc` but never executed (vitest only picks up
- * `*.spec.ts`, `*.browser.ts`, and `*.bench.ts`). Each `@ts-expect-error`
- * is self-validating: tsc fails if the line stops erroring.
+ * Typechecked by `tsc`, never executed (vitest runs only `*.spec.ts`,
+ * `*.browser.ts`, and `*.bench.ts`). tsc fails if an `@ts-expect-error`
+ * line stops erroring.
  */
 import type {
   Purpose,
@@ -47,12 +47,11 @@ system.createSpring(channels)
 declare const pair: [number, number]
 const tuple = system.createSpring(pair)
 
-// Array literals infer with exact arity but WIDENED elements, and record
-// literals infer wide, both without a `const` type parameter. Do not add
-// one. `T` is invariant, so the literal channels that `const` infers
-// (`[0, 0]`, `{ readonly x: 0 }`) would make springs created from
-// different initial values type-incompatible. That breaks annotations and
-// follow.
+// Without a `const` type parameter, array literals infer exact arity with
+// WIDENED elements, and record literals infer wide. Do not add one: `T` is
+// invariant, so `const`'s literal channels (`[0, 0]`, `{ readonly x: 0 }`)
+// would make springs from different initial values type-incompatible,
+// breaking annotations and follow.
 const arity: CompositeSpring<[number, number]> = system.createSpring([0, 0])
 void arity
 const wide: CompositeSpring<{ x: number }> = system.createSpring({ x: 0 })
@@ -81,9 +80,8 @@ system.createSpring({ position: {} })
 // @ts-expect-error empty arrays have no channels
 system.createSpring({ items: [] })
 
-// Channels that may be absent or undefined would make two springs of the
-// same declared shape structurally incompatible at runtime, so `Shape`
-// rejects them outright.
+// `Shape` rejects channels that may be absent, which would make two springs
+// of one declared shape structurally incompatible at runtime.
 declare const optional: { x: number; y?: number }
 // @ts-expect-error optional channels are rejected
 system.createSpring(optional)
@@ -170,8 +168,8 @@ system.createSpring({ x: 0, y: 0 }, { tension: 170, damping: 26 })
 // @ts-expect-error bare options are not a config, even at a leaf
 system.createSpring({ x: 0, y: 0 }, { x: { tension: 170, damping: 26 } })
 
-// A channel named like a spring option needs no special handling. A config
-// is always a `SpringDefinition`, so the name is not ambiguous.
+// A channel named like a spring option is unambiguous, because a config is
+// always a `SpringDefinition`.
 const collide = system.createSpring({ tension: 0, damping: 0 })
 collide.config = cfg
 collide.config = { tension: cfg, damping: cfg }
@@ -180,9 +178,8 @@ collide.config = { tension: 170, damping: 26 }
 
 // ── One `createSpring`, dispatched on the value ─────────────────────
 
-// Scalar creation takes a number; any object or array is a value shape.
-// Channels named `target` or `value` need no special handling either. An
-// older scalar creation form took such literals, and it no longer exists.
+// Scalar creation takes a number, and any object or array is a value shape,
+// so channels named `target` or `value` need no special handling.
 const scalar: Spring = system.createSpring(5)
 const composite: CompositeSpring<{ target: number; value: number }> = system.createSpring({
   target: 100,
@@ -193,9 +190,8 @@ void composite
 
 // ── Purpose shapes ───────────────────────────────────────────────────
 
-// A single purpose covers every channel; a shape sets it per channel, at
-// any level. Purposes go in the options object, the third argument after
-// `config`.
+// One purpose covers every channel, and a shape sets it per channel at any
+// level. Purposes go in the options object, the third argument.
 system.createSpring({ x: 0, y: 0 }, cfg, { purpose: 'nonmotion' })
 system.createSpring({ x: 0, y: 0 }, undefined, { purpose: { x: 'nonmotion' } })
 system.createSpring({ x: 0, y: 0 }, undefined, { purpose: { x: 'motion', y: 'nonmotion' } })
@@ -236,7 +232,5 @@ declare const point: CompositeSpring<Vector2>
 nested.target = { opacity: point }
 // @ts-expect-error a source targets a single channel, not a branch
 nested.target = { position: scalarLeader }
-// value writes take only numbers, because a source is a target, not a
-// displacement
-// @ts-expect-error a source is not a value
+// @ts-expect-error a source is a target, not a value displacement
 nested.value = { opacity: scalarLeader }

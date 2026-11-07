@@ -18,10 +18,9 @@ import { invariant } from './util.ts'
  */
 export interface SpringOptions {
   /**
-   * What the spring animates, which decides whether reduced motion applies
-   * to it. A `'nonmotion'` spring, such as a cross-fade, a color, or a
-   * blur, keeps animating under reduced motion. A `'motion'` spring snaps
-   * to the target. Fixed for the spring's life. See `Purpose`.
+   * What the spring animates. Under reduced motion, a `'motion'` spring
+   * snaps to its target and a `'nonmotion'` spring (a cross-fade, a color,
+   * a blur) keeps animating. Fixed for the spring's life. See `Purpose`.
    * @default 'motion'
    */
   purpose?: Purpose | undefined
@@ -33,12 +32,11 @@ export interface SpringOptions {
  */
 export interface CompositeSpringOptions<T extends object> {
   /**
-   * What each channel animates, which decides reduced-motion behavior
-   * per channel. Give a single `Purpose` for every channel, or a shape
-   * that mirrors the value with purposes at any level. A purpose at a
-   * subtree covers every channel below it. Channels it does not reach
-   * default to `'motion'`. Fixed for the spring's life. See
-   * `PurposeShape`.
+   * What each channel animates, which decides its reduced-motion behavior.
+   * Give one `Purpose` for every channel, or a shape mirroring the value
+   * with purposes at any level. A subtree's purpose covers every channel
+   * below it, and unreached channels default to `'motion'`. Fixed for the
+   * spring's life. See `PurposeShape`.
    * @default 'motion'
    */
   purpose?: PurposeShape<T> | undefined
@@ -47,13 +45,12 @@ export interface CompositeSpringOptions<T extends object> {
 export interface SpringSystemOptions extends TickerOptions {
   /**
    * How far a spring can trail a source it follows within one frame, in
-   * the value's own units. If a frame's motion would exceed it, the
-   * system splits the frame into internal sub-steps (at most 8), so
-   * followed chains stay accurate through slow frames and sudden
-   * retargets. A smaller value is tighter and costs more solver work.
-   * The budget never goes finer than the follower's resting precision,
-   * and listeners still fire once per frame. Springs that follow nothing
-   * are unaffected.
+   * the value's own units. Frames that would exceed it split into internal
+   * sub-steps (at most 8), keeping followed chains accurate through slow
+   * frames and sudden retargets. Smaller is tighter and costs more solver
+   * work, but never finer than the follower's resting precision. Listeners
+   * still fire once per frame, and springs that follow nothing are
+   * unaffected.
    * @default 0.1
    */
   couplingTolerance?: number | undefined
@@ -64,11 +61,10 @@ export interface SpringSystemOptions extends TickerOptions {
    */
   debug?: boolean | undefined
   /**
-   * When reduced motion applies, making `'motion'` springs and ramps
-   * jump to their targets instead of animating. `'user'` follows the OS
-   * prefers-reduced-motion setting, including live changes. Switching it
-   * on finishes in-flight motion at once. `'always'` and `'never'` force
-   * one behavior.
+   * When reduced motion applies, making `'motion'` springs and ramps jump
+   * to their targets instead of animating. `'user'` follows the OS
+   * prefers-reduced-motion setting live, and a switch to reduced finishes
+   * in-flight motion at once. `'always'` and `'never'` force one behavior.
    * @default 'user'
    */
   reducedMotion?: 'user' | 'always' | 'never' | undefined
@@ -247,10 +243,9 @@ export interface SpringSystem {
    * Creates a spring that already follows `source`, which can be any
    * scalar `SpringSource`: a `Spring`, a `Ramp`, or a value derived with
    * `mapSpring`, `velocityOf`, `accelerationOf`, or `targetOf`. Passing
-   * a composite source throws. Derive a scalar from it with `mapSpring`
-   * instead. The spring starts at the source's current value, so
-   * nothing moves until the source does. This is the same as creating a
-   * spring at that value and assigning `source` to its `target`.
+   * a composite source throws, so derive a scalar from it with
+   * `mapSpring`. The spring starts at the source's current value, the same
+   * as creating it there and assigning `source` to its `target`.
    *
    * `options.purpose` marks what the spring animates: `'nonmotion'`
    * keeps animating under reduced motion, `'motion'` (the default) snaps.
@@ -272,12 +267,11 @@ export interface SpringSystem {
     options?: CompositeSpringOptions<T>,
   ): CompositeSpring<T>
   /**
-   * Creates a ramp at `from`: a value that moves toward `options.target`
-   * at `options.rate` value units per second, in a straight line, and
-   * stops there. A spring that follows a ramp with the default
-   * `arrival` integrates against its steady motion exactly, not against
-   * a per-frame staircase. Without a target, the ramp starts at rest.
-   * `Infinity` or `-Infinity` makes it endless.
+   * Creates a ramp at `from`: a value that moves in a straight line toward
+   * `options.target` at `options.rate` value units per second, then stops.
+   * Without a target it starts at rest, and `Infinity` or `-Infinity`
+   * makes it endless. A spring following a ramp with the default `arrival`
+   * integrates its steady motion exactly, not a per-frame staircase.
    *
    * ```ts
    * // An endless spin at 270 deg/s, with a spring lagging behind it.
@@ -289,24 +283,24 @@ export interface SpringSystem {
    * const pulse = system.createSpring(mapSpring(clock, (ms) => Math.sin((Math.PI * ms) / 600)))
    * ```
    *
-   * `options.purpose` marks what the ramp drives: a `'motion'` ramp (the
-   * default) jumps to a bounded target under reduced motion and holds
-   * still on an endless one, and a `'nonmotion'` ramp keeps moving.
+   * Under reduced motion, a `'motion'` ramp (the default `purpose`) jumps
+   * to a bounded target and holds still on an endless one. A `'nonmotion'`
+   * ramp keeps moving.
    */
   createRamp(from: number, options: RampOptions): Ramp
   /**
-   * Advances every moving spring and ramp by `dt` ms. Use it for manual
-   * stepping in place of `start()`: in tests, custom loops, or offline
-   * rendering. `dt` must be a finite number >= 0, so time never runs
-   * backward. A negative or non-finite `dt` throws.
+   * Advances every moving spring and ramp by `dt` ms, for manual stepping
+   * in place of `start()`: tests, custom loops, offline rendering. Throws
+   * unless `dt` is finite and >= 0.
    */
   advance(dt: number): void
 
   /**
    * Begins animating on real frames: one tick per displayed frame, through
    * `requestAnimationFrame` in the browser and a `setTimeout` fallback
-   * elsewhere. An idle system sleeps. It schedules no frames while every
-   * spring rests and no ramp advances with the frame loop.
+   * elsewhere. An idle system sleeps, scheduling no frames while every
+   * spring rests and no ramp advances with the frame loop. Throws after
+   * `dispose`.
    */
   start(): void
   /** Stops animating. Springs and ramps hold their state until `start` or `advance`. */
@@ -317,11 +311,10 @@ export interface SpringSystem {
    */
   readonly running: boolean
   /**
-   * Stops the system for good and removes its listeners on the page: the
-   * visibility listener and, with `reducedMotion: 'user'`, the media
-   * query listener. Each system adds both when it is created, so dispose
-   * a system you no longer need. `useSpringSystem` disposes the system it
-   * creates when its component unmounts. Calling it again is a no-op.
+   * Stops the system for good and removes the page listeners it added at
+   * creation: visibility and, with `reducedMotion: 'user'`, the media
+   * query. Dispose a system you no longer need. `useSpringSystem` disposes
+   * the system it creates on unmount. Calling it again is a no-op.
    *
    * After dispose, `start()` throws. `advance` still steps the springs
    * and ramps, and `reducedMotion` no longer follows the user setting.
@@ -329,10 +322,9 @@ export interface SpringSystem {
   dispose(): void
   /**
    * Whether reduced motion is on, per the `reducedMotion` option and, in
-   * `'user'` mode, the live OS setting. While it is on, springs and
-   * ramps with `purpose: 'motion'` jump instead of animating, and those
-   * with `purpose: 'nonmotion'` animate as normal. Read it to gate
-   * decorative effects of your own.
+   * `'user'` mode, the live OS setting. While on, `'motion'` springs and
+   * ramps jump instead of animating, and `'nonmotion'` ones still animate.
+   * Read it to gate decorative effects of your own.
    */
   readonly reducedMotion: boolean
   /**
@@ -345,14 +337,14 @@ export interface SpringSystem {
   /**
    * Frame-rate cap, in frames per second. 0 means uncapped: one tick per
    * displayed frame, whatever rate the screen runs at. Capped ticks land
-   * on whole display frames and receive the true elapsed time.
+   * on whole display frames and receive the true elapsed time. Assignment
+   * accepts any number >= 0.
    */
   fps: number
   /**
-   * Frame gap, in ms, above which the system treats the gap as lag,
-   * such as a backgrounded tab or a blocking task. It replaces a lagging
-   * gap with `adjustedLag`, so springs do not teleport when frames
-   * resume. Reads return the value last set. Assignment accepts any
+   * Frame gap, in ms, above which the system treats the gap as lag (a
+   * backgrounded tab, a blocking task) and replaces it with `adjustedLag`,
+   * so springs do not teleport when frames resume. Assignment accepts any
    * number >= 0, and 0 disables lag clamping.
    */
   lagThreshold: number

@@ -26,7 +26,6 @@ function teleport() {
   const w = window.innerWidth
   const h = window.innerHeight
 
-  // A slow sine drift sets a general direction, and randomness breaks the pattern.
   const stepSize = 0.15 + 1.85 * (0.5 + 0.5 * Math.sin(step * 0.31)) ** 2
   step += stepSize
 
@@ -70,11 +69,10 @@ onMounted(() => {
 onBeforeUnmount(() => clearTimeout(autoTimer))
 
 // Each link rests 300 ms after a 1 px move, to within 0.0005 px
-// (precision 3). That tunes it to a natural frequency of about 35 rad/s,
-// with a dampingRatio of 0.85.
+// (precision 3): a natural frequency of about 35 rad/s, dampingRatio 0.85.
 const chainConfig = defineSpring({ bounce: 0.15, duration: 300, precision: 3 })
 
-// The first spring follows the mouse, and each later spring follows the one before it.
+// The first spring follows the mouse, each later one the spring before it.
 const springs: CompositeSpringRef<{ x: number; y: number }>[] = []
 
 for (let i = 0; i < count; i++) {

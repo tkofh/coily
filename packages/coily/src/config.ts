@@ -15,12 +15,11 @@ export interface SpringState {
 interface BaseOptions {
   /**
    * Decimal places of the resting threshold. A spring rests once its
-   * remaining motion cannot reach half a unit in the last place, which is
-   * `0.5 * 10^-precision`, or 0.005 at the default.
+   * remaining motion fits within `0.5 * 10^-precision` (0.005 at the
+   * default). Values are never rounded.
    *
-   * Values are never rounded. Precision only decides rest. A duration
-   * config is tuned against this threshold, so it rests at its `duration`
-   * at any precision. See
+   * Duration configs are tuned against this threshold, so they rest at
+   * their `duration` at any precision. See
    * https://github.com/tkofh/coily/blob/main/PRECISION.md.
    *
    * @default 2
@@ -28,28 +27,23 @@ interface BaseOptions {
   readonly precision?: number | undefined
 
   /**
-   * What the motion does when the value reaches the target, as a
-   * multiplier applied to the velocity at every crossing.
+   * Velocity multiplier applied each time the value crosses the target.
    *
-   * - `'passthrough'` is multiplier 1. It leaves the motion alone. The
-   *   value swings through the target and settles as its damping allows.
-   * - `'stop'` is multiplier 0. Motion ends at the target the first time
-   *   the value gets there, with no overshoot, however bouncy the config.
+   * - `'passthrough'` (1) leaves the motion alone. The value swings
+   *   through the target and settles as its damping allows.
+   * - `'stop'` (0) ends the motion at the first crossing, with no
+   *   overshoot however bouncy the config.
    * - A number between -1 and 1 sets the multiplier directly. Negative
-   *   values rebound. `-0.75` reverses the motion with three quarters of
-   *   its speed, at every return. Values between 0 and 1 pass through
-   *   slower.
+   *   values rebound. `-0.75` reverses at three quarters speed on every
+   *   return. Values between 0 and 1 pass through slower.
    *
-   * The multiplier acts only at crossings, so a motion that never
-   * crosses ignores it. A spring with `dampingRatio` 1 or above (`bounce`
-   * 0 or below) never overshoots. Retargeted from rest, it closes in from
-   * one side, and its `arrival` changes nothing. It crosses only when it
-   * starts with enough velocity toward the target, or when the target
-   * moves past it.
+   * A motion that never crosses ignores `arrival`. With `dampingRatio` 1
+   * or above (`bounce` 0 or below), a spring retargeted from rest closes
+   * in from one side. It crosses only when it starts with enough velocity
+   * toward the target, or when the target moves past it.
    *
-   * Crossings are solved from the motion's closed form, never sampled
-   * frame by frame, so a `'stop'` lands the value exactly on the target
-   * at any frame timing. See
+   * Crossings are solved exactly, never sampled per frame, so `'stop'`
+   * lands exactly on the target at any frame timing. See
    * https://github.com/tkofh/coily/blob/main/PRECISION.md.
    *
    * @default 'passthrough'
@@ -67,10 +61,7 @@ interface WithMass {
 }
 
 interface WithoutMass {
-  /**
-   * Mass is derived from the other parameters in this input shape
-   * and cannot be provided.
-   */
+  /** Derived from the other parameters in this input shape. Cannot be provided. */
   readonly mass?: undefined
 }
 
@@ -94,11 +85,10 @@ interface WithDamping {
 interface WithDampingRatio {
   /**
    * Damping as a fraction of critical damping, the friction at which
-   * bounce disappears. It sets the character of the motion, independent
-   * of its speed. Below 1 the spring overshoots and bounces. At 1 it
-   * settles as fast as possible without overshooting. Above 1 it settles
-   * slower, still without overshooting. At 0 it never settles. Must be
-   * greater than or equal to 0.
+   * bounce disappears. It sets the motion's character independent of its
+   * speed. Below 1 the spring bounces, and at 0 it never settles. At 1 it
+   * settles fastest without overshooting. Above 1 it settles slower, still
+   * without overshooting. Must be greater than or equal to 0.
    */
   readonly dampingRatio: number
 }
@@ -106,33 +96,31 @@ interface WithDampingRatio {
 interface WithBounce {
   /**
    * Bounciness, converted to a damping ratio as `1 - bounce`. 0 settles
-   * as fast as possible without overshooting. Positive values overshoot
-   * and bounce. At 1, the maximum bounce, the ratio is clamped just short
-   * of undamped, so the spring still settles. Negative values settle
-   * without bounce, more slowly. Must be between -1 and 1, and below 1
-   * in a config that sets `damping` without `duration`.
+   * fastest without overshooting. Positive values bounce. Negative values
+   * settle slower without bouncing. At 1 the ratio clamps just short of
+   * undamped, so the spring still settles. Must be between -1 and 1, and
+   * below 1 in a config that sets `damping` without `duration`.
    */
   readonly bounce: number
 }
 
 interface WithDuration {
   /**
-   * Settle time in ms. The spring is tuned to rest at this time when it
-   * starts `displacement` away from the target. Rest lands within a frame
-   * of the requested duration at any `precision`. A bouncy config can
-   * rest earlier, by up to about one oscillation, or several short ones
-   * when `bounce` is near 1. Must be greater than 0.
+   * Settle time in ms. Starting `displacement` away from the target, the
+   * spring rests within a frame of it at any `precision`. A bouncy config
+   * can rest earlier, by up to about one oscillation (several short ones
+   * when `bounce` is near 1). Must be greater than 0.
    */
   readonly duration: number
 }
 
 interface WithDisplacement {
   /**
-   * The initial displacement the duration tuning assumes. Set it to your
-   * animation's range (300 when animating 0 to 300) so the settle timing
-   * holds. The timing drifts as the real displacement moves away from
-   * this value. The sign does not matter. The magnitude must be greater
-   * than the resting threshold, `0.5 * 10^-precision`.
+   * The starting distance from the target that the `duration` tuning
+   * assumes. Set it to your animation's range (300 when animating 0 to
+   * 300). Timing drifts as the real distance departs from it. The sign is
+   * ignored. The magnitude must exceed the resting threshold,
+   * `0.5 * 10^-precision`.
    * @default 1
    */
   readonly displacement?: number | undefined
@@ -173,16 +161,14 @@ export type SpringOptionKeys =
   | 'arrival'
 
 /**
- * Marks every option key foreign to `T` as "absent or undefined". Mixing
- * properties from different input shapes then fails to type-check
- * instead of resolving to an unintended shape at runtime.
+ * Marks every option key foreign to `T` as absent or undefined, so mixing
+ * keys from different input shapes fails to type-check.
  */
 type Exact<T> = T & { [K in Exclude<SpringOptionKeys, keyof T>]?: undefined }
 
 /**
  * Every input `defineSpring` accepts: one of the documented parameter
- * combinations, exactly as written. Keys from different combinations do
- * not mix.
+ * combinations, with no keys mixed in from another.
  */
 export type SpringDefinitionOptions =
   | Exact<DirectOptions>
@@ -200,11 +186,11 @@ export type SpringDefinitionOptions =
   | Exact<DampingBounceDurationOptions>
 
 /**
- * Immutable, resolved spring parameters. Whatever `defineSpring` input
- * shape produced it, a config has concrete `mass`, `tension`, `damping`,
- * `precision`, and `arrival`, plus the quantities derived from them.
- * Instances are frozen and safe to share between springs. To change a
- * spring's behavior, assign a new config to `spring.config`.
+ * Resolved spring parameters, frozen and safe to share between springs.
+ * Whatever `defineSpring` input shape produced it, a config has concrete
+ * `mass`, `tension`, `damping`, `precision`, and `arrival`, plus the
+ * quantities derived from them. To change a spring's behavior, assign a
+ * new config to `spring.config`.
  */
 export class SpringDefinition {
   /** The config for springs created without one: critically damped, settling in about 500ms. */
@@ -219,10 +205,10 @@ export class SpringDefinition {
   /** Decimal places of the resting threshold. See `restingMagnitude`. */
   readonly precision: number
   /**
-   * Velocity multiplier applied when the value crosses the target, as
-   * provided or resolved from its named form. 1 (`'passthrough'`) leaves
-   * the motion untouched, 0 (`'stop'`) ends it at the target, negative
-   * values rebound.
+   * Velocity multiplier applied each time the value crosses the target.
+   * `'passthrough'` resolves to 1, which leaves the motion untouched.
+   * `'stop'` resolves to 0, which ends it at the target. Negative values
+   * rebound.
    */
   readonly arrival: number
 
@@ -231,13 +217,12 @@ export class SpringDefinition {
   /** The damping at which bounce disappears: `2 * mass * naturalFrequency`. */
   readonly criticalDamping: number
   /**
-   * `damping / criticalDamping`. Below 1 the spring overshoots and
-   * bounces, at 1 it settles fastest without overshooting, above 1 it
-   * settles slower.
+   * `damping / criticalDamping`. Below 1 the spring bounces. At 1 it
+   * settles fastest without overshooting. Above 1 it settles slower.
    */
   readonly dampingRatio: number
 
-  /** Resting threshold in value units: half a unit in the last `precision` place. */
+  /** Resting threshold in value units, `0.5 * 10^-precision`. */
   readonly restingMagnitude: number
 
   constructor(input: SpringDefinitionOptions) {
@@ -252,11 +237,10 @@ export class SpringDefinition {
     const precision = raw.precision ?? 2
     const arrival = raw.arrival as 'passthrough' | 'stop' | number | undefined
 
-    // Every provided option must be a finite number before its own range
-    // check. The comparisons reject NaN on their own, but they let
-    // infinities through to corrupt the derived parameters.
+    // The range checks below reject NaN but let infinities through, so
+    // every option is checked for finiteness first.
     for (const key of Object.keys(raw)) {
-      // The one option that admits strings. It is validated on its own below.
+      // The one option that admits strings. Validated on its own below.
       if (key === 'arrival') continue
       const value = raw[key]
       if (value !== undefined) {
@@ -275,8 +259,7 @@ export class SpringDefinition {
       'Provide either dampingRatio or bounce, not both',
     )
 
-    // Resolve bounce to dampingRatio. The clamp to a small epsilon keeps
-    // bounce = 1 (maximum bounce) settling.
+    // The floor keeps bounce = 1 settling.
     const dampingRatio =
       raw.dampingRatio ?? (bounce !== undefined ? Math.max(1e-4, 1 - bounce) : undefined)
 
@@ -347,9 +330,8 @@ export class SpringDefinition {
       )
       invariant(dampingRatio > 0, 'dampingRatio must be > 0 for duration-based config')
 
-      // The natural frequency that makes the decay bound from rest enter
-      // the resting threshold exactly at `duration`, so rest lands on the
-      // requested time instead of well before it.
+      // The natural frequency at which the decay bound from rest enters the
+      // resting threshold exactly at `duration`.
       const wn = restUnits(dampingRatio, x0 / this.restingMagnitude) / duration
 
       if (!hasK && !hasC) {
@@ -381,23 +363,21 @@ export class SpringDefinition {
   }
 
   /**
-   * Computes when a spring with this config comes to rest from `state`,
-   * in ms.
+   * Computes the time in ms until a spring with this config rests from
+   * `state`, solved exactly from the motion's decay bound. The spring
+   * rests at the first tick at or after it.
    *
-   * The time is solved from the motion's decay bound, not estimated. The
-   * spring is resting at the first tick at or after it. An underdamped
-   * spring can also rest earlier. Its rest amplitude pulses, and a frame
-   * that samples a dip inside the resting threshold rests there. Read the
-   * value as "no later than". The motion an early rest cuts off never
-   * leaves the resting threshold. See
-   * https://github.com/tkofh/coily/blob/main/PRECISION.md.
+   * An underdamped spring can also rest earlier, on a frame that samples
+   * a dip in its pulsing rest amplitude, so read the result as "no later
+   * than". The motion an early rest cuts off never leaves the resting
+   * threshold. See https://github.com/tkofh/coily/blob/main/PRECISION.md.
    *
    * Returns 0 when `state` is already inside the resting threshold.
-   * Returns Infinity when the motion never settles: a `dampingRatio` of
-   * 0 whose `arrival` neither stops nor slows it. When `arrival` is 0,
-   * the result is capped at the first target crossing, where such a
-   * spring rests exactly. Other multipliers fold their velocity loss at
-   * each crossing into the time.
+   * Returns Infinity when the motion never settles: a `dampingRatio` of 0
+   * whose `arrival` neither stops nor slows it. With `arrival` 0, the
+   * result is capped at the first target crossing, where the spring rests
+   * exactly. Other multipliers fold their per-crossing velocity loss into
+   * the time.
    */
   computeTimeRemaining(state: SpringState): number {
     const { position, velocity } = state
@@ -406,19 +386,17 @@ export class SpringDefinition {
       return 0
     }
 
-    // An arrival multiplier of 0 turns the first target crossing into
-    // exact rest. The crossing caps the decay bound, and it is the whole
-    // answer when the bound never decays.
+    // arrival 0 rests exactly at the first crossing. It caps the decay
+    // bound, and is the whole answer when the bound never decays.
     const crossing = this.arrival === 0 ? firstCrossing(this, position, velocity) * 1000 : Infinity
 
     return Math.min(restTime(this, position, velocity) * 1000, crossing)
   }
 }
 
-// The last time a decay bound sits above `threshold`, by bisection. `f`
-// must rise at most once and then decay to 0, with f(0) above the
-// threshold. `peak` is a time at or past the rise. Runs when a duration
-// config is built and on every `timeRemaining` read, never inside a tick.
+// Bisects for the last time `f` sits above `threshold`. Requires f(0) above
+// it and `f` rising at most once, by `peak`, before decaying to 0. Runs at
+// duration-config build and on `timeRemaining` reads, never inside a tick.
 function solveEntry(f: (t: number) => number, threshold: number, peak: number): number {
   let low = 0
   let high = Math.max(peak, 1e-6)
@@ -437,21 +415,18 @@ function solveEntry(f: (t: number) => number, threshold: number, peak: number): 
   return high
 }
 
-// The time in seconds at which the motion from (position, velocity) is
-// sure to rest. It is the exact moment the tightest closed-form bound on
-// the rest amplitude |x| + |v| / wn enters the resting threshold, or
-// Infinity when the bound never decays. Callers test for rest first, so
-// the bound starts above the threshold.
+// Seconds until the tightest closed-form bound on the rest amplitude
+// |x| + |v| / wn enters the threshold, or Infinity when it never decays.
+// Callers test for rest first, so the bound starts above the threshold.
 function restTime(config: SpringDefinition, position: number, velocity: number): number {
   const { naturalFrequency, dampingRatio, restingMagnitude, arrival } = config
 
   if (dampingRatio < 1) {
     const sigma = dampingRatio * naturalFrequency
     const wd = naturalFrequency * Math.sqrt(1 - dampingRatio ** 2)
-    // The rest amplitude is exactly exp(-sigma*t) * R * f(wd*t - phi),
-    // with R the oscillation amplitude and f periodic with
-    // max(f) = sqrt(2 + 2*zeta). That is the true peak of each pulse, not
-    // a safety margin.
+    // The rest amplitude is exactly exp(-sigma*t) * R * f(wd*t - phi), with
+    // R the oscillation amplitude and f periodic. max(f) = sqrt(2 + 2*zeta)
+    // is each pulse's true peak, not a safety margin.
     const R = Math.hypot(position, (velocity + sigma * position) / wd)
     const drop = Math.log((R * Math.sqrt(2 + 2 * dampingRatio)) / restingMagnitude)
     const plain = sigma > 0 ? drop / sigma : Infinity
@@ -459,10 +434,9 @@ function restTime(config: SpringDefinition, position: number, velocity: number):
     const strength = Math.abs(arrival)
     if (strength === 0 || strength === 1) return plain
 
-    // A rebound or slowdown scales the whole remaining trajectory by
-    // |arrival| at every crossing, which comes every half period after
-    // the first. That adds ln(1/|arrival|) * wd/pi to the effective decay
-    // rate.
+    // Each crossing (every half period after the first) scales the rest of
+    // the trajectory by |arrival|, adding ln(1/|arrival|) * wd/pi to the
+    // effective decay rate.
     const first = firstCrossing(config, position, velocity)
     if (plain <= first) return plain
     const loss = (-Math.log(strength) * wd) / Math.PI
@@ -471,9 +445,8 @@ function restTime(config: SpringDefinition, position: number, velocity: number):
 
   if (dampingRatio === 1) {
     const a0 = Math.abs(position) + Math.abs(velocity) / naturalFrequency
-    // |c1 + c2*t| + |c2 - wn*(c1 + c2*t)| / wn <= a0 + 2*|c2|*t. The
-    // bound is exact from rest and asymptotically tight otherwise. Its
-    // peak sits where its derivative crosses zero.
+    // |c1 + c2*t| + |c2 - wn*(c1 + c2*t)| / wn <= a0 + 2*|c2|*t, exact from
+    // rest and asymptotically tight otherwise. `peak` zeroes its derivative.
     const beta = 2 * Math.abs(velocity + naturalFrequency * position)
     const peak = beta > 0 ? Math.max(0, 1 / naturalFrequency - a0 / beta) : 0
     return solveEntry(
@@ -499,10 +472,9 @@ function restTime(config: SpringDefinition, position: number, velocity: number):
   )
 }
 
-// The dimensionless wn * t at which the decay bound of a motion from rest
-// enters the threshold, for a displacement `ratio` times the threshold.
-// The duration shapes invert this: wn = restUnits(zeta, x0 / threshold) / T
-// lands rest exactly at T. Mirrors the per-regime bounds in restTime.
+// The wn * t at which the from-rest decay bound enters the threshold, for a
+// displacement `ratio` thresholds away. Duration shapes set
+// wn = restUnits(zeta, x0 / threshold) / T. Mirrors restTime's bounds.
 function restUnits(dampingRatio: number, ratio: number): number {
   if (dampingRatio < 1) {
     // From rest, R = x0 / sqrt(1 - zeta^2) and M = sqrt(2 + 2*zeta)
@@ -524,10 +496,8 @@ function restUnits(dampingRatio: number, ratio: number): number {
   )
 }
 
-// The first strictly future time, in seconds, at which the motion from
-// (position, velocity) crosses the target, or Infinity when it never
-// does. These are the same per-regime roots the solvers anchor with (see
-// solver.ts).
+// Seconds until the motion's first strictly future target crossing, or
+// Infinity. The same per-regime roots the solvers in solver.ts anchor with.
 function firstCrossing(config: SpringDefinition, position: number, velocity: number): number {
   const { naturalFrequency, dampingRatio } = config
 
@@ -542,17 +512,15 @@ function firstCrossing(config: SpringDefinition, position: number, velocity: num
   }
 
   if (dampingRatio === 1) {
-    // (c1 + c2*t) * exp(-wn*t) has one root, -c1/c2. It counts as a
-    // crossing only when strictly future. NaN (a rest state) compares
-    // false and becomes Infinity.
+    // (c1 + c2*t) * exp(-wn*t) has one root, -c1/c2. NaN (a rest state)
+    // fails the strictly-future test and becomes Infinity.
     const t = -position / (velocity + naturalFrequency * position)
     return t > 0 ? t : Infinity
   }
 
-  // c1*sinh(wd*t) + c2*cosh(wd*t) crosses zero where tanh(wd*t) = -c2/c1.
-  // The root is strictly future only when the velocity term dominates
-  // with the opposite sign. Otherwise atanh yields NaN or a non-positive
-  // value, which compares false and becomes Infinity.
+  // c1*sinh(wd*t) + c2*cosh(wd*t) crosses zero where tanh(wd*t) = -c2/c1,
+  // strictly future only when the velocity term dominates with the
+  // opposite sign. Otherwise atanh yields NaN or <= 0, which becomes Infinity.
   const wd = naturalFrequency * Math.sqrt(dampingRatio ** 2 - 1)
   const theta = Math.atanh(
     (-position * wd) / (velocity + dampingRatio * naturalFrequency * position),
@@ -560,10 +528,7 @@ function firstCrossing(config: SpringDefinition, position: number, velocity: num
   return theta > 0 ? theta / wd : Infinity
 }
 
-/**
- * Creates a config from direct physical parameters. You set stiffness
- * (`tension`) and friction (`damping`) exactly.
- */
+/** Creates a config with stiffness (`tension`) and friction (`damping`) set directly. */
 export function defineSpring(input: Exact<DirectOptions>): SpringDefinition
 /**
  * Creates a config from stiffness and motion character. Damping is
@@ -583,9 +548,9 @@ export function defineSpring(input: Exact<TensionBounceOptions>): SpringDefiniti
  */
 export function defineSpring(input: Exact<DampingRatioOptions>): SpringDefinition
 /**
- * Creates a config from friction and bounciness. Tension is derived to
- * match the requested bounce. `bounce` must be less than 1, because the
- * derived tension grows without limit as `bounce` nears 1.
+ * Creates a config from friction and bounciness, deriving tension.
+ * `bounce` must be less than 1, since the derived tension grows without
+ * limit as it nears 1.
  */
 export function defineSpring(input: Exact<DampingBounceOptions>): SpringDefinition
 /**
@@ -595,20 +560,18 @@ export function defineSpring(input: Exact<DampingBounceOptions>): SpringDefiniti
  */
 export function defineSpring(input: Exact<TensionDampingRatioOptions>): SpringDefinition
 /**
- * Creates a config from all three physical parameters. Mass is derived
- * from tension, damping, and the requested bounce, and cannot be
- * provided. `bounce` must be less than 1, because the derived mass
- * grows without limit as `bounce` nears 1.
+ * Creates a config from tension, damping, and bounce. Mass is derived and
+ * cannot be provided. `bounce` must be less than 1, since the derived
+ * mass grows without limit as it nears 1.
  */
 export function defineSpring(input: Exact<TensionDampingBounceOptions>): SpringDefinition
 /**
- * Tunes the spring to rest at `duration` milliseconds, with
- * `dampingRatio` setting the motion's character. Tension and damping are
- * both derived. `dampingRatio` must be greater than 0.
+ * Tunes the spring to rest at `duration` ms, deriving tension and
+ * damping. `dampingRatio` sets the motion's character and must be
+ * greater than 0.
  *
  * The timing assumes the motion starts `displacement` (default 1) away
- * from the target. For accurate timing, pass a `displacement` that
- * matches your animation range.
+ * from the target. Pass your animation's range for accurate timing.
  *
  * @example
  * ```ts
@@ -618,57 +581,47 @@ export function defineSpring(input: Exact<TensionDampingBounceOptions>): SpringD
  */
 export function defineSpring(input: Exact<DurationOptions>): SpringDefinition
 /**
- * Tunes the spring to rest at `duration` milliseconds, with
- * `bounce` setting how oscillatory the settling motion is. Tension and
- * damping are both derived.
+ * Tunes the spring to rest at `duration` ms, deriving tension and
+ * damping. `bounce` sets how oscillatory the settling motion is.
  *
  * The timing assumes the motion starts `displacement` (default 1) away
- * from the target. For accurate timing, pass a `displacement` that
- * matches your animation range.
+ * from the target. Pass your animation's range for accurate timing.
  */
 export function defineSpring(input: Exact<BounceDurationOptions>): SpringDefinition
 /**
- * Tunes a spring of the given stiffness to rest at `duration`
- * milliseconds. Mass is derived from tension and the computed natural
- * frequency, then damping from mass and `dampingRatio`. Mass cannot be
- * provided, and `dampingRatio` must be greater than 0.
+ * Tunes a spring of the given stiffness to rest at `duration` ms. Mass is
+ * derived to meet the timing, then damping from mass and `dampingRatio`.
+ * Mass cannot be provided, and `dampingRatio` must be greater than 0.
  *
  * The timing assumes the motion starts `displacement` (default 1) away
- * from the target. For accurate timing, pass a `displacement` that
- * matches your animation range.
+ * from the target. Pass your animation's range for accurate timing.
  */
 export function defineSpring(input: Exact<TensionDurationOptions>): SpringDefinition
 /**
- * Tunes a spring of the given stiffness to rest at `duration`
- * milliseconds, with `bounce` setting how oscillatory the settling motion
- * is. Mass is derived from tension and the computed natural frequency,
- * and cannot be provided.
+ * Tunes a spring of the given stiffness to rest at `duration` ms, with
+ * `bounce` setting how oscillatory the settling motion is. Mass is
+ * derived to meet the timing and cannot be provided.
  *
  * The timing assumes the motion starts `displacement` (default 1) away
- * from the target. For accurate timing, pass a `displacement` that
- * matches your animation range.
+ * from the target. Pass your animation's range for accurate timing.
  */
 export function defineSpring(input: Exact<TensionBounceDurationOptions>): SpringDefinition
 /**
- * Tunes a spring of the given friction to rest at `duration`
- * milliseconds. Mass is derived from damping, `dampingRatio`, and the
- * computed natural frequency, then tension from mass. Mass cannot be
+ * Tunes a spring of the given friction to rest at `duration` ms. Mass is
+ * derived to meet the timing, then tension from mass. Mass cannot be
  * provided, and `dampingRatio` must be greater than 0.
  *
  * The timing assumes the motion starts `displacement` (default 1) away
- * from the target. For accurate timing, pass a `displacement` that
- * matches your animation range.
+ * from the target. Pass your animation's range for accurate timing.
  */
 export function defineSpring(input: Exact<DampingDurationOptions>): SpringDefinition
 /**
- * Tunes a spring of the given friction to rest at `duration`
- * milliseconds, with `bounce` setting how oscillatory the settling motion
- * is. Mass is derived from damping and the computed natural frequency,
- * and cannot be provided.
+ * Tunes a spring of the given friction to rest at `duration` ms, with
+ * `bounce` setting how oscillatory the settling motion is. Mass is
+ * derived to meet the timing and cannot be provided.
  *
  * The timing assumes the motion starts `displacement` (default 1) away
- * from the target. For accurate timing, pass a `displacement` that
- * matches your animation range.
+ * from the target. Pass your animation's range for accurate timing.
  */
 export function defineSpring(input: Exact<DampingBounceDurationOptions>): SpringDefinition
 export function defineSpring(input: SpringDefinitionOptions): SpringDefinition {

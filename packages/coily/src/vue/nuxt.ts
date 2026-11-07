@@ -19,9 +19,9 @@ export interface CoilyModuleOptions {
    */
   fps?: number
   /**
-   * The frame gap in ms above which the system treats the gap as lag. The
-   * system replaces a lag gap with `adjustedLag`, so springs do not jump
-   * when frames resume. 0 turns off lag clamping.
+   * The frame gap in ms above which the system treats the gap as lag and
+   * replaces it with `adjustedLag`, so springs do not jump when frames
+   * resume. 0 turns off lag clamping.
    * @default 500
    */
   lagThreshold?: number
@@ -33,9 +33,8 @@ export interface CoilyModuleOptions {
   adjustedLag?: number
   /**
    * How far a spring can trail a source it follows within one frame, in
-   * the value's own units. The system splits a frame whose motion would
-   * exceed it into internal sub-steps. A smaller value follows more
-   * closely and costs more solver work.
+   * the value's own units. Frames whose motion would exceed it run as
+   * sub-steps, so a smaller value follows more closely at more cost.
    * @default 0.1
    */
   couplingTolerance?: number
@@ -77,8 +76,8 @@ export default defineNuxtPlugin((nuxtApp) => {
 
 /**
  * The Nuxt module. It creates one spring system for the app and starts
- * it on the client only. On the server the system never starts, so
- * springs render their initial values. The module auto-imports
+ * it on the client only, so server rendering shows springs at their
+ * initial values. The module auto-imports
  * `useSpring`, `useRamp`, `useSpringSystem`, `useSpringPool`,
  * `defineSpring`, `mapSpring`, `velocityOf`, `accelerationOf`, and
  * `targetOf`, and registers the `SpringValue` component. It does not

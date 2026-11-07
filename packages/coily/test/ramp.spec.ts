@@ -575,8 +575,7 @@ describe('the system clock', () => {
       await frames.frame(16)
       expect(ramp.value).toBeCloseTo(16, 9)
 
-      // No frames arrive while hidden, so the whole spell lands on the
-      // first frame back.
+      // No frames arrive while hidden, so the spell lands on the next one.
       await frames.setHidden(true)
       await frames.wait(hiddenMs)
       await frames.setHidden(false)

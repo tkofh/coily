@@ -3,37 +3,28 @@ import { State } from './state.ts'
 import { CriticallyDampedSolver, OverdampedSolver, UnderdampedSolver } from './solver.ts'
 import { invariant } from './util.ts'
 
-// coily/css turns a spring config into static CSS.
+// coily/css turns a spring config into static CSS. Everything here is pure
+// (no DOM, no ticker), so it runs at build time or once up front.
 //
-// A spring released from rest has a displacement-independent normalized
-// curve, so its SHAPE is a pure function of the config. `springToLinear`
-// samples it into a CSS `linear()` easing. The higher-level helpers wrap
-// that easing into keyframes, an `animation` or `transition` shorthand, or
-// arguments for `element.animate`. Everything here is pure, with no DOM
-// and no ticker, so it runs at build time or once up front, never per
-// frame.
+// A from-rest spring's normalized curve is displacement-independent, so its
+// SHAPE is a pure function of the config. `springToLinear` samples it into a
+// `linear()` easing, and the other helpers wrap that easing. The settle TIME
+// does depend on displacement, because the absolute rest threshold is a
+// different fraction of a small move than of a large one.
 //
-// The settle TIME is not displacement-independent, because the absolute
-// rest threshold is a different fraction of a small move than of a large
-// one. The duration therefore comes from a caller-supplied (or
-// move-sized) displacement.
-//
-// A pure undamped spring (dampingRatio 0, arrival passthrough) never rests,
-// but its motion is a clean sinusoid. Rather than clamp it, these helpers
-// emit an infinite loop. The easing spans one HALF period (monotonic
-// 0 -> 1), and `animation-direction: alternate` replays it time-reversed.
-// From-rest undamped motion is symmetric per half period, so the replay
-// reproduces the exact oscillation forever.
+// A pure undamped spring (dampingRatio 0, arrival passthrough) never rests
+// but is a clean sinusoid, so it becomes an infinite loop. The easing spans
+// one HALF period (monotonic 0 -> 1), and `animation-direction: alternate`
+// replays it time-reversed. From-rest symmetry makes the replay exact.
 
 export interface LinearEasingOptions {
   /**
-   * The size of the move the easing is timed for, in value units. The
-   * spring's motion is the same at any size, but a larger move takes
-   * longer to come within the fixed rest threshold. Its easing covers a
-   * longer duration, so the `linear()` stops land at different
-   * percentages, and the stop count can change. The keyframe helpers
-   * (`springToWaapi`, `springToCss`, `springToTransition`) default it to
-   * the largest move among their specs instead.
+   * The size of the move the easing is timed for, in value units. A larger
+   * move takes longer to come within the fixed rest threshold, so it gets a
+   * longer duration, different `linear()` stop percentages, and possibly a
+   * different stop count. The keyframe helpers (`springToWaapi`,
+   * `springToCss`, `springToTransition`) default it to the largest move
+   * among their specs.
    * @default 1
    */
   readonly displacement?: number
@@ -47,8 +38,7 @@ export interface LinearEasingOptions {
   /**
    * The longest duration to generate, in ms. It cuts off configs with so
    * little damping (friction) that they take very long to settle. A
-   * `'loop'` easing is not capped: its duration is always one half
-   * period.
+   * `'loop'` easing ignores the cap and lasts one half period.
    * @default 10000
    */
   readonly maxDuration?: number
@@ -154,9 +144,8 @@ function buildSettle(
   const points = walk(config, displacement, durationMs / 1000, 1, true, velocity)
 
   // Rest is a fixpoint, so the tail lands exactly on the target. An
-  // oscillating spring can rest up to one pulse before the time bound, when
-  // its amplitude dips under the threshold. If the walk stopped early, pad
-  // a flat segment out to the reported duration.
+  // oscillating spring can rest up to one pulse before the time bound, so
+  // an early stop pads a flat segment out to the reported duration.
   const last = points[points.length - 1]!
   if (1 - last.x > 1e-6) {
     points.push({ x: 1, y: 1 })
@@ -260,12 +249,12 @@ function reconstructionError(
 
 /**
  * Turns a spring config into a CSS `linear()` easing and the duration in
- * ms to pair it with. A spring that settles returns a `'settle'` easing.
- * A pure undamped config (`dampingRatio: 0` with passthrough `arrival`)
- * has no friction and never settles, so it returns a `'loop'` easing for
- * an infinite alternating animation. Any other config that never settles,
- * such as `dampingRatio: 0` with `arrival: -1`, returns a `'settle'`
- * easing cut off at `maxDuration`.
+ * ms to pair it with. A settling config returns a `'settle'` easing. A
+ * pure undamped config (`dampingRatio: 0` with passthrough `arrival`)
+ * never settles and returns a `'loop'` easing for an infinite alternating
+ * animation. Any other config that never settles, such as
+ * `dampingRatio: 0` with `arrival: -1`, returns a `'settle'` easing cut
+ * off at `maxDuration`.
  */
 export function springToLinear(
   config: SpringDefinition,
@@ -275,9 +264,8 @@ export function springToLinear(
   const maxError = options.maxError ?? 0.0025
   const maxDuration = options.maxDuration ?? 10000
 
-  // Pure undamped passthrough never rests but is a clean sinusoid, so loop
-  // it. Other never-settling combinations (undamped reflection) fall
-  // through to the clamp below, because this loop shape does not fit them.
+  // Undamped reflection never rests either, but the loop shape doesn't fit
+  // it, so it falls through to the clamp.
   if (config.dampingRatio === 0 && config.arrival === 1) {
     return buildLoop(config, displacement, maxError)
   }
@@ -287,17 +275,17 @@ export function springToLinear(
 }
 
 /**
- * Like `springToLinear`, but for a spring caught mid-flight instead of at
- * rest. `state` carries the displacement from the target (`position`) and
- * the current `velocity`, so the easing continues the motion instead of
- * restarting it. Use it to regenerate an animation when its target
- * changes, so the new animation carries momentum instead of stalling. The
- * curve depends on the velocity, so compute it for each interruption
- * instead of caching it per config.
+ * Like `springToLinear`, but for a spring caught mid-flight. `state`
+ * carries the displacement from the target (`position`) and the current
+ * `velocity`, so the easing continues the motion instead of restarting it.
+ * Use it to regenerate an animation when its target changes. The curve
+ * depends on the velocity, so compute it per interruption instead of
+ * caching it per config.
  *
- * The result is always a `'settle'` easing. A config that never settles
- * is cut off at `maxDuration`. Throws when `position` is 0 (within 1e-9),
- * even if `velocity` is not.
+ * The result is always a `'settle'` easing, timed from `position`, so
+ * `options.displacement` is ignored. A config that never settles is cut
+ * off at `maxDuration`. Throws when `position` is 0 (within 1e-9), even if
+ * `velocity` is not.
  */
 export function springFromState(
   config: SpringDefinition,
@@ -322,11 +310,11 @@ export function springFromState(
 
 /**
  * Advances a spring `state` by `elapsedMs` ms and returns the new
- * displacement and velocity. The Web Animations API does not expose an
- * animation's velocity, so use this with a running `element.animate`.
- * Read the animation's `currentTime` and advance the state the animation
- * started from by that much. The result is the spring's live state, ready
- * to hand to `springFromState` when the animation is interrupted.
+ * displacement and velocity. `elapsedMs <= 0` returns a copy of `state`.
+ *
+ * The Web Animations API doesn't expose velocity, so to interrupt a running
+ * `element.animate`, advance the state it started from by its `currentTime`
+ * and hand the result to `springFromState`.
  */
 export function springStateAt(
   config: SpringDefinition,
@@ -343,7 +331,7 @@ export function springStateAt(
 export interface PropertySpec {
   /** The CSS property, for example `'opacity'`, `'transform'`, or `'translate'`. */
   readonly property: string
-  /** Start value. */
+  /** The start value. */
   readonly from: number
   /** The target value. */
   readonly to: number
@@ -360,11 +348,9 @@ export interface PropertySpec {
   readonly format?: (value: number) => string
   /**
    * The property's current velocity, in its units per second. Set it to
-   * regenerate an interrupted animation from its live motion, so the
-   * animation carries momentum instead of restarting from rest. A spec
-   * with a nonzero velocity must be the only spec in the call, because a
-   * from-state easing depends on one property's velocity. With other
-   * specs, the call throws.
+   * regenerate an interrupted animation with its momentum instead of from
+   * rest. A spec with a nonzero velocity must be the only spec in the call,
+   * or the call throws.
    */
   readonly velocity?: number
 }
@@ -377,13 +363,11 @@ export interface CssOptions extends LinearEasingOptions {
   readonly name?: string
 }
 
-// Resolves one shared easing and the merged `from`/`to` keyframes for one or
-// more specs. A settle ends at each target. A loop swings symmetrically
-// about it, so its far endpoint is the mirror `2 * to - from`, target at the
-// 50% midpoint. Specs sharing a property (say, several `transform`
+// Resolves the merged `from`/`to` keyframes and one shared easing, so all
+// properties settle together. A loop's far endpoint is the mirror
+// `2 * to - from`. Specs sharing a property (say, several `transform`
 // functions) space-join into one value. Duration tunes to the largest move
-// unless the caller overrides `displacement`. One easing spans all
-// properties, so they settle together instead of each on its own clock.
+// unless the caller overrides `displacement`.
 function resolveSpecs(
   config: SpringDefinition,
   specs: PropertySpec[],
@@ -463,10 +447,11 @@ export function springToWaapi(
 }
 
 /**
- * Builds CSS text for the animation: a `@keyframes` rule and an `animation`
- * shorthand value, driving one property or several from one spring. The
- * `name` option (default `'coily'`) names the `@keyframes` rule and is
- * referenced by the `animation` value.
+ * Builds CSS text for the animation: a `@keyframes` rule named by `name`
+ * (default `'coily'`) and an `animation` shorthand value that references
+ * it, driving one property or several from one spring. A settling spring
+ * fills forwards. An undamped one repeats infinitely in alternating
+ * directions.
  *
  * @example
  * ```ts
@@ -499,8 +484,7 @@ export function springToCss(
   const keyframes =
     `@keyframes ${name} {\n` + `  from { ${declare(from)} }\n` + `  to { ${declare(to)} }\n` + `}`
 
-  // `linear()`'s commas are paren-protected, so the shorthand parses as one
-  // animation. A settle holds its end value. A loop repeats, alternating.
+  // `linear()`'s commas are paren-protected, so this parses as one animation.
   const animation =
     easing.mode === 'loop'
       ? `${ms} ${easing.easing} infinite alternate ${name}`
@@ -511,21 +495,18 @@ export function springToCss(
 
 /**
  * Builds a CSS `transition` value that animates a property change with the
- * spring. Set it on the element, then change the property to animate it,
- * for example on `:hover`, with a toggled class, or with a state
- * attribute. Pass several specs to build one `transition` for several
- * properties.
+ * spring. Set it on the element, then change the property, for example on
+ * `:hover`, with a toggled class, or with a state attribute. Pass several
+ * specs to build one `transition` for several properties.
  *
- * A transition cannot loop, so an undamped (looping) config throws. The
- * values come from your CSS rules. The `from` and `to` of each spec give
- * the size of the move, which tunes the duration.
+ * The values come from your CSS rules. Each spec's `from` and `to` only
+ * size the move, which tunes the duration. An undamped (looping) config
+ * throws, because a transition cannot loop.
  *
  * A transition starts from rest unless its spec carries a `velocity`, in
- * the property's units per second. A velocity hands off the speed of a
- * moving value, such as a drag at release, and it reshapes both the
- * curve and the duration. Build the transition at the handoff, because
- * the result depends on the speed. A spec with a velocity must be the
- * only spec in the call.
+ * the property's units per second, such as a drag's speed at release. The
+ * velocity reshapes the curve and the duration, so build the transition at
+ * the handoff. A spec with a velocity must be the only spec in the call.
  *
  * ```ts
  * // Release a dragged card back to 0 at the drag's speed.
@@ -538,12 +519,10 @@ export function springToCss(
  * card.style.translate = '0px'
  * ```
  *
- * The browser does not carry momentum from one transition into the next.
- * When a change interrupts a transition mid-flight, the new one starts
- * from rest, so the motion stalls at the turn. To keep the momentum,
- * read the current velocity with `springStateAt` and rebuild the
- * transition with it. For motion that reverses often, drive a live
- * `Spring` instead.
+ * The browser carries no momentum between transitions, so a change that
+ * interrupts one mid-flight stalls at the turn. To keep the momentum, read
+ * the velocity with `springStateAt` and rebuild the transition with it.
+ * For motion that reverses often, drive a live `Spring` instead.
  */
 export function springToTransition(
   config: SpringDefinition,

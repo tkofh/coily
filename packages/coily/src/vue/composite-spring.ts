@@ -20,25 +20,23 @@ import {
 /**
  * Config for an object `useSpring`: a `ConfigShape`, or a ref or getter
  * of one. A `ConfigShape` is one `SpringDefinition` for every channel,
- * `null` for the default, or a shape with configs at any level. When a
- * reactive config changes, the channels reconfigure in place.
+ * `null` for the default, or a shape with configs at any level. A
+ * changed reactive config reconfigures the channels in place.
  *
- * Unlike scalar config, each config position takes only a
- * `SpringDefinition` instance, which `defineSpring` builds. The shape
- * reads a plain object as a nested level of the shape, never as spring
- * options.
+ * Each config position takes only a `SpringDefinition` from
+ * `defineSpring`. A plain object reads as a nested level of the shape,
+ * never as spring options.
  */
 export type UseCompositeSpringConfig<T extends object> = MaybeRefOrGetter<
   ConfigShape<T> | undefined
 >
 
 /**
- * The reactive handle for a composite spring. It is a ref that reads the
- * deep-readonly composite value and accepts partial shapes on writes. It
- * carries `velocity`, `timeRemaining`, and `isResting` refs, plus
- * `settled` and `jumpTo`. Writing the main ref displaces the named
- * channels, and they spring back. To move them, change the target you
- * passed to `useSpring`.
+ * The ref an object `useSpring` returns. Reads return the deep-readonly
+ * composite value, and writes accept partial shapes. It carries
+ * `velocity`, `timeRemaining`, and `isResting` refs plus `settled` and
+ * `jumpTo`. Writing it displaces the named channels, which spring back.
+ * To move them, change the target passed to `useSpring`.
  */
 export interface CompositeSpringRef<T extends object> extends ReactiveSpringRef<
   ReadonlyShape<T>,

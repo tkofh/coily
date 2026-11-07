@@ -3,27 +3,21 @@ import fc from 'fast-check'
 import { createSpringSystem, defineSpring } from '../src/index.ts'
 
 /**
- * Number of ticks for convergence tests. Each test divides the solved
- * rest time by this number to get the dt per tick, so no test has to
- * guess how long to run.
+ * Ticks per convergence test. Each test's dt is its solved rest time
+ * divided by this, so no test guesses how long to run.
  */
 const ITERATIONS = 300
 
-/**
- * Arbitrary for valid spring parameters. Damping is derived as a fraction
- * of critical damping, so the test controls the damping ratio directly.
- */
+/** Valid spring parameters, with damping drawn as a ratio of critical damping. */
 const springParamsArb = fc
   .record({
     mass: fc.double({ min: 0.5, max: 50, noNaN: true }),
     tension: fc.double({ min: 10, max: 500, noNaN: true }),
-    // Damping ratio between 0.1 and 3, which covers the underdamped and
-    // overdamped regimes. A random double almost never resolves to a ratio
-    // of exactly 1, so the critically damped solver gets no coverage here.
+    // Spans underdamped and overdamped. A random double is almost never
+    // exactly 1, so the critically damped solver gets no coverage here.
     dampingRatio: fc.double({ min: 0.1, max: 3, noNaN: true }),
-    // Displacement magnitude well above the resting threshold (0.005 at precision 2).
-    // A displacement under the threshold rests at once by design, so it
-    // tells these tests nothing.
+    // Well above the 0.005 resting threshold. A smaller displacement rests
+    // at once and tests nothing.
     displacement: fc.double({ min: 1, max: 500, noNaN: true }),
     target: fc.double({ min: -200, max: 200, noNaN: true }),
     sign: fc.constantFrom(1, -1),
@@ -61,9 +55,8 @@ function simulateToSettling(
 
   const dt = est / iterations
 
-  // Two ticks past the solved rest time: the bound is exact, so a sum of
-  // dt-sized steps can land an ulp short of it, and rest waits for the
-  // first tick at or after the bound.
+  // Two extra ticks: summed dt steps can land an ulp short of the exact
+  // bound, and rest waits for the first tick at or after it.
   for (let i = 0; i < iterations + 2; i++) {
     system.advance(dt)
   }

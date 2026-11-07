@@ -3,13 +3,14 @@
 ---
 
 Add ramps. `system.createRamp(from, { rate, target })` makes a value that
-moves toward its target at a fixed speed, in a straight line, and stops
-there. A target of `Infinity` or `-Infinity` makes the ramp endless. A ramp
-is a source, so a spring can follow it. With the default `arrival`, the
-spring tracks the ramp's steady motion exactly. A target that you write once
-per frame lands about half a frame behind instead. Use a ramp for an endless
-spin, a heading that turns at a capped speed, or a clock in milliseconds
-mapped into a shape with `mapSpring`.
+moves toward its target at `rate` units per second, in a straight line,
+and stops there. A target of `Infinity` or `-Infinity` makes the ramp
+endless. A ramp is a source, so a spring can follow it. With the default
+`arrival`, the spring tracks the ramp's steady motion exactly. A spring
+whose target you rewrite every frame trails about half a frame behind
+instead. Use a ramp for an endless spin, a heading that turns at a capped
+speed, or a clock in milliseconds (`rate: 1000`) mapped into a shape with
+`mapSpring`.
 
 ```ts
 const sweep = system.createRamp(0, { rate: 270, target: Infinity })
@@ -18,7 +19,8 @@ const ring = system.createSpring(sweep)
 
 A ramp has the same members as a spring where they apply: writable
 `value`, `target`, and `rate`, plus `velocity`, `isResting`,
-`timeRemaining`, `settled`, `jumpTo`, `dispose`, and the usual events.
+`timeRemaining`, `settled`, `jumpTo`, `dispose`, `onUpdate`, `onStart`,
+`onStop`, and `onDispose`.
 `velocityOf`, `accelerationOf`, and `targetOf` accept it. A ramp runs in the
 frame loop only while something listens to it frame by frame. Otherwise it
 keeps moving on the system's clock at no cost per frame, and a read reports

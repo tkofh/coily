@@ -13,10 +13,9 @@ export interface SpringValueProps {
    */
   config?: SpringDefinitionOptions | SpringDefinition
   /**
-   * What the spring animates, `'motion'` or `'nonmotion'`. A
-   * `'nonmotion'` spring, such as a cross-fade or a color, keeps
-   * animating under reduced motion. The component reads it once, in
-   * `setup()`, and ignores later changes.
+   * What the spring animates. Under reduced motion, a `'motion'` spring
+   * snaps, and a `'nonmotion'` spring, such as a cross-fade or a color,
+   * keeps animating. Read once in `setup()`, so later changes are ignored.
    * @default 'motion'
    */
   purpose?: Purpose
@@ -47,8 +46,8 @@ export type SpringValueSlots = SlotsType<{ default: SpringValueSlotScope }>
 
 /**
  * A renderless component that passes one spring's state to its default
- * slot. It is the template-only form of `useSpring`. It must render
- * below a provided spring system. A template ref to the component
+ * slot: the template-only form of `useSpring`. It must render below a
+ * provided spring system, and throws otherwise. A template ref to it
  * reads the same fields as the slot scope.
  *
  * @example

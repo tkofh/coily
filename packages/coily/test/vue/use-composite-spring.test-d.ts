@@ -2,9 +2,9 @@
  * Type-level tests for the composite spring Vue bridge: `useSpring` shape
  * overload dispatch and pool creation.
  *
- * This file is compiled by `tsc` but never executed (vitest only picks up
- * `*.spec.ts`, `*.browser.ts`, and `*.bench.ts`). Each `@ts-expect-error`
- * is self-validating: tsc fails if the line stops erroring.
+ * Typechecked by `tsc`, never executed (vitest runs only `*.spec.ts`,
+ * `*.browser.ts`, and `*.bench.ts`). tsc fails if an `@ts-expect-error`
+ * line stops erroring.
  */
 import { type Ref, computed, ref } from 'vue'
 import {
@@ -98,7 +98,7 @@ useSpring(() => 10)
 // ── Linked object refs ──────────────────────────────────────────────
 
 // Chain-building unions (ref-or-leader, as in a follower loop) collapse
-// into the shape overload's ref member; runtime dispatch still links via
+// into the shape overload's ref member. Runtime dispatch still links via
 // the instance.
 declare const chainTarget:
   | Ref<{ x: number; y: number }>

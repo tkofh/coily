@@ -18,10 +18,9 @@ export class SpringMotion extends Motion {
   readonly #reduces: boolean
 
   /**
-   * A first-order-hold slope in value units per second. `armSlope` sets
-   * it immediately before the `advance` that reads and clears it, and no
-   * user code runs between the two. 0 means the target holds still
-   * across the step.
+   * First-order-hold slope in value units per second, 0 when the target
+   * holds still across the step. `armSlope` sets it immediately before the
+   * `advance` that reads and clears it, with no user code between.
    */
   #slope = 0
 
@@ -79,10 +78,9 @@ export class SpringMotion extends Motion {
   }
 
   get timeRemaining() {
-    // Solved from the live state on read. The closed forms are
-    // time-invariant, so nothing needs upkeep per tick. Chains of
-    // followers disturb every motion every frame, and eager upkeep here
-    // would cost a bisection per motion per frame that no caller reads.
+    // Solved on read, since the closed forms are time-invariant. Follower
+    // chains disturb every motion every frame, so eager upkeep would cost an
+    // unread bisection per motion per frame.
     return this.#config.computeTimeRemaining(this.#state)
   }
 
@@ -120,21 +118,17 @@ export class SpringMotion extends Motion {
 
   /**
    * Advances the simulation and emits nothing. The tick pass advances
-   * every motion through this, then delivers the frame's events with
-   * `endFrame`. The synchronous `tick` wraps the two.
+   * every motion through this, then delivers events with `endFrame`. The
+   * synchronous `tick` wraps the two.
    *
-   * A pending slope from `armSlope` integrates the step against a target
-   * that moves at that slope instead of holding still. The step is one
-   * affine transform around the unchanged solver. With the target at
-   * `p(t) = p0 + g*t`, the displacement u = x - p(t) obeys the
-   * homogeneous equation shifted by the constant
-   * u_ss = -(2*zeta/wn)*g = -(damping/tension)*g. The solver ticks
-   * w = u - u_ss exactly, and the results shift back. Because u is
-   * measured from the moving target, the slope ends exactly on the new
-   * target. The armer assigns that target, so no rebase arithmetic is
-   * needed. The slope is an argument of the step, never persistent
-   * solver state. With g = 0 the step takes the plain path below, so a
-   * motion never armed with a slope steps bit-exactly like an isolated
+   * A pending slope from `armSlope` makes the step one affine transform
+   * around the unchanged solver. With the target at `p(t) = p0 + g*t`, the
+   * displacement u = x - p(t) obeys the homogeneous equation shifted by the
+   * constant u_ss = -(2*zeta/wn)*g = -(damping/tension)*g. The solver ticks
+   * w = u - u_ss exactly, and the results shift back. u is measured from
+   * the moving target, which the armer already assigned, so the step ends
+   * on it with no rebase arithmetic. With g = 0 the step takes the plain
+   * path, so a motion never armed steps bit-exactly like an isolated
    * spring.
    */
   advance(dt: number) {
@@ -147,9 +141,8 @@ export class SpringMotion extends Motion {
       const shift = (this.#config.damping / this.#config.tension) * g
       state.position += shift
       state.velocity -= g
-      // Anchor in slope space from the shifted state, always, and again
-      // on the next step. The slope-space anchor is wrong for any other
-      // frame.
+      // Re-anchor from the shifted state now and again next step. The
+      // slope-space anchor is wrong for any other frame.
       if (this.#needsUpdate) {
         this.#updateSolver()
         this.#needsUpdate = false
@@ -202,9 +195,8 @@ export class SpringMotion extends Motion {
     this.#reconcileRunning()
   }
 
-  // Reads state fresh rather than caching it around the update emit. An
-  // update callback can displace the motion again, and a stale boolean
-  // would emit a false 'stop'.
+  // Reads state fresh because an update callback can displace the motion
+  // again, and a cached boolean would emit a false 'stop'.
   #reconcileRunning() {
     if (this.#state.isResting) {
       if (this.#running) {
@@ -249,13 +241,12 @@ export class SpringMotion extends Motion {
   }
 
   /**
-   * The shock signal for the sub-step controller, read by the `plan` of
-   * a follower that has this motion as its leader. It is the deviation
-   * from the quasi-steady tracking manifold x = -(damping/tension) * v,
-   * where damping/tension is 2*zeta/wn. It is near zero while the motion
-   * chases a smoothly moving target at any speed. After a target
-   * teleport it is the full displacement. After a fling from rest it is
-   * (damping/tension) * |v|.
+   * The shock signal for the sub-step controller, read by a follower's
+   * `plan` from its leader: the deviation from the quasi-steady tracking
+   * manifold x = -(damping/tension) * v, where damping/tension is
+   * 2*zeta/wn. It is near zero while chasing a smoothly moving target at
+   * any speed, the full displacement after a target teleport, and
+   * (damping/tension) * |v| after a fling from rest.
    */
   manifoldDeviation() {
     const config = this.#config

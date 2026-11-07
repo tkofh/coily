@@ -18,9 +18,9 @@ import { SpringSystemKey } from './system.ts'
 
 /**
  * Config for a scalar `useSpring`: a `SpringDefinition`, any option shape
- * `defineSpring` accepts, or a ref or getter of either. When a reactive
- * config changes, the spring reconfigures in place. `undefined` means the
- * default config.
+ * `defineSpring` accepts, or a ref or getter of either. A changed
+ * reactive config reconfigures the spring in place. `undefined` means
+ * the default config.
  */
 export type UseSpringConfig = MaybeRefOrGetter<
   SpringDefinitionOptions | SpringDefinition | undefined
@@ -46,21 +46,16 @@ interface SpringLike<V, W, C> {
 
 /**
  * The ref `useSpring` returns: a writable ref of the animated value, with
- * the rest of the spring attached. Reads are tracked, and the ref
- * triggers once per frame while the spring moves.
- *
- * Writing the main ref displaces the spring, and it springs back toward
- * its target. To move the spring, change the target you passed to
+ * the rest of the spring attached. It triggers once per frame while the
+ * spring moves. Writing it displaces the spring, which springs back
+ * toward its target. To move the spring, change the target passed to
  * `useSpring`.
  *
- * The ref is also a `SpringSource`, so another `useSpring` can follow
- * it. A scalar ref can also be a `mapSpring` leaf or a composite channel
- * target. The ref is a `TargetedSource` too, so `velocityOf`,
- * `accelerationOf`, and `targetOf` accept it as they accept the spring
- * it wraps. Followers read the backing spring directly, never through
- * the ref's tracked getter. Following therefore registers no Vue
- * dependencies, and an effect that touches a follower's leader does not
- * re-run while the leader animates.
+ * The ref is a `TargetedSource`, so another `useSpring` can follow it,
+ * and `velocityOf`, `accelerationOf`, and `targetOf` accept it. A scalar
+ * ref also works as a `mapSpring` leaf or a composite channel target.
+ * Followers read the backing spring directly, so following never adds a
+ * Vue dependency, even inside an effect that moves the leader.
  */
 export interface ReactiveSpringRef<V, W = V> extends Ref<V, W>, TargetedSource<V> {
   /**
@@ -201,15 +196,13 @@ export function createReactiveSpringRef<V, W, C>(
     jumpTo: (next: W) => spring.jumpTo(next),
   }) as ReactiveSpringRef<V, W>
 
-  // A getter, so each read returns the spring's current settled promise
-  // instead of one captured at creation.
+  // A getter, so reads see the current promise, not the one at creation.
   Object.defineProperty(ref, 'settled', {
     get: () => spring.settled,
   })
   Object.defineProperty(ref, instanceKey, { value: spring })
-  // The source slot gives followers the backing spring's own api. Their
-  // reads skip the customRef getter, so they never add a dependency to an
-  // active effect.
+  // Followers get the backing spring's api, so their reads skip the
+  // tracked getter.
   Object.defineProperty(ref, SpringSourceSymbol, { value: spring[SpringSourceSymbol] })
 
   return ref

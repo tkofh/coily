@@ -1,9 +1,9 @@
 <script setup lang="ts">
 const reduced = useMediaQuery('(prefers-reduced-motion: reduce)')
 
-// Spin · an endless ramp is a constant-speed rotation. The spring that
-// follows it lags behind. It meets a rate change with a smooth speed-up
-// or slow-down, and at rate 0 it overshoots a little and settles back.
+// Spin · an endless ramp is a constant-speed rotation. The following
+// spring lags, eases through rate changes, and at rate 0 overshoots a
+// little and settles back.
 const spinRate = ref(180)
 const spin = useRamp(Infinity, spinRate, { from: 0 })
 const flywheel = useSpring(spin, defineSpring({ bounce: 0.3, duration: 800 }))
@@ -52,10 +52,10 @@ function knockBack() {
   fill.value = Math.max(0, fill.value - 30)
 }
 
-// Stopwatch · a 'nonmotion' ramp at 1000 per second counts milliseconds
-// and keeps counting under reduced motion. The ticking hand is a spring
-// following a stepped `mapSpring` of it, so each second lands with a
-// bounce, and it snaps instead under reduced motion.
+// Stopwatch · a 'nonmotion' ramp at 1000 per second counts ms and keeps
+// counting under reduced motion. The hand springs after a stepped
+// `mapSpring` of it, so each second lands with a bounce, or snaps under
+// reduced motion.
 const running = ref(true)
 const clock = useRamp(Infinity, () => (running.value ? 1000 : 0), {
   from: 0,

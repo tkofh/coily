@@ -160,9 +160,8 @@ describe('SpringSystem: transport controls', () => {
 })
 
 describe('SpringSystem: ticker options', () => {
-  // ticker.spec.ts covers the Ticker's own behavior (capping, lag
-  // clamping, validation). These tests only confirm that the system
-  // exposes and forwards the options.
+  // ticker.spec.ts covers capping, lag clamping, and validation. These
+  // tests confirm only that the system exposes and forwards the options.
   test('defaults match the ticker defaults', ({ system }) => {
     expect(system.fps).toBe(0)
     expect(system.lagThreshold).toBe(500)

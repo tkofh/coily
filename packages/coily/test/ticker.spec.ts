@@ -5,9 +5,8 @@ import { SpringMotion } from '../src/spring-motion.ts'
 import { Ticker } from '../src/ticker.ts'
 
 /**
- * Deterministic stand-in for the browser's frame scheduler: `frame(elapsed)`
- * advances the clock and fires whatever callbacks are pending, mirroring how
- * rAF delivers one timestamp per displayed frame.
+ * Deterministic stand-in for rAF: `frame(elapsed)` advances the clock and
+ * fires the pending callbacks with one shared timestamp.
  */
 class FrameSource {
   now = 0
@@ -234,10 +233,9 @@ describe('Ticker', () => {
       ticker.start()
       source.frame(8.33) // priming frame
 
-      // This guards a regression. A 16.67ms accumulator grid lands exactly
-      // on 2-frame boundaries at 120Hz, so timestamp jitter used to flip the
-      // crossing between the 2nd and 3rd frame. Steps of 16.7ms and 25ms
-      // then alternated. Frame pacing must absorb the jitter.
+      // Regression: a 16.67ms accumulator grid lands exactly on 2-frame
+      // boundaries at 120Hz, so jitter flipped the crossing between the 2nd
+      // and 3rd frame, alternating 16.7ms and 25ms steps.
       const jitter = [0.4, -0.2, -0.4, 0.1]
       let sinceTick = 0
       for (let i = 0; i < 96; i++) {

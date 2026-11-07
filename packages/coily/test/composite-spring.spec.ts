@@ -346,9 +346,8 @@ describe('CompositeSpring: config shapes', () => {
   })
 
   test('rejects a bare options object as a single config', ({ system }) => {
-    // Configs must be `SpringDefinition` instances (via `defineSpring`); a bare
-    // options object reads as a config shape, so its option keys are unknown
-    // channels.
+    // A bare options object reads as a config shape, so its option keys are
+    // unknown channels.
     expect(() =>
       system.createSpring({ x: 0 }, { mass: 1, tension: 170, damping: 26 } as never),
     ).toThrow("Unknown channel 'mass'")
@@ -397,9 +396,8 @@ describe('CompositeSpring: config shapes', () => {
   })
 
   test('rejects a numeric leaf in a config shape', ({ system }) => {
-    // A plain object is a config shape, so its leaves must be configs. A
-    // number is not a config, even when the channel is named like a spring
-    // option.
+    // A plain object is a config shape, so its leaves must be configs, even
+    // at a channel named like a spring option.
     expect(() =>
       system.createSpring({ tension: 0, damping: 0 }, { tension: 170, damping: 26 } as never),
     ).toThrow("Invalid config for 'tension'")

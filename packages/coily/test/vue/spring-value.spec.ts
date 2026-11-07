@@ -134,7 +134,7 @@ describe('SpringValue', () => {
     wrapper.unmount()
     system.advance(16)
 
-    // No further render occurs; the last-seen slot value is frozen.
+    // No further render occurs, so the last-seen slot value is frozen.
     expect(scope().value).toBe(valueAtUnmount)
   })
 })

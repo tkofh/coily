@@ -37,9 +37,8 @@ export class Emitter {
 
   emit(type: EventType) {
     const list = this.#list(type)
-    // With several handlers, emit iterates a snapshot, so a handler that
-    // subscribes or unsubscribes mid-emit cannot shift the iteration. The
-    // common single-handler path skips that allocation on every tick.
+    // A snapshot keeps mid-emit (un)subscribes from shifting the iteration.
+    // The common single-handler path skips that per-tick allocation.
     if (list.length === 1) {
       list[0]!()
     } else if (list.length > 1) {

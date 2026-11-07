@@ -9,8 +9,8 @@ import { invariant, RESOLVED } from './util.ts'
 /** Options for `SpringSystem.createRamp`. */
 export interface RampOptions {
   /**
-   * The ramp's speed, in value units per second. It must be finite and
-   * at least 0. A rate of 0 rests the ramp where it is.
+   * The ramp's speed, in value units per second. Must be finite and
+   * >= 0. A rate of 0 rests the ramp where it is.
    */
   rate: number
   /**
@@ -20,11 +20,10 @@ export interface RampOptions {
    */
   target?: number | undefined
   /**
-   * What the ramp drives, which decides whether reduced motion applies
-   * to it. Under reduced motion, a `'motion'` ramp jumps to a bounded
-   * target and holds still on an endless one. A `'nonmotion'` ramp, such
-   * as a clock for logic, keeps moving. The purpose is fixed for the
-   * ramp's life. See `Purpose`.
+   * What the ramp drives, which decides whether reduced motion applies.
+   * Under reduced motion, a `'motion'` ramp jumps to a bounded target and
+   * holds still on an endless one. A `'nonmotion'` ramp, such as a clock
+   * for logic, keeps moving. Fixed for the ramp's life. See `Purpose`.
    * @default 'motion'
    */
   purpose?: Purpose | undefined
@@ -51,12 +50,11 @@ function assertValue(value: number): void {
  *
  * A ramp is a `SpringSource`, so a spring can follow it. With the
  * default `arrival`, the spring integrates against the ramp's steady
- * motion exactly. A target that you assign once per frame reaches the
- * spring as a staircase instead. With any other `arrival`, the spring
- * holds the target still within each of a frame's internal sub-steps,
- * so it tracks a staircase too, one step per sub-step. Typical uses are
- * an endless spin, a heading that turns at a capped speed, and a clock
- * in milliseconds mapped into a shape with `mapSpring`.
+ * motion exactly, where a target assigned once per frame would reach it
+ * as a staircase. With any other `arrival`, the spring holds the target
+ * still within each of a frame's sub-steps, one stair per sub-step.
+ * Typical uses are an endless spin, a heading that turns at a capped
+ * speed, and a clock in ms mapped into a shape with `mapSpring`.
  *
  * ```ts
  * const system = createSpringSystem()
@@ -67,27 +65,25 @@ function assertValue(value: number): void {
  * sweep.value // 270
  * ```
  *
- * The value is a function of time, so a ramp costs nothing per frame
- * unless something watches it frame by frame. An `onUpdate` listener
- * watches it, and so does any spring that follows the ramp. On a
- * bounded ramp, an `onStop` listener or a pending `settled` also
- * watches it. An unwatched ramp keeps moving on the system's clock, and
- * a read reports where it is. That clock counts each frame's time,
- * `advance` calls, and the time a started system spends asleep. It
- * stops while the system is stopped. A sleeping system also skips the
- * time the page is hidden. An awake system gets no frames in a hidden
- * tab, so the whole hidden spell counts as one frame when the page
- * returns: `adjustedLag` ms if it lasted longer than `lagThreshold`, in
- * full otherwise, and in full with lag clamping off.
+ * A ramp costs nothing per frame unless something watches it: an
+ * `onUpdate` listener, a following spring, or, on a bounded ramp, an
+ * `onStop` listener or a pending `settled`. An unwatched ramp still
+ * moves, and a read reports where it is.
+ *
+ * Ramps move on the system clock. It counts frame time, `advance` calls,
+ * and the time a started system spends asleep, and stops while the
+ * system is stopped. A sleeping system skips the time the page is
+ * hidden. An awake system gets no frames in a hidden tab, so the hidden
+ * spell counts as one frame on return: `adjustedLag` ms if it lasted
+ * longer than `lagThreshold`, in full otherwise or with lag clamping off.
  *
  * The clock holds still through synchronous code, so every read in one
- * event handler or one render sees the same moment. A ramp that you
- * create and read with no `await` in between reads its starting value.
+ * event handler or render sees the same moment. A ramp created and read
+ * with no `await` in between reads its starting value.
  *
- * Under reduced motion, a ramp behaves like a spring with the same
- * `purpose`. A `'motion'` ramp jumps to a bounded target. An endless
- * `'motion'` ramp holds still, and resumes when reduced motion turns
- * off.
+ * Under reduced motion, a `'motion'` ramp jumps to a bounded target, and
+ * an endless one holds still until reduced motion turns off, then
+ * resumes. A `'nonmotion'` ramp keeps moving.
  */
 export class Ramp implements TargetedSource {
   /** Brands the ramp as a `TargetedSource` whose api is the ramp itself. */
@@ -119,13 +115,14 @@ export class Ramp implements TargetedSource {
   }
 
   /**
-   * The current value, where the ramp is now.
+   * The current value.
    *
-   * Assignment moves the ramp to the written value at once and notifies
-   * update listeners synchronously. The ramp keeps its target and rate
-   * and carries on from there. Writing the current value does nothing.
-   * Under reduced motion, a `'motion'` ramp with a bounded target rests
-   * at the written value, and its target becomes that value too.
+   * Assignment accepts a finite number. It moves the ramp there at once,
+   * keeping its target and rate, and notifies update listeners
+   * synchronously. Writing the
+   * current value does nothing. Under reduced motion, a `'motion'` ramp
+   * with a bounded target rests at the written value, which becomes its
+   * target too.
    */
   get value(): number {
     return this.#motion.value
@@ -137,14 +134,15 @@ export class Ramp implements TargetedSource {
   }
 
   /**
-   * Where the ramp is heading: a number, or `Infinity` or `-Infinity`
-   * for an endless ramp.
+   * Where the ramp is heading, or `Infinity` or `-Infinity` for an
+   * endless ramp.
    *
-   * Assignment sends the ramp from its current value toward the new
-   * target at its current rate. It emits no `update`, because the value
-   * did not move. It emits `start` if the ramp was resting. Under reduced
-   * motion, a `'motion'` ramp jumps to a bounded target and notifies
-   * update listeners, and it holds still toward an endless target.
+   * Assignment accepts any number but `NaN`, and sends the ramp toward the
+   * new target at its current rate.
+   * It emits `start` if the ramp was resting, and no `update`, since the
+   * value has not moved. Under reduced motion, a `'motion'` ramp jumps to
+   * a bounded target, notifying update listeners, and holds still toward
+   * an endless one.
    */
   get target(): number {
     return this.#motion.target
@@ -158,9 +156,8 @@ export class Ramp implements TargetedSource {
   /**
    * The ramp's speed, in value units per second.
    *
-   * Assignment accepts any finite number >= 0. The new rate applies from
-   * the current value on, and the distance already covered stays
-   * covered. A rate of 0 rests the ramp where it is.
+   * Assignment accepts any finite number >= 0 and applies from the
+   * current value on. A rate of 0 rests the ramp where it is.
    */
   get rate(): number {
     return this.#motion.rate
@@ -172,15 +169,14 @@ export class Ramp implements TargetedSource {
   }
 
   /**
-   * The current velocity, in value units per second. While the ramp
-   * moves, it is `rate` signed toward the target. At rest it is 0.
-   * Read-only.
+   * The current velocity, in value units per second. It is `rate`
+   * signed toward the target while the ramp moves, and 0 at rest.
    */
   get velocity(): number {
     return this.#motion.velocity
   }
 
-  /** Always 0, because a ramp's speed does not change along the way. Read-only. */
+  /** Always 0, since a ramp moves at a constant speed. */
   get acceleration(): number {
     return 0
   }
@@ -204,15 +200,15 @@ export class Ramp implements TargetedSource {
 
   /**
    * The time until the ramp reaches its target, in ms. It is 0 at rest,
-   * and Infinity while the ramp moves toward an infinite target.
+   * and `Infinity` while the ramp moves toward an endless target.
    */
   get timeRemaining(): number {
     return this.#motion.timeRemaining
   }
 
   /**
-   * A promise that resolves when the ramp next comes to rest. It is
-   * already resolved while the ramp rests and after dispose. A pending
+   * A promise that resolves when the ramp next comes to rest. Already
+   * resolved while the ramp rests and after dispose. A pending
    * `settled` keeps a bounded ramp in the frame loop, so the promise
    * resolves on the frame the ramp arrives.
    *
@@ -239,9 +235,9 @@ export class Ramp implements TargetedSource {
   }
 
   /**
-   * Places the ramp at `value` and rests it there, so target and value
-   * both become `value`. It notifies update listeners synchronously, and
-   * emits `stop` if the ramp was moving.
+   * Rests the ramp at `value`, which becomes both its value and target.
+   * Notifies update listeners synchronously, and emits `stop` if the ramp
+   * was moving.
    */
   jumpTo(value: number) {
     assertValue(value)
@@ -249,11 +245,11 @@ export class Ramp implements TargetedSource {
   }
 
   /**
-   * Releases the ramp permanently. It stops where it is, and followers
-   * detach and keep their current target. `settled` resolves, and
-   * dispose listeners run. Calling it again does nothing.
+   * Releases the ramp permanently. It stops where it is, `settled`
+   * resolves, and dispose listeners run. Followers detach and keep their
+   * current target. Calling it again does nothing.
    *
-   * A disposed ramp keeps its final value readable. Writes to it throw.
+   * The final value stays readable, and writes throw.
    */
   dispose() {
     if (this.#motion.disposed) return
@@ -267,8 +263,8 @@ export class Ramp implements TargetedSource {
   /**
    * Subscribes to value changes: every frame the ramp moves, plus
    * synchronous `value` writes, `jumpTo` calls, and reduced-motion jumps.
-   * While any update listener is subscribed, the ramp advances with the
-   * frame loop. Returns an unsubscribe function.
+   * A subscribed listener keeps the ramp in the frame loop. Returns an
+   * unsubscribe function.
    */
   onUpdate(callback: () => void): () => void {
     return this.#motion.onUpdate(callback)
@@ -284,10 +280,9 @@ export class Ramp implements TargetedSource {
 
   /**
    * Subscribes to the ramp coming to rest: arriving at its target,
-   * `jumpTo`, a rate of 0, or holding under reduced motion. While any stop
-   * listener is subscribed, a bounded ramp advances with the frame loop,
-   * so the event fires on the frame it arrives. Returns an unsubscribe
-   * function.
+   * `jumpTo`, a rate of 0, or holding under reduced motion. A subscribed
+   * listener keeps a bounded ramp in the frame loop, so the event fires
+   * on the frame it arrives. Returns an unsubscribe function.
    */
   onStop(callback: () => void): () => void {
     return this.#motion.onStop(callback)

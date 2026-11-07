@@ -37,9 +37,8 @@ export class State {
   }
 
   /**
-   * The rest test. The displacement, plus the displacement the current
-   * velocity could still turn into (|x| + |v| / wn), is inside the
-   * config's resting threshold.
+   * True when |x| + |v| / wn, the displacement plus what the velocity could
+   * still add, is within the config's resting threshold.
    */
   get isResting() {
     return (

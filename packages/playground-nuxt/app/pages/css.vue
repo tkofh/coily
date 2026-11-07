@@ -14,9 +14,8 @@ function playSettle() {
   settleBox.value?.animate(settleWaapi.keyframes, settleWaapi.options)
 }
 
-// Hover · a CSS transition. It springs on hover. If you mouse out
-// mid-flight, it stalls at the turn, because a transition cannot carry
-// velocity. This card shows that cost next to a live spring.
+// Hover · a CSS transition. Mousing out mid-flight stalls it at the turn,
+// because a transition cannot carry velocity.
 const hoverConfig = defineSpring({ bounce: 0.4, duration: 650, displacement: 240 })
 const hoverTransition = springToTransition(hoverConfig, {
   property: 'translate',
@@ -25,10 +24,8 @@ const hoverTransition = springToTransition(hoverConfig, {
 })
 
 // Hover · WAAPI with momentum. On each enter and leave, springStateAt
-// reads the spring's live velocity at the running animation's
-// currentTime, and the animation regenerates from that state. A reversal
-// mid-flight keeps its momentum instead of stalling like the transition
-// above.
+// reads the live state at the running animation's currentTime, and the
+// animation regenerates from it, so a mid-flight reversal keeps momentum.
 const momentumConfig = defineSpring({ bounce: 0.5, duration: 700, displacement: 240 })
 const momentumBox = ref<HTMLElement>()
 let momentumAnim: Animation | null = null
@@ -62,9 +59,8 @@ function retarget(to: number) {
   momentumTarget = to
 }
 
-// Loop · a pure undamped spring never rests, so coily/css emits a seamless
-// infinite alternating animation. The card runs it as CSS @keyframes and
-// as WAAPI side by side.
+// Loop · an undamped spring never rests, so coily/css emits a seamless
+// infinite alternating animation, run here as CSS @keyframes and WAAPI.
 const loopConfig = defineSpring({ tension: 150, damping: 0 })
 const loopSpec = { property: 'translate', from: 0, to: 280, unit: 'px' } as const
 const loopCss = springToCss(loopConfig, loopSpec, { name: 'coily-loop' })

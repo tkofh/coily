@@ -1,9 +1,8 @@
 /**
- * Type-level tests for the `defineSpring` input shapes.
- *
- * `tsc` compiles this file, but nothing executes it (vitest picks up only
- * `*.spec.ts`, `*.browser.ts`, and `*.bench.ts`). Each `@ts-expect-error`
- * checks itself, because tsc fails if the line stops erroring.
+ * Type-level tests for the `defineSpring` input shapes. `tsc` checks this
+ * file, and vitest never runs it (it collects only `*.spec.ts`,
+ * `*.browser.ts`, and `*.bench.ts`). Each `@ts-expect-error` fails tsc if
+ * its line stops erroring.
  */
 import { defineSpring } from '../src/index.ts'
 

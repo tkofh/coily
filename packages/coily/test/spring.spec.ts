@@ -73,9 +73,8 @@ describe('Spring: input validation', () => {
     }).toThrow('Precision must be greater than or equal to 0')
   })
 
-  // The types reject the following shapes too. The casts stand in for
-  // untyped (plain JS) callers, who must get a clear error instead of a
-  // parameter that is ignored or misread without a word.
+  // The types reject these shapes too. The casts stand in for plain-JS
+  // callers, who must get a clear error, not a silently misread parameter.
   test('throws when mass accompanies tension, damping, and dampingRatio', () => {
     expect(() =>
       defineSpring({ mass: 2, tension: 170, damping: 26, dampingRatio: 1 } as never),
@@ -241,7 +240,6 @@ describe('Spring: events', () => {
     system.advance(1000 / 60)
     expect(onStart).not.toHaveBeenCalled()
 
-    // Change the target to start motion.
     spring.target = 100
     expect(onStart).toHaveBeenCalledOnce()
   })
@@ -359,7 +357,6 @@ describe('Spring: events', () => {
     const onStop = vi.fn()
     spring.onStop(onStop)
 
-    // Simulate until resting
     for (let i = 0; i < 600; i++) {
       system.advance(1000 / 60)
       if (spring.isResting) break
@@ -423,7 +420,6 @@ describe('Spring: parameter changes mid-animation', () => {
     const spring = system.createSpring(100, defineSpring({ mass: 1, tension: 170, damping: 10 }))
     spring.target = 0
 
-    // Tick for a bit, change params, then simulate to completion
     for (let i = 0; i < 30; i++) system.advance(1000 / 60)
     spring.config = defineSpring({ mass: 1, tension: 200, damping: 30 })
 
@@ -783,10 +779,9 @@ describe('Spring: retargeting preserves value', () => {
 
   test('a soft spring is not declared resting while it can still move visibly', () => {
     const system = createSpringSystem({ reducedMotion: 'never' })
-    // wn = 0.1. Near a zero crossing this spring passes the naive box
-    // check (|x| and |v| both under the threshold), while its velocity can
-    // still carry it about 10 times the threshold away. The rest test must
-    // keep it ticking through the crossing instead of snapping it to rest.
+    // wn = 0.1. Near a zero crossing it passes the naive box check (|x| and
+    // |v| under the threshold) while its velocity can still carry it about
+    // 10 times the threshold away. It must keep ticking through the crossing.
     const spring = system.createSpring(
       1,
       defineSpring({ mass: 1, tension: 0.01, dampingRatio: 0.2, precision: 2 }),
