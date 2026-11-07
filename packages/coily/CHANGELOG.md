@@ -1,5 +1,207 @@
 # Change Log
 
+## 0.16.0
+
+### Minor Changes
+
+- 499bd35: Breaking: rename the `'appearance'` purpose to `'nonmotion'`. Replace it
+  everywhere a purpose is accepted: `createSpring`, composite purpose shapes,
+  `useSpring`, `useSpringPool().createSpring`, and the `<SpringValue>`
+  `purpose` prop. `'appearance'` has no alias and now throws the
+  invalid-purpose error.
+
+  ```ts
+  system.createSpring(1, config, { purpose: 'nonmotion' })
+  ```
+
+  The old word covered values that change how something looks, such as a
+  cross-fade, a color, or a blur. It did not cover values that move nothing at
+  all, such as a number that never reaches the screen. `'nonmotion'` names
+  what all of these values share. The behavior does not change: a
+  `'nonmotion'` value keeps animating under reduced motion.
+
+- 499bd35: Export the types that public signatures use, so you can name them in your
+  own code. `coily` now exports `Shape`, `PartialShape`, `ReadonlyShape`,
+  `TargetShape`, `SourceShape`, `SourceValues`, `SpringSourceApi`,
+  `KinematicSourceApi`, and `TargetedSourceApi`. The three api types let you
+  write a custom source with a typed api object. `coily/vue` now exports
+  `UseSpringConfig`, `UseCompositeSpringConfig`, and `SpringValueSlotScope`.
+
+  `SpringDefinition` is now a value export as well as a type, so
+  `SpringDefinition.default` and `instanceof SpringDefinition` work from an
+  import of `coily`.
+
+- 499bd35: Add ramps. `system.createRamp(from, { rate, target })` makes a value that
+  moves toward its target at `rate` units per second, in a straight line,
+  and stops there. A target of `Infinity` or `-Infinity` makes the ramp
+  endless. A ramp is a source, so a spring can follow it. With the default
+  `arrival`, the spring tracks the ramp's steady motion exactly. A spring
+  whose target you rewrite every frame trails about half a frame behind
+  instead. Use a ramp for an endless spin, a heading that turns at a capped
+  speed, or a clock in milliseconds (`rate: 1000`) mapped into a shape with
+  `mapSpring`.
+
+  ```ts
+  const sweep = system.createRamp(0, { rate: 270, target: Infinity })
+  const ring = system.createSpring(sweep)
+  ```
+
+  A ramp has the same members as a spring where they apply: writable
+  `value`, `target`, and `rate`, plus `velocity`, `isResting`,
+  `timeRemaining`, `settled`, `jumpTo`, `dispose`, `onUpdate`, `onStart`,
+  `onStop`, and `onDispose`.
+  `velocityOf`, `accelerationOf`, and `targetOf` accept it. A ramp runs in the
+  frame loop only while something listens to it frame by frame. Otherwise it
+  keeps moving on the system's clock at no cost per frame, and a read reports
+  where it is. The clock holds still through synchronous code, so all reads
+  in one render or event handler agree.
+
+  Under reduced motion, a ramp jumps to a bounded target, and an endless ramp
+  holds still until reduced motion turns off. `purpose: 'nonmotion'` keeps a
+  ramp moving under reduced motion, for a clock that drives logic.
+
+  `useRamp(target, rate, { from, purpose })` in `coily/vue` returns a
+  `RampRef`, which `useSpring` can follow. The ref keeps the ramp in the frame
+  loop only while something reads it or follows it. The Nuxt module
+  auto-imports `useRamp`.
+
+- 499bd35: Fix two cases where a spring rested at a different time than its config
+  promised. Both change how the affected springs move.
+
+  - Heavily overdamped springs no longer snap to rest early. The solver froze
+    part of its formula to avoid an overflow, and at a large `dampingRatio`
+    that cut the motion short. A `dampingRatio: 10` spring jumped the last
+    22% of its move, and `defineSpring({ duration: 500, dampingRatio: 10 })`
+    rested after as little as 71 ms. These springs now follow the exact curve
+    and rest when `timeRemaining` and `duration` say, so they can take
+    noticeably longer to settle. Springs with a `dampingRatio` below about 3
+    move as before.
+  - Duration configs now tune against their own `precision`. They always used
+    the default resting threshold of 0.005, so
+    `defineSpring({ duration: 500, dampingRatio: 1, precision })` rested at
+    153 ms with precision 0 and at 811 ms with precision 4. It now rests at
+    500 ms at any precision. A higher precision makes the spring stiffer, and
+    a lower one makes it softer. Configs at the default precision move as
+    before. The `defineSpring` `displacement` limit follows `precision` too:
+    its magnitude must be greater than `0.5 * 10^-precision`.
+
+- 499bd35: Two inputs that used to misbehave quietly now throw.
+
+  - `system.advance(dt)` throws on a negative `dt`. A negative `dt` ran the
+    clock backward and rewound springs. A `dt` of 0 is still allowed.
+  - `bounce: 1` throws in `defineSpring({ damping, bounce })` and
+    `defineSpring({ tension, damping, bounce })`, as their docs already said.
+    These shapes derive tension or mass from the damping, and at `bounce` 1
+    the result blows up: `{ damping: 10, bounce: 1 }` derived a tension of
+    2.5e9. Every other shape still accepts `bounce: 1`.
+
+- 499bd35: Add `SpringSystem.dispose()`. Each system adds a page visibility listener
+  and, with `reducedMotion: 'user'`, a media query listener, and before this
+  change nothing removed them. `dispose()` stops the system for good and
+  removes both. After dispose, `start()` throws and `advance` still works.
+
+  `useSpringSystem` now disposes the system it creates when its component
+  unmounts, so a component that mounts many times, such as a route page, no
+  longer keeps every system it created alive.
+
+- 499bd35: Add `targetOf(spring)`, a source that reads where a spring is heading
+  instead of where it is. Pair it with the spring in a `mapSpring` shape to
+  express anything measured against the destination, such as remaining
+  travel, progress, or a lead that anticipates the move. You wire it once,
+  and you no longer rebuild the map on every retarget. A `CompositeSpring`
+  gives a target of the same shape. The Nuxt module auto-imports `targetOf`.
+
+  ```ts
+  const lead = mapSpring({ value: body, target: targetOf(body) }, ({ value, target }) =>
+    Math.max(-20, Math.min(20, target - value)),
+  )
+  const eyes = system.createSpring(lead)
+  ```
+
+  Vue refs from `useSpring` now type-check with `velocityOf`, `accelerationOf`,
+  and `targetOf`. They always worked at runtime, as the springs they wrap do.
+  The new `TargetedSource` type names what `targetOf` accepts: a source in
+  motion that also reports its target. Every spring, composite, and spring
+  ref is one.
+
+### Patch Changes
+
+- 499bd35: Correct three docs.
+
+  - `arrival` acts only when the value crosses the target. A spring with a
+    `dampingRatio` of 1 or above that is retargeted from rest never crosses,
+    so its `arrival` changes nothing.
+  - `springToTransition` accepts a spec with a `velocity`, and the transition
+    starts at that speed. This hands off a moving value, such as a drag at
+    release. The velocity reshapes both the curve and the duration.
+  - The `coily/css` `displacement` option changes more than the duration. A
+    larger move takes longer to come within the rest threshold, so the
+    `linear()` stops land at different percentages.
+
+- 499bd35: Fix three frame loop bugs.
+
+  - Calling `stop()` and then `start()` in a listener during a frame
+    scheduled a second frame loop, so every listener ran twice per frame
+    until the next `stop()`. The system now keeps a single loop.
+  - `CompositeSpring.settled` could hang when read during a tick, for example
+    in another spring's update listener. If the composite came back to rest
+    before that tick ended, it fired neither `start` nor `stop`, and the
+    promise waited for later motion. It now resolves at the end of the tick.
+  - `lagThreshold` and `adjustedLag` read back the values you set. Setting
+    `lagThreshold` to 0 read back as `100000000`, and a gap longer than that
+    still counted as lag. Setting `lagThreshold` below `adjustedLag` also
+    lowered `adjustedLag` for good, so setting `lagThreshold` to 10 and then
+    500 left `adjustedLag` at 10. Now 0 disables lag clamping for every gap,
+    and a frame that clamps uses at most `lagThreshold` of `adjustedLag`
+    without changing the setting.
+
+- 499bd35: Fix followers under reduced motion.
+
+  - A follower now snaps once when reduced motion turns on. A spring that
+    followed a moving spring got two `update` events, and a follower that
+    started moving before its leader snapped first to a stale target. Each
+    spring now snaps to its final target, with one `update` and one `stop`.
+  - A `'motion'` spring that follows a moving `'nonmotion'` spring snaps to
+    it every frame, and its update listener ran in the middle of the frame, while
+    other springs still held the previous frame's values. It now runs with
+    the frame's other events, so every spring it reads is at its final value
+    for the frame.
+
+- 499bd35: Fix writes that threw after changing part of a spring. A write that throws
+  now changes nothing.
+
+  - A write to a disposed `Spring` or `CompositeSpring` throws
+    `Cannot write to a disposed spring`. Before, a `velocity` or `config`
+    write did not throw, and any write put the spring back in its system.
+    Every later `advance` then threw `Cannot tick a disposed motion`, and no
+    other spring in the system moved.
+  - A rejected `target` write keeps the current follow. Writing `NaN` or
+    `Infinity` to a following spring, or following a source whose value is
+    not finite, threw after the spring had stopped following its source.
+  - A composite `target`, `value`, `velocity`, or `config` write, or a
+    `jumpTo` call, checks its whole input first. One that named an unknown
+    channel or held a bad entry threw after changing the channels listed
+    before it, and those channels emitted events. A composite `target`
+    naming a leader of another shape left some channels following it. A
+    channel target that is a source with a non-finite value now throws with
+    the channel's path.
+
+- 499bd35: Fix two `useSpring` bugs in `coily/vue`.
+
+  - `useSpring(() => (pick.value ? left : right))` threw when `left` and
+    `right` were object `useSpring` refs. It now follows the current leader
+    channel by channel and switches leaders when the getter changes. A getter
+    can also switch between a leader and a plain shape. A `CompositeSpring`
+    from `useSpringPool` can be a leader too, directly or from a getter or
+    ref.
+    A shape-valued source that is not a composite, such as
+    `velocityOf(composite)`, now throws a clear error instead of following
+    nothing.
+  - `timeRemaining` on a `useSpring` ref went stale after a retarget from
+    rest. The spring emits no update until the next frame, so an effect
+    reading `timeRemaining` kept seeing 0 while the spring had started to
+    move. The ref now also triggers when the spring starts and stops.
+
 ## 0.15.0
 
 ### Minor Changes
