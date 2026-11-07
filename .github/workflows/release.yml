@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # push the changeset-release/main branch
-      pull-requests: write # open/update the Version Packages PR
+      pull-requests: write # open and update the Version Packages PR
     outputs:
       has-changesets: ${{ steps.changesets.outputs.hasChangesets }}
       needs-publish: ${{ steps.gate.outputs.needs-publish }}

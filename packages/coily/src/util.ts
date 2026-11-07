@@ -32,5 +32,5 @@ export function isNumber(value: unknown): value is number {
   return typeof value === 'number'
 }
 
-// Shared so resting and disposed springs don't allocate a promise per read.
+// Shared so resting and disposed springs do not allocate a promise per read.
 export const RESOLVED = Promise.resolve()

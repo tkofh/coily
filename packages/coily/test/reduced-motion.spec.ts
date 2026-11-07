@@ -199,11 +199,10 @@ describe("reduced motion: purpose 'nonmotion'", () => {
     })
 
     spring.target = { x: 100, y: 200, opacity: 0 }
-    // x and y snapped synchronously; advance one frame to let opacity fade.
+    // x and y snapped synchronously. Advance one frame to let opacity fade.
     system.advance(1000 / 60)
 
     const value = spring.value
-    // Motion channels snapped; the nonmotion channel is still fading.
     expect(value.x).toBe(100)
     expect(value.y).toBe(200)
     expect(value.opacity).toBeLessThan(1)
@@ -230,7 +229,7 @@ describe("reduced motion: purpose 'nonmotion'", () => {
   test('an invalid purpose in a shape throws with the channel path', () => {
     const system = createSpringSystem()
     expect(() =>
-      // @ts-expect-error — 'wiggle' is not a Purpose
+      // @ts-expect-error 'wiggle' is not a Purpose
       system.createSpring({ x: 0 }, config, { purpose: { x: 'wiggle' } }),
     ).toThrow(/purpose.*'x'/)
   })
@@ -238,11 +237,11 @@ describe("reduced motion: purpose 'nonmotion'", () => {
   test("the removed 'appearance' purpose throws, naming the accepted words", () => {
     const system = createSpringSystem()
     expect(() =>
-      // @ts-expect-error — 'appearance' was renamed to 'nonmotion'
+      // @ts-expect-error 'appearance' was renamed to 'nonmotion'
       system.createSpring(0, config, { purpose: 'appearance' }),
     ).toThrow("Spring purpose must be 'motion' or 'nonmotion'")
     expect(() =>
-      // @ts-expect-error — 'appearance' was renamed to 'nonmotion'
+      // @ts-expect-error 'appearance' was renamed to 'nonmotion'
       system.createSpring({ x: 0 }, config, { purpose: 'appearance' }),
     ).toThrow("expected 'motion', 'nonmotion', or a purpose shape")
   })

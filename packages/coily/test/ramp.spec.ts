@@ -69,7 +69,7 @@ describe('createRamp', () => {
     expect(() => system.createRamp(0, { rate: Infinity })).toThrow('Ramp rate')
     expect(() => system.createRamp(0, { rate: 1, target: Number.NaN })).toThrow('Ramp target')
     expect(() =>
-      // @ts-expect-error — 'appearance' is not a Purpose
+      // @ts-expect-error 'appearance' is not a Purpose
       system.createRamp(0, { rate: 1, purpose: 'appearance' }),
     ).toThrow("Ramp purpose must be 'motion' or 'nonmotion'")
   })
@@ -89,8 +89,8 @@ describe('writes', () => {
     expect(ramp.value).toBeCloseTo(60, 10)
     expect(ramp.target).toBe(100)
 
-    // One update from the write above and one from the frame; writing
-    // the current value adds none.
+    // One update came from the write above and one from the frame.
+    // Writing the current value adds none.
     const current = ramp.value
     ramp.value = current
     expect(onUpdate).toHaveBeenCalledTimes(2)
@@ -174,6 +174,50 @@ describe('events', () => {
     ramp.target = 0
     for (let i = 0; i < 3; i++) system.advance(16)
     expect(events).toEqual(['start', 'stop', 'start', 'stop'])
+  })
+
+  test('start fires on every departure, even after an arrival nobody watched', () => {
+    const system = createSpringSystem()
+    const ramp = system.createRamp(0, { rate: 1000 })
+    const events: string[] = []
+    ramp.onStart(() => events.push('start'))
+
+    ramp.target = 10
+    system.advance(100)
+    ramp.target = 20
+    system.advance(100)
+    ramp.target = 30
+    system.advance(100)
+    ramp.value = 0
+    ramp.rate = 0
+    ramp.rate = 1000
+    expect(events).toEqual(['start', 'start', 'start', 'start', 'start'])
+  })
+
+  test('a ramp retargeted in the frame it arrives keeps ticking', () => {
+    const system = createSpringSystem({ reducedMotion: 'never' })
+    // The spring enters the tick first, so its listener runs before the
+    // ramp's own end of frame.
+    const spring = system.createSpring(0, smooth)
+    spring.target = 100
+    const ramp = system.createRamp(0, { rate: 1000, target: 10 })
+    const onUpdate = vi.fn()
+    ramp.onUpdate(onUpdate)
+    let retargeted = false
+    spring.onUpdate(() => {
+      if (retargeted) return
+      retargeted = true
+      ramp.target = 1000
+    })
+
+    system.advance(16)
+    onUpdate.mockClear()
+    for (let i = 0; i < 5; i++) system.advance(16)
+    expect(onUpdate).toHaveBeenCalledTimes(5)
+
+    const follower = system.createSpring(ramp, smooth)
+    for (let i = 0; i < 5; i++) system.advance(16)
+    expect(follower.target).toBe(ramp.value)
   })
 
   test('an arrival nobody watched stays silent, even to a later stop listener', () => {
@@ -279,7 +323,7 @@ describe('followers', () => {
       }
       return trail
     }
-    // 32 ms frames put the arrival at 450 ms mid-frame; the 1 ms run is
+    // 32 ms frames put the arrival at 450 ms, mid-frame. The 1 ms run is
     // the reference, sampled at the same instants.
     const coarse = run(32, 30)
     const fine = run(1, 960)
@@ -507,7 +551,7 @@ describe('the system clock', () => {
     const seen: number[] = []
     ramp.onUpdate(() => seen.push(ramp.value))
     expect(ramp.value).toBe(100)
-    // The first frame after waking primes; frames step from there.
+    // The first frame after waking primes, and frames step from there.
     await frames.frame(16)
     await frames.frame(16)
     await frames.frame(16)
@@ -544,7 +588,8 @@ describe('the system clock', () => {
     await frames.wait(100)
     expect(ramp.value).toBe(100)
 
-    // The read woke the ticker, and the frame's timestamp predates it.
+    // The subscription wakes the ticker, and the frame's timestamp
+    // predates the last read.
     ramp.onUpdate(() => {})
     await nextTask()
     frames.now -= 2

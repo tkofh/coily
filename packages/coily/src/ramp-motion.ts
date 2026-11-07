@@ -5,20 +5,22 @@ import type { Purpose } from './spring.ts'
 import { invariant } from './util.ts'
 
 /**
- * A ramp's place in the system: a value moving toward its target at a
- * fixed speed, read from an anchor on the system clock.
+ * A ramp's motion in the system: a value that moves toward its target
+ * at a fixed speed, read from an anchor on the system clock.
  *
- * The anchor is the canonical state. The value at clock time `t` is
+ * The anchor is the source of truth. At clock time `t` the value is
  * `anchorValue + speed * (t - anchorTime)` toward the target, clamped
- * there, and every write re-anchors at the current value first, so a
- * write changes only what happens from now on. The ramp joins the tick
- * only while something needs it frame by frame (an update listener, or
- * a stop listener on a bounded ramp). Outside the tick it still moves,
- * because the formula reads the clock, and it emits nothing.
+ * at the target. Every write re-anchors at the current value first, so
+ * a write changes only what happens from then on. The ramp joins the
+ * tick only while something needs it frame by frame: an update
+ * listener, or a stop listener on a bounded ramp. Outside the tick it
+ * still moves, because the formula reads the clock, but it emits no
+ * frame events, not even `stop` on arrival.
  *
- * Inside an advance phase the tick steps a cached value by `rate * h`
- * per sub-step, so a follower recoupling mid-frame reads the ramp where
- * the sub-step leaves it. Between phases reads use the formula again.
+ * Inside an advance phase the tick steps a cached value by `speed * h`
+ * per sub-step, so a follower that recouples mid-frame reads the ramp
+ * where the sub-step leaves it. Between phases, reads use the formula
+ * again.
  */
 export class RampMotion extends Motion {
   readonly #motions: MotionSet
@@ -32,12 +34,10 @@ export class RampMotion extends Motion {
   #target: number
   /** Value units per second. */
   #rate: number
-  /** An endless ramp holding still under reduced motion. */
+  /** Whether the ramp is endless and holds still under reduced motion. */
   #held = false
   #disposed = false
 
-  /** Whether the ramp is in the `MotionSet`. */
-  #ticking = false
   /** Whether the ramp is in the set's `reducible` registry. */
   #reducible = false
   /** The motion state listeners last heard: true after `start`, false after `stop`. */
@@ -92,7 +92,7 @@ export class RampMotion extends Motion {
     return this.#target > value ? speed : -speed
   }
 
-  /** Milliseconds until arrival: 0 at rest, Infinity while moving toward an infinite target. */
+  /** Time until arrival, in ms: 0 at rest, Infinity while moving toward an infinite target. */
   get timeRemaining(): number {
     const value = this.value
     const speed = this.#speed()
@@ -101,7 +101,7 @@ export class RampMotion extends Motion {
   }
 
   set value(value: number) {
-    this.#assertLive()
+    this.#beginWrite()
     if (value === this.value) return
     this.#anchorValue = value
     this.#anchorTime = this.#motions.time
@@ -116,7 +116,7 @@ export class RampMotion extends Motion {
   }
 
   set target(target: number) {
-    this.#assertLive()
+    this.#beginWrite()
     this.#reanchor()
     this.#target = target
     const endless = !Number.isFinite(target)
@@ -133,14 +133,14 @@ export class RampMotion extends Motion {
   }
 
   set rate(rate: number) {
-    this.#assertLive()
+    this.#beginWrite()
     this.#reanchor()
     this.#rate = rate
     this.#sync()
   }
 
   jumpTo(value: number) {
-    this.#assertLive()
+    this.#beginWrite()
     this.#anchorValue = value
     this.#anchorTime = this.#motions.time
     this.#target = value
@@ -190,9 +190,9 @@ export class RampMotion extends Motion {
   }
 
   endFrame() {
-    // Sub-steps sum to the frame's dt only to rounding, so an arrival the
-    // steps reached is pinned in the anchor, where the formula sees it
-    // too.
+    // Sub-steps sum to the frame's dt only up to rounding. An arrival
+    // that the steps reached is pinned in the anchor, so the formula sees
+    // it too.
     if (this.#stepped === this.#target && this.#anchorValue !== this.#target) {
       this.#anchorValue = this.#target
       this.#anchorTime = this.#motions.time
@@ -257,8 +257,9 @@ export class RampMotion extends Motion {
     const speed = this.#speed()
     const remaining = this.#target - this.#anchorValue
     if (speed === 0 || remaining === 0) return this.#anchorValue
-    // The clock never runs backward, but an idle credit can land a hair
-    // behind a read taken just before it.
+    // A guard. The ticker never credits idle time behind an earlier
+    // read, but a negative `advance` dt moves the clock back, and the
+    // ramp must not then move back past its anchor.
     const travel = speed * Math.max(0, time - this.#anchorTime)
     return Math.abs(remaining) <= travel
       ? this.#target
@@ -271,8 +272,12 @@ export class RampMotion extends Motion {
     this.#anchorTime = time
   }
 
-  #assertLive() {
+  // An unwatched ramp arrives without anyone noticing, so its start/stop
+  // state can lag behind its motion. Settling that first lets the write's
+  // own `start` fire when it moves the ramp off rest.
+  #beginWrite() {
     invariant(!this.#disposed, 'Cannot write to a disposed ramp')
+    this.#sync()
   }
 
   #listen(type: 'update' | 'stop', callback: () => void): () => void {
@@ -302,8 +307,7 @@ export class RampMotion extends Motion {
     const watched =
       this.#updateListeners > 0 || (this.#stopListeners > 0 && Number.isFinite(this.#target))
     const ticking = moving && watched
-    if (ticking !== this.#ticking) {
-      this.#ticking = ticking
+    if (ticking !== this.#motions.has(this)) {
       if (ticking) this.#motions.add(this)
       else this.#motions.remove(this)
     }

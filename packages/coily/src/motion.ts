@@ -9,13 +9,14 @@ let nextId = 0
  * Owners keep their motion in a private field, so none of this reaches
  * the public api.
  *
- * A tick runs in two phases. Every moving motion advances first, with no
- * events, so followers recouple against values that are current for the
- * frame. Then each one that advanced delivers its events in `endFrame`.
+ * A tick runs in two phases. First every moving motion advances and
+ * emits no events, so followers recouple against values that are
+ * current for the frame. Then each motion that advanced delivers its
+ * events in `endFrame`.
  */
 export abstract class Motion {
   /**
-   * Creation order across every kind of motion. Wherever motions need a
+   * Creation order across every kind of motion. If motions need a
    * deterministic order and nothing else decides it, the lower id goes
    * first.
    */
@@ -35,20 +36,20 @@ export abstract class Motion {
   frame = 0
 
   /**
-   * Dependency rank, written by `FollowGraph`: motions the follow graph
-   * touches count up from 0, leaders before followers, and -1 marks a
-   * motion outside the graph.
+   * Dependency rank, written by `FollowGraph`. Motions in the follow
+   * graph count up from 0, leaders before followers. -1 marks a motion
+   * outside the graph.
    */
   rank = -1
 
   /**
-   * The edge this motion follows through, or null. Written by
-   * `FollowGraph`; only a spring follows.
+   * The edge this motion follows through, or null. `FollowGraph` writes
+   * it. Only a spring follows.
    */
   edge: FollowEdge | null = null
 
   /**
-   * The edges reading this motion, or null when none. `FollowGraph`
+   * The edges that read this motion, or null when none do. `FollowGraph`
    * rebuilds them with the ranks, so they can lag a mid-pass edge change
    * until the next recompute. The tick tolerates stale entries.
    */
@@ -77,17 +78,17 @@ export abstract class Motion {
   abstract applyReducedMotion(reduced: boolean): void
 
   /**
-   * The sub-step controller's shock signal, read by a follower's `plan`
-   * with this motion as its leader: how far the motion sits from steady
-   * tracking. 0 for a motion that cannot be knocked off its course.
+   * How far the motion sits from steady tracking. A follower's `plan`
+   * reads it from its leader as the sub-step controller's shock signal.
+   * A motion that nothing can knock off its course returns 0.
    */
   abstract manifoldDeviation(): number
 
   /**
-   * Whether the motion's slope changes within the next `dt` seconds at a
-   * moment it can name in advance, which history-based planning cannot
-   * see coming. A follower's `plan` demands the sub-step cap on such a
-   * frame.
+   * Whether the motion's slope changes within the next `dt` seconds, at
+   * a moment the motion knows in advance. Planning from history cannot
+   * see such a change coming, so a follower's `plan` demands the sub-step
+   * cap on that frame.
    */
   abstract kinksWithin(dt: number): boolean
 }

@@ -3,19 +3,19 @@ import { SpringSourceSymbol, isSpringSource, recipeOf } from './spring-source.ts
 
 // What advances a registered source: its own motion, or the sources it
 // aggregates (a composite's channels), each resolved through its own
-// entry. Brand getters write it lazily; `resolveLeaderMotions` reads
-// it. A source with no entry is foreign — a user-authored object
-// honoring the `SpringSource` contract — and contributes no ordering
-// constraint.
+// entry. Brand getters write it lazily, and `resolveLeaderMotions`
+// reads it. A source that has no entry, and whose api leads to none, is
+// foreign: a user-authored object that honors the `SpringSource`
+// contract. It adds no ordering constraint.
 const MOTION_BACKING = new WeakMap<object, Motion | readonly object[]>()
 
 /**
  * Records what advances `source`: its own `Motion` for a spring or a
- * ramp, or the aggregated sources whose own registrations lead to motions (a
- * composite registers its channel springs). Called from the
- * `SpringSourceSymbol` brand getters on every api read — lazily, so
- * springs never used as sources stay out of the weak registry, and
- * idempotently, so repeated reads just overwrite the entry.
+ * ramp, or the aggregated sources whose own registrations lead to
+ * motions (a composite registers its channel springs). The
+ * `SpringSourceSymbol` brand getters call it on every api read. The
+ * call is lazy, so springs never used as sources stay out of the weak
+ * registry. It is also idempotent: a repeated read overwrites the entry.
  */
 export function registerBacking(source: object, backing: Motion | readonly object[]): void {
   MOTION_BACKING.set(source, backing)
@@ -23,10 +23,11 @@ export function registerBacking(source: object, backing: Motion | readonly objec
 
 /**
  * Resolves the motions behind `source`, deduplicated: every spring or
- * ramp reached through any chain of derivations — `mapSpring`
- * pipelines, `velocityOf`/`accelerationOf`/`targetOf` wrappers,
- * composite channels. A foreign source resolves to nothing: it imposes
- * no tick-ordering constraint and couples through its emitter alone.
+ * ramp reached through any chain of derivations. A chain can pass
+ * through `mapSpring` pipelines, `velocityOf`, `accelerationOf`, and
+ * `targetOf` wrappers, and composite channels. A foreign source
+ * resolves to nothing. It imposes no tick-ordering constraint and
+ * couples through its emitter alone.
  */
 export function resolveLeaderMotions(source: object): readonly Motion[] {
   const leaders = new Set<Motion>()
@@ -55,10 +56,10 @@ function collectInto(source: object, leaders: Set<Motion>): void {
       (api as unknown) !== source
     ) {
       // A wrapper can hand out another source's api as a plain value
-      // slot — a Vue SpringRef exposes its backing spring's — so the
-      // wrapper itself never registers; resolve through the api. Coily
-      // apis belong to sources created before their wrapper, so the
-      // walk still follows creation order and cannot cycle.
+      // slot, as a Vue SpringRef does with its backing spring's api. The
+      // wrapper itself never registers, so resolve through the api.
+      // Coily apis belong to sources created before their wrapper, so
+      // the walk still follows creation order and cannot cycle.
       collectInto(api, leaders)
       return
     }
@@ -138,9 +139,10 @@ export interface FollowEdge {
   readonly leaders: readonly Motion[]
   /**
    * Whether the follower shares a Tarjan SCC with any of its leaders,
-   * self-follow included. Written by `FollowGraph` on recompute. Routes
-   * `plan` to the ZOH sub-step law: FOH destabilizes cycles that are
-   * stable under ZOH, so no slope may ever arm inside an SCC.
+   * self-follow included. `FollowGraph` writes it on recompute. A cyclic
+   * edge routes `plan` to the ZOH (zero-order hold) sub-step law. FOH
+   * (first-order hold) destabilizes cycles that are stable under ZOH,
+   * so a slope must never arm inside an SCC.
    */
   cyclic: boolean
   /** The follower's target as `plan` observes it once per frame. */
@@ -148,21 +150,22 @@ export interface FollowEdge {
   /**
    * Re-anchors the follower to the followed source's current value.
    * `h` is the step the follower is about to advance by, in seconds
-   * (the internal tick unit). On an edge where a slope may arm —
-   * acyclic, passthrough arrival, `h > 0`, not a reduced-motion jump —
-   * it retargets and arms the follower's slope with the delta over
-   * `h`, so the coming advance integrates against the leader's motion.
-   * Every other edge retargets with the exact semantics of the
-   * leader-update handler (finite guard, reduced-motion jump).
+   * (the internal tick unit). A slope can arm only when the edge is
+   * acyclic, the follower's arrival is passthrough, `h > 0`, and the
+   * retarget is not a reduced-motion jump. Then it retargets and arms
+   * the follower's slope with the delta over `h`, so the coming advance
+   * integrates against the leader's motion. Every other edge retargets
+   * with the exact semantics of the leader-update handler (finite
+   * guard, reduced-motion jump).
    */
   recouple(h: number): void
   /**
    * Refreshes the estimator from the follower's current target and
-   * returns this edge's sub-step demand for a frame of `dt` seconds —
-   * unclamped; the caller maxes over edges and clamps. Runs no user
-   * code: history is the target trail, freshness reads leader motion
-   * state. Call at most once per edge per frame, before any motion
-   * advances.
+   * returns this edge's sub-step demand for a frame of `dt` seconds.
+   * The demand is unclamped. The caller takes the max over edges and
+   * clamps it. Runs no user code: history comes from the target trail,
+   * and freshness reads leader motion state. Call it at most once per
+   * edge per frame, before any motion advances.
    */
   plan(dt: number): number
 }
@@ -170,10 +173,10 @@ export interface FollowEdge {
 /**
  * The follow graph as a walkable structure: one edge per following
  * motion, and a cached dependency rank over every motion the edges
- * touch. `MotionSet` owns one; springs register and unregister edges as
- * follows are wired and torn down. What the tick reads per motion —
- * `edge`, `followers`, `rank` — lives on the motions themselves; this
- * class is their writer.
+ * touch. `MotionSet` owns one. Springs register an edge when they wire
+ * a follow and unregister it when they tear the follow down. The tick
+ * reads `edge`, `followers`, and `rank` from the motions themselves,
+ * and this class writes them.
  */
 export class FollowGraph {
   readonly #edges = new Map<Motion, FollowEdge>()
@@ -185,12 +188,12 @@ export class FollowGraph {
   #edgeList: readonly FollowEdge[] = []
   #dirty = false
 
-  /** Whether no edges are registered, letting the tick skip ordering work entirely. */
+  /** Whether no edges are registered. The tick then skips all ordering work. */
   get isEmpty(): boolean {
     return this.#edges.size === 0
   }
 
-  /** Every registered edge, valid after `ensureOrder`; the plan pass walks this once per frame. */
+  /** Every registered edge, valid after `ensureOrder`. The plan pass walks it once per frame. */
   get edges(): readonly FollowEdge[] {
     return this.#edgeList
   }
@@ -215,11 +218,11 @@ export class FollowGraph {
 
   /**
    * Recomputes ranks if an edge was added or removed since the last
-   * call; clean calls return immediately. Afterward, motions the graph
-   * touches hold ranks counting up from 0 with every leader ranked
-   * before its followers, members of a cycle rank in ascending creation
-   * id, and motions outside the graph hold -1. Ranks are canonical: a
-   * function of graph structure and creation order, never of wiring
+   * call. A clean call returns immediately. Afterward, motions the graph
+   * touches hold ranks that count up from 0, with every leader ranked
+   * before its followers. Members of a cycle rank in ascending creation
+   * id, and motions outside the graph hold -1. Ranks are canonical: they
+   * depend on graph structure and creation order, never on wiring
    * order.
    */
   ensureOrder(): void {
@@ -306,9 +309,9 @@ export class FollowGraph {
             lowOf.set(parent.node, Math.min(lowOf.get(parent.node)!, low))
           }
           if (low === indexOf.get(frame.node)!) {
-            // frame.node roots a finished SCC: pop its members and rank
-            // them in ascending creation id — the cycle policy, stable
-            // across passes and churn.
+            // frame.node roots a finished SCC. Pop its members and rank
+            // them in ascending creation id. That is the cycle policy,
+            // and it stays stable across passes and churn.
             const members: Motion[] = []
             let member: Motion
             do {

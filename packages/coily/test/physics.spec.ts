@@ -6,13 +6,13 @@ import { OverdampedSolver } from '../src/solver.ts'
 
 /**
  * The textbook character of each damping regime, checked through the public
- * API with fixed, legible parameters. The random-input laws these springs
- * obey — convergence, symmetry, no-NaN, overdamped monotonicity, underdamped
- * energy decay — live in `properties.spec.ts`; this file only pins the
- * qualitative behavior that distinguishes one regime from another.
+ * API with fixed, readable parameters. The random-input laws these springs
+ * obey (convergence, symmetry, no NaN, overdamped monotonicity, underdamped
+ * energy decay) live in `properties.spec.ts`. This file pins only the
+ * qualitative behavior that tells one regime from another.
  */
 
-/** Simulate a spring at a fixed step, returning per-frame value/velocity snapshots. */
+/** Simulates a spring at a fixed step and returns a value and velocity snapshot per frame. */
 function simulate(
   params: { mass: number; tension: number; damping: number; target: number; value: number },
   duration: number,
@@ -53,7 +53,7 @@ function zeroCrossings(snapshots: { value: number }[]) {
 
 describe('physics: regime character', () => {
   test('underdamped (ζ < 1) overshoots the target', () => {
-    // ζ = 10 / (2 * √170) ≈ 0.38
+    // zeta = 10 / (2 * sqrt(170)), about 0.38
     const { snapshots } = simulate(
       { mass: 1, tension: 170, damping: 10, target: 0, value: 100 },
       3000,
@@ -89,7 +89,7 @@ describe('physics: regime character', () => {
       5000,
     )
 
-    // At the same time point (~0.5s) the overdamped spring is further out.
+    // At the same time (about 500 ms), the overdamped spring is further out.
     const idx = 30
     expect(Math.abs(overdamped[idx]!.value)).toBeGreaterThan(Math.abs(critical[idx]!.value))
   })
@@ -100,7 +100,8 @@ describe('physics: regime character', () => {
       5000,
     )
 
-    // Undamped: still moving after 5s, and energy is conserved so peaks hold.
+    // An undamped spring is still moving after 5000 ms, and it keeps its
+    // energy, so the peaks hold.
     expect(spring.isResting).toBe(false)
 
     const maxima: number[] = []
@@ -130,21 +131,77 @@ describe('physics: regime character', () => {
   })
 })
 
+// The overdamped solution as its two decaying modes, x(t) = A * exp(r1 * t)
+// + B * exp(r2 * t). Both exponents are negative, so it is safe at any t.
+function overdampedExact(tension: number, dampingRatio: number, x0: number, t: number) {
+  const wn = Math.sqrt(tension)
+  const sigma = dampingRatio * wn
+  const wd = wn * Math.sqrt(dampingRatio ** 2 - 1)
+  const c1 = sigma * x0
+  const c2 = x0 * wd
+  return (
+    ((c1 + c2) * Math.exp((wd - sigma) * t) - (c1 - c2) * Math.exp(-(wd + sigma) * t)) / (2 * wd)
+  )
+}
+
 describe('physics: overdamped solver overflow guard', () => {
-  test('a large time step keeps the hyperbolic terms finite', () => {
-    // sinh/cosh overflow to Infinity near an argument of 710, where the decay
-    // factor has underflowed to 0 and their product would be NaN. The solver
-    // clamps the hyperbolic argument; a single huge tick must still land a
-    // finite, rested state rather than NaN.
-    const config = new SpringDefinition({ tension: 100, damping: 100 }) // ζ = 5, wd ≈ 49
+  test('a tick past the hyperbolic overflow point lands on the exact curve', () => {
+    // sinh and cosh overflow to Infinity near an argument of 710. One tick
+    // to wd * t of about 980 must still land a finite, exact state.
+    const config = new SpringDefinition({ tension: 100, damping: 100 }) // zeta = 5, wd about 49
     const state = new State(config, 100, 0)
     const solver = new OverdampedSolver(state)
 
     solver.configure(config)
-    solver.tick(10) // wd * t ≈ 490, past the overflow point
+    solver.tick(20)
 
     expect(Number.isFinite(state.position)).toBe(true)
     expect(Number.isFinite(state.velocity)).toBe(true)
-    expect(state.position).toBeCloseTo(0, 6)
+    const exact = overdampedExact(100, 5, 100, 20)
+    expect(Math.abs(state.position - exact) / exact).toBeLessThan(1e-12)
   })
+})
+
+describe('physics: heavy damping', () => {
+  // A heavy spring's slow mode decays at about wn / (2 * dampingRatio), so
+  // much of its displacement is left long after wd * t grows large.
+  test.each([5, 10, 30])('dampingRatio %d follows the exact curve until it rests', (zeta) => {
+    const system = createSpringSystem({ reducedMotion: 'never' })
+    const spring = system.createSpring(100, defineSpring({ tension: 100, dampingRatio: zeta }))
+    spring.target = 0
+    const predicted = spring.timeRemaining
+
+    let t = 0
+    for (;;) {
+      system.advance(16)
+      t += 16
+      if (spring.isResting) break
+      // Within 1e-9 of the 100-unit move.
+      const exact = overdampedExact(100, zeta, 100, t / 1000)
+      expect(Math.abs(spring.value - exact)).toBeLessThan(1e-7)
+    }
+    // It rests on the first frame at or after the solved rest time.
+    expect(t).toBeGreaterThanOrEqual(predicted)
+    expect(t - predicted).toBeLessThan(16)
+  })
+
+  test.each([1, 300])(
+    'a duration config with dampingRatio 10 rests at its duration (displacement %d)',
+    (displacement) => {
+      const system = createSpringSystem({ reducedMotion: 'never' })
+      const spring = system.createSpring(
+        displacement,
+        defineSpring({ duration: 500, dampingRatio: 10, displacement }),
+      )
+      spring.target = 0
+
+      let t = 0
+      while (!spring.isResting) {
+        system.advance(1)
+        t += 1
+      }
+      expect(t).toBeGreaterThanOrEqual(499)
+      expect(t).toBeLessThanOrEqual(501)
+    },
+  )
 })

@@ -75,7 +75,7 @@ describe('CompositeSpring: creation', () => {
   })
 
   test('throws when the whole value is not a plain object or array', ({ system }) => {
-    // The root container check is the composite's own — a non-container
+    // The composite checks the root container itself, so a non-container
     // value never reaches the shape tree.
     expect(() => system.createSpring(new Date() as unknown as Record<string, number>)).toThrow(
       'Composite spring value must be a plain object or an array of numeric channels',
@@ -251,8 +251,9 @@ describe('CompositeSpring: config shapes', () => {
   })
 
   test('rejects a numeric leaf in a config shape', ({ system }) => {
-    // A plain object is a config shape, so its leaves must be configs — a
-    // number is not, even when the channel is named like a spring option.
+    // A plain object is a config shape, so its leaves must be configs. A
+    // number is not a config, even when the channel is named like a spring
+    // option.
     expect(() =>
       system.createSpring({ tension: 0, damping: 0 }, { tension: 170, damping: 26 } as never),
     ).toThrow("Invalid config for 'tension'")
@@ -564,6 +565,33 @@ describe('CompositeSpring: settled promise', () => {
     expect(resolved).toBe(true)
   })
 
+  test('resolves when the composite leaves rest and returns within one tick', async ({
+    system,
+  }) => {
+    const spring = system.createSpring({ x: 0 }, config)
+    const driver = system.createSpring(0, config)
+    driver.target = 1
+
+    let settled: Promise<void> | undefined
+    driver.onUpdate(() => {
+      if (settled) return
+      // The composite's start and stop wait for the end of the tick, so
+      // the jump rests it before either fires.
+      spring.target = { x: 10 }
+      settled = spring.settled
+      spring.jumpTo({ x: 10 })
+    })
+    system.advance(FRAME)
+
+    let resolved = false
+    void settled!.then(() => {
+      resolved = true
+    })
+    await flush()
+    expect(spring.isResting).toBe(true)
+    expect(resolved).toBe(true)
+  })
+
   test('dispose resolves a pending promise', async ({ system }) => {
     const spring = system.createSpring({ x: 0 }, config)
     spring.target = { x: 100 }
@@ -616,6 +644,34 @@ describe('CompositeSpring: dispose', () => {
 
     spring.dispose()
     expect(onDispose).toHaveBeenCalledOnce()
+  })
+
+  test('writes to a disposed composite throw and change nothing', ({ system }) => {
+    const spring = system.createSpring({ x: 0, y: 0 }, config)
+    const other = system.createSpring(0, config)
+    spring.target = { x: 100, y: 100 }
+    other.target = 100
+    system.advance(FRAME)
+    spring.dispose()
+    const value = { ...spring.value }
+    const target = { ...spring.target }
+
+    for (const write of [
+      () => (spring.target = { x: 5 }),
+      () => (spring.value = { x: 5 }),
+      () => (spring.velocity = { x: 5 }),
+      () => (spring.config = config),
+      () => spring.jumpTo({ x: 5 }),
+      () => (spring.target = system.createSpring({ x: 0, y: 0 })),
+    ]) {
+      expect(write).toThrow('Cannot write to a disposed spring')
+    }
+    expect(spring.value).toEqual(value)
+    expect(spring.target).toEqual(target)
+
+    const before = other.value
+    expect(() => system.advance(FRAME)).not.toThrow()
+    expect(other.value).toBeGreaterThan(before)
   })
 
   test('double dispose is a no-op', ({ system }) => {

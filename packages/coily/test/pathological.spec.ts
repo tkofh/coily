@@ -5,10 +5,10 @@ import { FRAME, advanceUntilResting, test } from './helpers.ts'
 
 /**
  * Adversarial graphs and listeners: self-reference, cycles, thrown user
- * code, reentrant writes, and depth. These pin the containment
- * properties the machinery already relies on — retargets never re-emit,
- * and passes recover after a throw — rather than exercising any
- * dedicated guard code.
+ * code, reentrant writes, and depth. These tests pin the containment
+ * properties that the tick already relies on: retargets never re-emit,
+ * and passes recover after a throw. No dedicated guard code exists for
+ * them to exercise.
  */
 
 const config = defineSpring({ mass: 1, tension: 170, damping: 26 })
@@ -129,7 +129,7 @@ describe('pathological graphs: cycles', () => {
     const spring = system.createSpring({ x: 0, y: 0 }, config)
 
     spring.target = { y: 100 }
-    // x follows y through the composite itself — a legal self-reference.
+    // x follows y through the composite itself, which is a legal self-reference.
     spring.target = { x: mapSpring(spring, ({ y }) => y) }
 
     for (let i = 0; i < 600; i++) {
@@ -280,8 +280,8 @@ describe('pathological depth', () => {
     const tail = links[links.length - 1]!
 
     head.target = 100
-    // The tail starts resting, so wait for the whole chain: the motion
-    // wavefront takes many frames to arrive at the far end.
+    // The tail starts at rest, so wait for the whole chain. The motion
+    // takes many frames to reach the far end.
     for (let i = 0; i < 3000; i++) {
       system.advance(FRAME)
       if (links.every((link) => link.isResting)) break
@@ -292,7 +292,7 @@ describe('pathological depth', () => {
   })
 
   test('a 5000-deep map chain reads and follows without overflowing', ({ system }) => {
-    // Nesting getters would overflow the call stack near 600 maps; flat
+    // Nested getters would overflow the call stack near 600 maps. Flat
     // composition keeps reads iterative at any depth.
     const leader = system.createSpring(0, config)
 

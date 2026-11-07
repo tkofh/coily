@@ -2,8 +2,8 @@
 const reduced = useMediaQuery('(prefers-reduced-motion: reduce)')
 
 // Spin · an endless ramp is a constant-speed rotation. The spring that
-// follows it lags like a flywheel: a rate change reaches it as a smooth
-// speed-up or slow-down, and rate 0 lets it coast to a stop.
+// follows it lags behind. It meets a rate change with a smooth speed-up
+// or slow-down, and at rate 0 it overshoots a little and settles back.
 const spinRate = ref(180)
 const spin = useRamp(Infinity, spinRate, { from: 0 })
 const flywheel = useSpring(spin, defineSpring({ bounce: 0.3, duration: 800 }))
@@ -106,8 +106,8 @@ function resetClock() {
         <output>{{ spinRate }} deg/s</output>
       </label>
       <p class="hint">
-        Drag the rate. The ramp changes speed at once; the follower catches up like a flywheel, and
-        at 0 it coasts past and settles back.
+        Drag the rate. The ramp changes speed at once. The follower speeds up or slows down to
+        match, and at 0 it coasts past the ramp and settles back.
       </p>
     </section>
 
@@ -124,7 +124,8 @@ function resetClock() {
       </label>
       <p class="hint">
         Move the pointer around the dial. The faint needle is the target. The solid one turns toward
-        it no faster than the turn rate, {{ Math.round(turnRemaining) }} ms from arriving.
+        it no faster than the turn rate. The ramp under it arrives in
+        {{ Math.round(turnRemaining) }} ms.
       </p>
     </section>
 
@@ -141,7 +142,7 @@ function resetClock() {
       </div>
       <p class="hint">
         40% per second. {{ fillStatus }}, {{ Math.round(fillRemaining) }} ms to go. Knocking it back
-        writes <code>value</code>; the ramp carries on toward its target from there.
+        writes <code>value</code>, and the ramp continues toward its target from there.
       </p>
     </section>
 

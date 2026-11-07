@@ -1,8 +1,8 @@
 /**
- * Defers callbacks while inside a batch or tick: `request` runs the
- * callback immediately at depth 0 and queues it — deduplicated — until
- * the outermost exit otherwise. Composite springs use it to coalesce
- * per-channel events into composite ones.
+ * Defers callbacks while inside a batch or tick. At depth 0, `request`
+ * runs the callback immediately. Otherwise it queues the callback, once
+ * per callback, until the outermost exit. Composite springs use it to
+ * merge per-channel events into composite ones.
  */
 export class FlushQueue {
   readonly #callbacks = new Set<() => void>()

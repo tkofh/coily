@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { SpringDefinition } from '../src/config.ts'
 import { State } from '../src/state.ts'
 
-/** ωₙ = √(tension/mass) = 1, so the resting envelope is simply |x| + |v|. */
+/** wn = sqrt(tension / mass) = 1, so the rest test reads |x| + |v|. */
 function makeConfig(precision: number) {
   return new SpringDefinition({ tension: 1, damping: 1, precision })
 }
@@ -47,20 +47,20 @@ describe('State', () => {
     })
 
     test('displacement and velocity accumulate: each alone is fine, together they exceed', () => {
-      // 0.003 + 0.003/ωₙ = 0.006 > 0.005
+      // 0.003 + 0.003 / wn = 0.006 > 0.005
       const state = new State(makeConfig(2), 0.003, 0.003)
       expect(state.isResting).toBe(false)
     })
 
     test('a stiff spring rests with velocity above the raw threshold', () => {
-      // ωₙ = 10: v = 0.04 is only worth 0.004 of future travel
+      // wn = 10, so v = 0.04 is worth only 0.004 of future travel.
       const stiff = new SpringDefinition({ tension: 100, damping: 1, precision: 2 })
       const state = new State(stiff, 0, 0.04)
       expect(state.isResting).toBe(true)
     })
 
     test('a soft spring keeps moving with velocity below the raw threshold', () => {
-      // ωₙ = 0.1: v = 0.004 is worth 0.04 of future travel — 8× the threshold
+      // wn = 0.1, so v = 0.004 is worth 0.04 of future travel, 8 times the threshold.
       const soft = new SpringDefinition({ tension: 0.01, damping: 1, precision: 2 })
       const state = new State(soft, 0, 0.004)
       expect(state.isResting).toBe(false)
@@ -69,8 +69,8 @@ describe('State', () => {
 
   describe('precision changes', () => {
     test('changing precision moves the resting threshold', () => {
-      // Envelope 0.04: above the 0.005 threshold at precision 2,
-      // inside the 0.05 threshold at precision 1
+      // The rest amplitude is 0.04. That is above the 0.005 threshold at
+      // precision 2 and inside the 0.05 threshold at precision 1.
       const state = new State(makeConfig(2), 0.04, 0)
       expect(state.isResting).toBe(false)
 

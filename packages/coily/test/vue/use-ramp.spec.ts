@@ -11,7 +11,13 @@ import {
   type PropType,
 } from 'vue'
 import { mount } from '@vue/test-utils'
-import { createSpringSystem, targetOf, velocityOf, type SpringSystem } from '../../src/index.ts'
+import {
+  createSpringSystem,
+  defineSpring,
+  targetOf,
+  velocityOf,
+  type SpringSystem,
+} from '../../src/index.ts'
 import type { Ramp } from '../../src/ramp.ts'
 import { SpringSystemKey } from '../../src/vue/system.ts'
 import { useRamp, type RampRef } from '../../src/vue/ramp.ts'
@@ -298,5 +304,28 @@ describe('useRamp subscribes on read', () => {
     for (let i = 0; i < 10; i++) system.advance(16)
     expect(tracked.updates).toBe(1)
     expect(tracked.ramp!.value).toBeCloseTo(16, 9)
+  })
+
+  test('useSpring of a ramp ref follows the ramp, exactly as a core follower does', () => {
+    const system = createSpringSystem({ reducedMotion: 'never' })
+    const config = defineSpring({ duration: 300, dampingRatio: 1 })
+    let viaRef!: SpringRef
+    let ramp!: RampRef
+    mount(
+      defineComponent({
+        setup() {
+          ramp = useRamp(Infinity, 100, { from: 0 })
+          viaRef = useSpring(ramp, config)
+          return {}
+        },
+        render: () => h('div'),
+      }),
+      { global: { provide: { [SpringSystemKey as symbol]: system } } },
+    )
+    const core = system.createSpring(ramp, config)
+
+    for (let i = 0; i < 120; i++) system.advance(16)
+    expect(viaRef.value).toBeCloseTo(core.value, 9)
+    expect(ramp.value - viaRef.value).toBeGreaterThan(0)
   })
 })

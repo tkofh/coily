@@ -19,9 +19,9 @@ import { invariant } from './util.ts'
 export interface SpringOptions {
   /**
    * What the spring animates, which decides whether reduced motion applies
-   * to it. `'nonmotion'` — a cross-fade, a color, a blur — keeps
-   * animating under reduced motion; `'motion'` snaps to the target. Fixed
-   * for the spring's life. See `Purpose`.
+   * to it. A `'nonmotion'` spring, such as a cross-fade, a color, or a
+   * blur, keeps animating under reduced motion. A `'motion'` spring snaps
+   * to the target. Fixed for the spring's life. See `Purpose`.
    * @default 'motion'
    */
   purpose?: Purpose | undefined
@@ -33,11 +33,12 @@ export interface SpringOptions {
  */
 export interface CompositeSpringOptions<T extends object> {
   /**
-   * What each channel animates, deciding reduced-motion behavior per
-   * channel: a single `Purpose` for every channel, or a shape mirroring
-   * the value with purposes at any level — a purpose at a subtree covers
-   * every channel below it. Channels it doesn't reach default to
-   * `'motion'`. Fixed for the spring's life. See `PurposeShape`.
+   * What each channel animates, which decides reduced-motion behavior
+   * per channel. Give a single `Purpose` for every channel, or a shape
+   * that mirrors the value with purposes at any level. A purpose at a
+   * subtree covers every channel below it. Channels it does not reach
+   * default to `'motion'`. Fixed for the spring's life. See
+   * `PurposeShape`.
    * @default 'motion'
    */
   purpose?: PurposeShape<T> | undefined
@@ -45,26 +46,29 @@ export interface CompositeSpringOptions<T extends object> {
 
 export interface SpringSystemOptions extends TickerOptions {
   /**
-   * How far a spring may trail a source it follows within one frame, in
-   * the value's own units. A frame whose motion would exceed it is split
-   * into internal sub-steps (at most 8), so followed chains stay
-   * accurate through slow frames and sudden retargets. Smaller is
-   * tighter and costs more solver work; it never goes finer than the
-   * follower's resting precision, and listeners still fire once per
-   * frame. Springs that follow nothing are unaffected.
+   * How far a spring can trail a source it follows within one frame, in
+   * the value's own units. If a frame's motion would exceed it, the
+   * system splits the frame into internal sub-steps (at most 8), so
+   * followed chains stay accurate through slow frames and sudden
+   * retargets. A smaller value is tighter and costs more solver work.
+   * The budget never goes finer than the follower's resting precision,
+   * and listeners still fire once per frame. Springs that follow nothing
+   * are unaffected.
    * @default 0.1
    */
   couplingTolerance?: number | undefined
   /**
-   * Log active motion counts to the console whenever they change.
+   * Logs the count of active motions to the console after each frame
+   * where it changed.
    * @default false
    */
   debug?: boolean | undefined
   /**
-   * When springs snap to their targets instead of animating. `'user'`
-   * follows the OS prefers-reduced-motion setting, including live changes
-   * — switching it on finishes in-flight motion instantly. `'always'` and
-   * `'never'` force one behavior.
+   * When reduced motion applies, making `'motion'` springs and ramps
+   * jump to their targets instead of animating. `'user'` follows the OS
+   * prefers-reduced-motion setting, including live changes. Switching it
+   * on finishes in-flight motion at once. `'always'` and `'never'` force
+   * one behavior.
    * @default 'user'
    */
   reducedMotion?: 'user' | 'always' | 'never' | undefined
@@ -73,6 +77,9 @@ export interface SpringSystemOptions extends TickerOptions {
 class SpringSystemImpl implements SpringSystem {
   readonly #motions: MotionSet
   readonly #ticker: Ticker
+  /** Removes the reduced-motion media query listener, or null without one. */
+  #unwatchReducedMotion: (() => void) | null = null
+  #disposed = false
 
   constructor(options?: SpringSystemOptions) {
     this.#motions = new MotionSet(options?.debug)
@@ -92,9 +99,11 @@ class SpringSystemImpl implements SpringSystem {
     ) {
       const query = window.matchMedia('(prefers-reduced-motion: reduce)')
       this.#applyReducedMotion(query.matches)
-      query.addEventListener('change', (event) => {
+      const onChange = (event: MediaQueryListEvent) => {
         this.#applyReducedMotion(event.matches)
-      })
+      }
+      query.addEventListener('change', onChange)
+      this.#unwatchReducedMotion = () => query.removeEventListener('change', onChange)
     }
   }
 
@@ -171,6 +180,7 @@ class SpringSystemImpl implements SpringSystem {
   }
 
   start() {
+    invariant(!this.#disposed, 'Cannot start a disposed spring system')
     this.#ticker.start()
   }
 
@@ -180,6 +190,14 @@ class SpringSystemImpl implements SpringSystem {
 
   get running() {
     return !this.#ticker.stopped
+  }
+
+  dispose() {
+    if (this.#disposed) return
+    this.#disposed = true
+    this.#ticker.dispose()
+    this.#unwatchReducedMotion?.()
+    this.#unwatchReducedMotion = null
   }
 
   get fps() {
@@ -208,24 +226,27 @@ class SpringSystemImpl implements SpringSystem {
 }
 
 /**
- * Owns springs and advances them over time. Create one with
- * `createSpringSystem`, then either `start()` it to animate on real
- * frames or call `advance` yourself for manual stepping.
+ * Owns springs and ramps and advances them over time. Create one with
+ * `createSpringSystem`. Then either `start()` it to animate on real
+ * frames, or call `advance` yourself for manual stepping.
  */
 export interface SpringSystem {
   /**
-   * Creates a spring at rest at `value`. Without `config`, springs use
-   * the default: critically damped, settling in about 500ms. To follow
-   * another spring from birth, pass it in place of `value`.
+   * Creates a spring at rest at `value`. Without `config`, the spring
+   * uses the default: critically damped, settling in about 500 ms. To
+   * follow a source from creation, pass it in place of `value`.
    *
    * `options.purpose` marks what the spring animates: `'nonmotion'`
    * keeps animating under reduced motion, `'motion'` (the default) snaps.
    */
   createSpring(value: number, config?: SpringDefinition, options?: SpringOptions): Spring
   /**
-   * Creates a spring already following `source` — a `Spring`, or a value
-   * derived with `mapSpring`. It starts at the source's current value,
-   * so nothing moves until the source does; equivalent to creating a
+   * Creates a spring that already follows `source`, which can be any
+   * scalar `SpringSource`: a `Spring`, a `Ramp`, or a value derived with
+   * `mapSpring`, `velocityOf`, `accelerationOf`, or `targetOf`. Passing
+   * a composite source throws. Derive a scalar from it with `mapSpring`
+   * instead. The spring starts at the source's current value, so
+   * nothing moves until the source does. This is the same as creating a
    * spring at that value and assigning `source` to its `target`.
    *
    * `options.purpose` marks what the spring animates: `'nonmotion'`
@@ -240,7 +261,7 @@ export interface SpringSystem {
    * `config` applies per channel: a single `SpringDefinition` for every
    * channel, or a shape mirroring the value with configs at any level.
    * `options.purpose` marks reduced-motion behavior the same way, per
-   * channel — a `'nonmotion'` channel keeps animating.
+   * channel. A `'nonmotion'` channel keeps animating.
    */
   createSpring<T extends object>(
     value: T & Shape<T>,
@@ -250,9 +271,10 @@ export interface SpringSystem {
   /**
    * Creates a ramp at `from`: a value that moves toward `options.target`
    * at `options.rate` value units per second, in a straight line, and
-   * stops there. A spring that follows a ramp tracks its steady motion
-   * exactly. Without a target the ramp starts at rest; `Infinity` or
-   * `-Infinity` makes it endless.
+   * stops there. A spring that follows a ramp integrates against its
+   * steady motion exactly, not against a per-frame staircase. Without a
+   * target, the ramp starts at rest. `Infinity` or `-Infinity` makes it
+   * endless.
    *
    * ```ts
    * // An endless spin at 270 deg/s, with a spring lagging behind it.
@@ -270,20 +292,20 @@ export interface SpringSystem {
    */
   createRamp(from: number, options: RampOptions): Ramp
   /**
-   * Advances every moving spring and ramp by `dt` milliseconds. For
-   * manual stepping in place of `start()` — tests, custom loops, offline
-   * rendering.
+   * Advances every moving spring and ramp by `dt` milliseconds. Use it
+   * for manual stepping in place of `start()`: in tests, custom loops,
+   * or offline rendering.
    */
   advance(dt: number): void
 
   /**
-   * Begins animating on real frames: one tick per displayed frame, via
+   * Begins animating on real frames: one tick per displayed frame, through
    * `requestAnimationFrame` in the browser and a `setTimeout` fallback
-   * elsewhere. An idle system sleeps — no frames are scheduled while
-   * every spring rests.
+   * elsewhere. An idle system sleeps. It schedules no frames while every
+   * spring rests and no ramp advances with the frame loop.
    */
   start(): void
-  /** Stops animating. Springs hold their state until `start` or `advance`. */
+  /** Stops animating. Springs and ramps hold their state until `start` or `advance`. */
   stop(): void
   /**
    * Whether the system is between `start()` and `stop()`. Sleeping while
@@ -291,33 +313,45 @@ export interface SpringSystem {
    */
   readonly running: boolean
   /**
-   * Whether springs currently snap instead of animating, per the
-   * `reducedMotion` option and, in `'user'` mode, the live OS setting.
-   * Read it to gate purely decorative effects of your own. Springs
-   * created with `purpose: 'nonmotion'` animate regardless.
+   * Stops the system for good and removes its listeners on the page: the
+   * visibility listener and, with `reducedMotion: 'user'`, the media
+   * query listener. Each system adds both when it is created, so dispose
+   * a system you no longer need. `useSpringSystem` disposes the system it
+   * creates when its component unmounts. Calling it again is a no-op.
+   *
+   * After dispose, `start()` throws. `advance` still steps the springs
+   * and ramps, and `reducedMotion` no longer follows the user setting.
+   */
+  dispose(): void
+  /**
+   * Whether reduced motion is on, per the `reducedMotion` option and, in
+   * `'user'` mode, the live OS setting. While it is on, springs and
+   * ramps with `purpose: 'motion'` jump instead of animating, and those
+   * with `purpose: 'nonmotion'` animate as normal. Read it to gate
+   * decorative effects of your own.
    */
   readonly reducedMotion: boolean
   /**
-   * How far a spring may trail a source it follows within one frame, in
-   * the value's own units — see the `couplingTolerance` option.
+   * How far a spring can trail a source it follows within one frame, in
+   * the value's own units. See the `couplingTolerance` option.
    * Assignment accepts any finite number >= 0 and applies from the next
-   * frame; 0 means as fine as the follower's resting precision allows.
+   * frame. 0 means as fine as the follower's resting precision allows.
    */
   couplingTolerance: number
   /**
-   * Frame-rate cap. 0 means uncapped: one tick per displayed frame,
-   * whatever rate the screen runs at. Capped ticks land on whole display
-   * frames and receive the true elapsed time.
+   * Frame-rate cap, in frames per second. 0 means uncapped: one tick per
+   * displayed frame, whatever rate the screen runs at. Capped ticks land
+   * on whole display frames and receive the true elapsed time.
    */
   fps: number
   /**
-   * Frame gap in milliseconds above which the gap is treated as lag — a
-   * backgrounded tab, a blocking task — and replaced with `adjustedLag`,
-   * so springs don't teleport when frames resume. 0 disables lag
-   * clamping.
+   * Frame gap, in ms, above which the system treats the gap as lag,
+   * such as a backgrounded tab or a blocking task. It replaces a lagging
+   * gap with `adjustedLag`, so springs do not teleport when frames
+   * resume. 0 disables lag clamping.
    */
   lagThreshold: number
-  /** The elapsed milliseconds a lagging frame is replaced with. Clamped to at most `lagThreshold`. */
+  /** The elapsed ms that replaces a lagging frame's gap. Clamped to at most `lagThreshold`. */
   adjustedLag: number
 }
 

@@ -7,20 +7,21 @@ import type { Purpose } from './spring.ts'
 import { invariant } from './util.ts'
 
 /**
- * One spring simulation in displacement space: position is measured from
- * the target (0 means settled), so retargeting is a rebase performed by
- * the owning `Spring`. Picks the closed-form solver for the config's
- * damping regime and emits update/start/stop/dispose events.
+ * One spring simulation in displacement space. Position is measured from
+ * the target (0 means settled), so a retarget is a rebase that the
+ * owning `Spring` performs. Picks the closed-form solver for the
+ * config's damping regime and emits update, start, stop, and dispose
+ * events.
  */
 export class SpringMotion extends Motion {
   /** Whether reduced motion finishes the motion: false for a `'nonmotion'` spring. */
   readonly #reduces: boolean
 
   /**
-   * A first-order-hold slope in value units per second, armed by
-   * `armSlope` immediately before the `advance` that consumes it
-   * (read-and-clear; no user code runs between the two). 0 means the
-   * target holds still across the step.
+   * A first-order-hold slope in value units per second. `armSlope` sets
+   * it immediately before the `advance` that reads and clears it, and no
+   * user code runs between the two. 0 means the target holds still
+   * across the step.
    */
   #slope = 0
 
@@ -32,8 +33,8 @@ export class SpringMotion extends Motion {
   #overdampedSolver: OverdampedSolver | null = null
   #currentSolver: UnderdampedSolver | CriticallyDampedSolver | OverdampedSolver | null = null
 
-  // Solver work is deferred to the next tick: #needsUpdate swaps solvers
-  // after a reconfigure, #needsReset re-anchors after a position or
+  // Solver work waits for the next tick. #needsUpdate swaps solvers
+  // after a reconfigure, and #needsReset re-anchors after a position or
   // velocity write.
   #needsUpdate = false
   #needsReset = false
@@ -78,10 +79,10 @@ export class SpringMotion extends Motion {
   }
 
   get timeRemaining() {
-    // Solved from the live state on read: the closed forms are
-    // time-invariant, so nothing needs maintaining per tick — chains of
-    // followers disturb every motion every frame, and eager bookkeeping
-    // here is a per-frame bisection nobody asked for.
+    // Solved from the live state on read. The closed forms are
+    // time-invariant, so nothing needs upkeep per tick. Chains of
+    // followers disturb every motion every frame, and eager upkeep here
+    // would cost a bisection per motion per frame that no caller reads.
     return this.#config.computeTimeRemaining(this.#state)
   }
 
@@ -120,18 +121,19 @@ export class SpringMotion extends Motion {
   /**
    * Advances the simulation and emits nothing. The tick pass advances
    * every motion through this, then delivers the frame's events with
-   * `endFrame`; the synchronous `tick` wraps the two.
+   * `endFrame`. The synchronous `tick` wraps the two.
    *
-   * A pending slope from `armSlope` integrates the step against a target moving at
-   * that slope instead of holding still: one affine transform around
-   * the unchanged solver. With the target at `p(t) = p0 + g*t`, the
-   * displacement u = x - p(t) obeys the homogeneous equation shifted by
-   * the constant u_ss = -(2*zeta/wn)*g = -(damping/tension)*g, so the
-   * solver ticks w = u - u_ss exactly and the results shift back.
-   * Measuring u from the moving target makes the slope endpoint and the
-   * new target coincide — the armer assigns the target, no rebase
-   * arithmetic exists. The slope is an argument of the step, never
-   * persistent solver state: g = 0 takes the plain step below, so a
+   * A pending slope from `armSlope` integrates the step against a target
+   * that moves at that slope instead of holding still. The step is one
+   * affine transform around the unchanged solver. With the target at
+   * `p(t) = p0 + g*t`, the displacement u = x - p(t) obeys the
+   * homogeneous equation shifted by the constant
+   * u_ss = -(2*zeta/wn)*g = -(damping/tension)*g. The solver ticks
+   * w = u - u_ss exactly, and the results shift back. Because u is
+   * measured from the moving target, the slope ends exactly on the new
+   * target. The armer assigns that target, so no rebase arithmetic is
+   * needed. The slope is an argument of the step, never persistent
+   * solver state. With g = 0 the step takes the plain path below, so a
    * motion never armed with a slope steps bit-exactly like an isolated
    * spring.
    */
@@ -145,9 +147,9 @@ export class SpringMotion extends Motion {
       const shift = (this.#config.damping / this.#config.tension) * g
       state.position += shift
       state.velocity -= g
-      // Anchor in slope space from the shifted state: unconditionally,
-      // and again next step — the slope-space anchor is wrong for any
-      // other frame.
+      // Anchor in slope space from the shifted state, always, and again
+      // on the next step. The slope-space anchor is wrong for any other
+      // frame.
       if (this.#needsUpdate) {
         this.#updateSolver()
         this.#needsUpdate = false
@@ -181,8 +183,8 @@ export class SpringMotion extends Motion {
     this.#currentSolver.tick(dt)
 
     if (this.#state.isResting) {
-      // Snap exactly to the target at rest; the deferred reset re-anchors
-      // the solver if the spring is disturbed again.
+      // Snap exactly to the target at rest. The deferred reset re-anchors
+      // the solver if something disturbs the spring again.
       this.#state.position = 0
       this.#state.velocity = 0
       this.#needsReset = true
@@ -190,18 +192,19 @@ export class SpringMotion extends Motion {
   }
 
   /**
-   * Emits the frame's `update`, then reconciles `stop`/`start`. The tick
-   * pass calls this in dependency order after every motion has advanced,
-   * so update callbacks read frame-final values everywhere.
+   * Emits the frame's `update`, then reconciles `stop` and `start`. The
+   * tick pass calls this after every motion advanced, in the order the
+   * motions first advanced, so update callbacks read frame-final values
+   * everywhere.
    */
   endFrame() {
     this.#emitter.emit('update')
     this.#reconcileRunning()
   }
 
-  // Reads state fresh rather than caching around the update emit: an
-  // update callback can re-displace the motion, and a stale boolean
-  // would emit a bogus 'stop'.
+  // Reads state fresh rather than caching it around the update emit. An
+  // update callback can displace the motion again, and a stale boolean
+  // would emit a false 'stop'.
   #reconcileRunning() {
     if (this.#state.isResting) {
       if (this.#running) {
@@ -214,7 +217,7 @@ export class SpringMotion extends Motion {
     }
   }
 
-  /** Ends the motion at the target at once and emits the update. */
+  /** Ends the motion at the target at once and emits `update`, plus `stop` if it was moving. */
   finish() {
     this.position = 0
     this.velocity = 0
@@ -227,12 +230,13 @@ export class SpringMotion extends Motion {
   }
 
   /**
-   * The sub-step controller's shock signal, read by a follower's `plan`
-   * with this motion as its leader: deviation from the quasi-steady
-   * tracking manifold x = -(damping/tension) * v, where damping/tension
-   * is 2*zeta/wn. Near zero while chasing any smoothly moving target at
-   * any speed; the full displacement after a target teleport;
-   * (damping/tension) * |v| after a fling.
+   * The shock signal for the sub-step controller, read by the `plan` of
+   * a follower that has this motion as its leader. It is the deviation
+   * from the quasi-steady tracking manifold x = -(damping/tension) * v,
+   * where damping/tension is 2*zeta/wn. It is near zero while the motion
+   * chases a smoothly moving target at any speed. After a target
+   * teleport it is the full displacement. After a fling from rest it is
+   * (damping/tension) * |v|.
    */
   manifoldDeviation() {
     const config = this.#config
@@ -241,8 +245,8 @@ export class SpringMotion extends Motion {
 
   /**
    * Newton's second law for the damped spring, `a = -(k*x + c*v) / m`,
-   * with x the displacement from the target. Exact from state and
-   * config, like position and velocity.
+   * with x the displacement from the target. Like position and velocity,
+   * it is exact from the state and the config.
    */
   get acceleration() {
     const config = this.#config

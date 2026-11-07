@@ -1,6 +1,6 @@
 /**
- * Type-level tests for composite spring value shapes, partial shapes, and
- * config shapes.
+ * Type-level tests for composite spring value shapes, partial writes,
+ * following, config shapes, purpose shapes, and mixed targets.
  *
  * This file is compiled by `tsc` but never executed (vitest only picks up
  * `*.spec.ts`, `*.browser.ts`, and `*.bench.ts`). Each `@ts-expect-error`
@@ -48,10 +48,11 @@ declare const pair: [number, number]
 const tuple = system.createSpring(pair)
 
 // Array literals infer with exact arity but WIDENED elements, and record
-// literals infer wide — both without a `const` type parameter. Don't add
-// one: `T` is invariant, so `const`'s literal channels (`[0, 0]`,
-// `{ readonly x: 0 }`) would make springs created from different initial
-// values type-incompatible, breaking annotations and follow.
+// literals infer wide, both without a `const` type parameter. Do not add
+// one. `T` is invariant, so the literal channels that `const` infers
+// (`[0, 0]`, `{ readonly x: 0 }`) would make springs created from
+// different initial values type-incompatible. That breaks annotations and
+// follow.
 const arity: CompositeSpring<[number, number]> = system.createSpring([0, 0])
 void arity
 const wide: CompositeSpring<{ x: number }> = system.createSpring({ x: 0 })
@@ -111,7 +112,7 @@ obj.jumpTo({ position: { x: 0 } })
 obj.target = { position: { z: 1 } }
 // @ts-expect-error channel targets are numbers
 obj.target = { opacity: '1' }
-// @ts-expect-error composite reads are live mirrors — deeply read-only
+// @ts-expect-error composite reads are live mirrors and deeply read-only
 obj.value.position.x = 5
 
 tuple.target = [100, 100]
@@ -169,8 +170,8 @@ system.createSpring({ x: 0, y: 0 }, { tension: 170, damping: 26 })
 // @ts-expect-error bare options are not a config, even at a leaf
 system.createSpring({ x: 0, y: 0 }, { x: { tension: 170, damping: 26 } })
 
-// A channel named like a spring option is unremarkable — there is no
-// ambiguity to resolve, since a config is always a `SpringDefinition`.
+// A channel named like a spring option needs no special handling. A config
+// is always a `SpringDefinition`, so the name is not ambiguous.
 const collide = system.createSpring({ tension: 0, damping: 0 })
 collide.config = cfg
 collide.config = { tension: cfg, damping: cfg }
@@ -180,8 +181,8 @@ collide.config = { tension: 170, damping: 26 }
 // ── One `createSpring`, dispatched on the value ─────────────────────
 
 // Scalar creation takes a number; any object or array is a value shape.
-// Channels named `target` or `value` are unremarkable — the displaced
-// scalar creation form that once claimed such literals no longer exists.
+// Channels named `target` or `value` need no special handling either. An
+// older scalar creation form took such literals, and it no longer exists.
 const scalar: Spring = system.createSpring(5)
 const composite: CompositeSpring<{ target: number; value: number }> = system.createSpring({
   target: 100,
@@ -193,7 +194,8 @@ void composite
 // ── Purpose shapes ───────────────────────────────────────────────────
 
 // A single purpose covers every channel; a shape sets it per channel, at
-// any level. Purposes ride in the third options argument, past `config`.
+// any level. Purposes go in the options object, the third argument after
+// `config`.
 system.createSpring({ x: 0, y: 0 }, cfg, { purpose: 'nonmotion' })
 system.createSpring({ x: 0, y: 0 }, undefined, { purpose: { x: 'nonmotion' } })
 system.createSpring({ x: 0, y: 0 }, undefined, { purpose: { x: 'motion', y: 'nonmotion' } })
@@ -234,6 +236,7 @@ declare const point: CompositeSpring<Vector2>
 nested.target = { opacity: point }
 // @ts-expect-error a source targets a single channel, not a branch
 nested.target = { position: scalarLeader }
-// value writes stay numeric — sources are targets, not displacements
+// value writes take only numbers, because a source is a target, not a
+// displacement
 // @ts-expect-error a source is not a value
 nested.value = { opacity: scalarLeader }

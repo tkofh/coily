@@ -1,8 +1,8 @@
 import type { SpringDefinition } from './config.ts'
 
 /**
- * The mutable position/velocity pair a motion and its solvers share, in
- * displacement space: position 0 means at the target.
+ * The mutable position and velocity that a motion and its solvers share,
+ * in displacement space. Position 0 means at the target.
  */
 export class State {
   #config: SpringDefinition
@@ -37,8 +37,8 @@ export class State {
   }
 
   /**
-   * The rest test: displacement, plus the displacement the current
-   * velocity could still convert into (|x| + |v| / wn), is inside the
+   * The rest test. The displacement, plus the displacement the current
+   * velocity could still turn into (|x| + |v| / wn), is inside the
    * config's resting threshold.
    */
   get isResting() {

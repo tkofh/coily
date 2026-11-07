@@ -73,9 +73,9 @@ describe('Spring: input validation', () => {
     }).toThrow('Precision must be greater than or equal to 0')
   })
 
-  // The following shapes are rejected by the types too — the casts simulate
-  // untyped (plain JS) callers, who should get a clear error instead of a
-  // silently ignored or misinterpreted parameter.
+  // The types reject the following shapes too. The casts stand in for
+  // untyped (plain JS) callers, who must get a clear error instead of a
+  // parameter that is ignored or misread without a word.
   test('throws when mass accompanies tension, damping, and dampingRatio', () => {
     expect(() =>
       defineSpring({ mass: 2, tension: 170, damping: 26, dampingRatio: 1 } as never),
@@ -237,11 +237,11 @@ describe('Spring: events', () => {
     const onStart = vi.fn()
     spring.onStart(onStart)
 
-    // Spring is resting — no start event on tick
+    // The spring is resting, so a tick emits no start event.
     system.advance(1000 / 60)
     expect(onStart).not.toHaveBeenCalled()
 
-    // Change target to trigger motion
+    // Change the target to start motion.
     spring.target = 100
     expect(onStart).toHaveBeenCalledOnce()
   })
@@ -331,7 +331,7 @@ describe('Spring: events', () => {
     const onUpdate = vi.fn()
     spring.onUpdate(onUpdate)
 
-    // A retarget preserves the current value — no update until a real tick
+    // A retarget keeps the current value, so no update fires until a real tick.
     spring.target = 100
     expect(onUpdate).not.toHaveBeenCalled()
 
@@ -445,7 +445,7 @@ describe('Spring: re-activation from rest', () => {
     spring.value = 50
     expect(spring.value).toBe(50)
 
-    // Should animate back to target
+    // The spring animates back to the target.
     for (let i = 0; i < 600; i++) {
       system.advance(1000 / 60)
       if (spring.isResting) break
@@ -617,7 +617,7 @@ describe('Spring: dispose', () => {
 
     spring.dispose()
     system.advance(1000 / 60)
-    // onUpdate should not fire again — emitter was cleared
+    // Dispose cleared the emitter, so onUpdate does not fire again.
     expect(onUpdate).toHaveBeenCalledOnce()
   })
 
@@ -655,18 +655,56 @@ describe('Spring: dispose', () => {
     expect(spring.value).toBe(frozen)
     expect(() => {
       spring.target = 500
-    }).toThrow('Cannot tick a disposed motion')
+    }).toThrow('Cannot write to a disposed spring')
     expect(() => {
       spring.value = 5
-    }).toThrow('Cannot tick a disposed motion')
-    expect(() => spring.jumpTo(50)).toThrow('Cannot tick a disposed motion')
+    }).toThrow('Cannot write to a disposed spring')
+    expect(() => {
+      spring.velocity = 5
+    }).toThrow('Cannot write to a disposed spring')
+    expect(() => {
+      spring.config = defineSpring({ mass: 1, tension: 300, damping: 20 })
+    }).toThrow('Cannot write to a disposed spring')
+    expect(() => spring.jumpTo(50)).toThrow('Cannot write to a disposed spring')
+    expect(() => {
+      spring.target = system.createSpring(0)
+    }).toThrow('Cannot write to a disposed spring')
+    // A write of the current value throws too.
+    expect(() => {
+      spring.value = frozen
+    }).toThrow('Cannot write to a disposed spring')
+    expect(spring.value).toBe(frozen)
+  })
+
+  test('a write to a disposed spring leaves the rest of the system running', ({ system }) => {
+    const config = defineSpring({ mass: 1, tension: 170, damping: 26 })
+    const disposed = system.createSpring(0, config)
+    const other = system.createSpring(0, config)
+    disposed.target = 100
+    other.target = 100
+    system.advance(1000 / 60)
+    disposed.dispose()
+
+    for (const write of [
+      () => (disposed.velocity = 5),
+      () => (disposed.target = 500),
+      () => (disposed.value = 5),
+      () => (disposed.config = defineSpring({ mass: 1, tension: 300, damping: 20 })),
+      () => disposed.jumpTo(50),
+    ]) {
+      expect(write).toThrow('Cannot write to a disposed spring')
+    }
+
+    const before = other.value
+    expect(() => system.advance(1000 / 60)).not.toThrow()
+    expect(other.value).toBeGreaterThan(before)
   })
 })
 
 describe('Spring: duration-based settle time', () => {
   test('rests on the requested duration when displacement matches the range', () => {
     // Non-oscillating regimes rest at the first frame at or after the
-    // requested duration — duration means duration, not "well within".
+    // requested duration, not well before it.
     for (const dampingRatio of [1, 2]) {
       const system = createSpringSystem()
       const spring = system.createSpring(
@@ -689,7 +727,7 @@ describe('Spring: duration-based settle time', () => {
 
   test('a bouncy duration config rests at or shortly before the requested duration', () => {
     // The rest amplitude pulses, so a frame can catch a dip inside the
-    // threshold up to one oscillation early — never late.
+    // threshold up to one oscillation early, but never late.
     const system = createSpringSystem()
     const spring = system.createSpring(
       0,
@@ -745,10 +783,10 @@ describe('Spring: retargeting preserves value', () => {
 
   test('a soft spring is not declared resting while it can still move visibly', () => {
     const system = createSpringSystem({ reducedMotion: 'never' })
-    // ωₙ = 0.1: near a zero crossing this spring satisfies the naive box
-    // check (|x| and |v| both under the threshold) while its velocity can
-    // still carry it ~10× the threshold away. The envelope must keep it
-    // ticking through the crossing instead of snapping it to rest there.
+    // wn = 0.1. Near a zero crossing this spring passes the naive box
+    // check (|x| and |v| both under the threshold), while its velocity can
+    // still carry it about 10 times the threshold away. The rest test must
+    // keep it ticking through the crossing instead of snapping it to rest.
     const spring = system.createSpring(
       1,
       defineSpring({ mass: 1, tension: 0.01, dampingRatio: 0.2, precision: 2 }),

@@ -7,9 +7,9 @@ import {
 } from 'vue'
 
 // Vue's provide() hides the value from the providing component's own
-// inject(). These helpers keep a side table per instance so a component
-// can consume what it provides — the useSpringSystem root case, where
-// the creating component animates too.
+// inject(). These helpers keep a side table per instance, so a component
+// can inject what it provides. useSpringSystem needs this at the root,
+// where the component that creates the system also animates.
 const localProvides = new WeakMap<ComponentInternalInstance, Map<InjectionKey<unknown>, unknown>>()
 
 export function provideLocal<T>(key: InjectionKey<T>, value: T) {

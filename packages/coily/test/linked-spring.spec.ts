@@ -36,6 +36,19 @@ describe('Spring: following', () => {
   })
 
   describe('following', () => {
+    test('a rejected number target keeps the follow', ({ system }) => {
+      const leader = system.createSpring(0, config)
+      const follower = system.createSpring(leader, config)
+
+      for (const bad of [Number.NaN, Infinity]) {
+        expect(() => {
+          follower.target = bad
+        }).toThrow('Spring target must be a finite number')
+      }
+      leader.jumpTo(50)
+      expect(follower.target).toBe(50)
+    })
+
     test('follows leader to new target', ({ system }) => {
       const leader = system.createSpring(0, config)
       const follower = system.createSpring(leader.value)
@@ -86,8 +99,8 @@ describe('Spring: following', () => {
 
     test('a follow wired after creation propagates in the same frame', ({ system }) => {
       // Regression: applying a config during follow used to park the resting
-      // follower in the motion set, where it consumed its once-per-pass tick
-      // before the leader emitted — adding a frame of lag per chain link.
+      // follower in the motion set. There it used up its once-per-pass tick
+      // before the leader emitted, which added a frame of lag per chain link.
       const a = system.createSpring(0, config)
       const b = system.createSpring(0)
       const c = system.createSpring(0)
@@ -188,7 +201,6 @@ describe('Spring: following', () => {
 
       expect(follower.tension).toBe(400)
 
-      // Leader config change should not affect follower now
       leader.config = defineSpring({ mass: 1, tension: 999, damping: 99 })
       expect(follower.tension).toBe(400)
     })
@@ -239,9 +251,10 @@ describe('Spring: following', () => {
     test('a follower woken mid-pass by its leader does not tick twice in one frame', ({
       system,
     }) => {
-      // Construct a follower whose motion sits BEFORE its leader's in the
-      // motion set: it rests and is removed during the pass, then the leader's
-      // update re-adds it — it must not advance (or emit) twice that frame.
+      // Construct a follower whose motion sits before its leader's in the
+      // motion set. It rests and leaves the set during the pass, then the
+      // leader's update re-adds it. It must not advance (or emit) twice
+      // that frame.
       const follower = system.createSpring(0, config)
       const leader = system.createSpring(0, config)
 
@@ -289,7 +302,6 @@ describe('Spring: following', () => {
 
       leader.dispose()
 
-      // Follower keeps its position
       expect(follower.value).toBe(posBeforeDispose)
     })
 
@@ -751,7 +763,7 @@ describe('Spring: following', () => {
       // Held-target coupling integrates whole frames against a stale
       // partner and bleeds the pair's conserved mean: at 33ms frames the
       // K = 1 baseline settles near 34 instead of the true 50
-      // (follower-coupling-investigation.md section 4). Sub-stepping
+      // (docs/follower-coupling/investigation.md, section 4). Sub-stepping
       // converges it like 1/K.
       const [a, b] = releasePair()
       expect(Math.abs(a - b)).toBeLessThan(0.1)
@@ -890,9 +902,9 @@ describe('Spring: following', () => {
       const before = follower.value
       leader.jumpTo(50)
 
-      // The retarget lands synchronously and exactly; the follower's
-      // value moves only by animating — no slope smears the jump across
-      // the next frame.
+      // The retarget lands synchronously and exactly. The follower's
+      // value moves only by animating, and no slope spreads the jump
+      // across the next frame.
       expect(follower.target).toBe(50)
       expect(follower.value).toBe(before)
     })
@@ -932,7 +944,8 @@ describe('Spring: following', () => {
       follower.onUpdate(() => counts.follower++)
       compositeFollower.onUpdate(() => counts.composite++)
 
-      // Teleports rail K for the frame; notification must not scale.
+      // The teleports push K to its cap for the frame. The update count
+      // must not grow with K.
       leader.target = 200
       composite.target = { x: 200, y: 200 }
       system.advance(33)

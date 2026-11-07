@@ -597,8 +597,8 @@ describe('FollowGraph: planning', () => {
 
     leader.target = 100
     motions.tick(1 / 60)
-    // This frame's plan ran before its recouple: the observed delta is
-    // still zero, the leader's first move lands in the next plan.
+    // This frame's plan ran before its recouple, so the observed delta is
+    // still zero. The leader's first move lands in the next plan.
     expect(trail.delta).toBe(0)
     const first = follower.target
 
@@ -647,9 +647,9 @@ describe('FollowGraph: planning', () => {
     motions.tick(1 / 60)
     motions.tick(1 / 60)
 
-    // Two reads per frame — the mid-pass recouple and the frame-end
-    // update handler — and none from the plan pass, whose history is the
-    // follower's own target trail.
+    // Two reads per frame, one from the mid-pass recouple and one from
+    // the frame-end update handler. The plan pass reads nothing, because
+    // its history is the follower's own target trail.
     expect(reads).toBe(wired + 6)
   })
 

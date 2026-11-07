@@ -38,9 +38,9 @@ describe('velocityOf', () => {
       if (motion.isResting && follower.isResting) break
     }
 
-    // The follower rode the leader's velocity up...
+    // The follower tracked the leader's velocity up, then settled as the
+    // leader came to rest and its velocity fell to 0.
     expect(peak).toBeGreaterThan(0)
-    // ...then settled as the leader came to rest and its velocity fell to 0.
     expect(follower.value).toBeCloseTo(0, 1)
     expect(follower.isResting).toBe(true)
   })

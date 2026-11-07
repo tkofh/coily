@@ -20,9 +20,9 @@ import { invariant, isNumber, isRecordOrArray, RESOLVED } from './util.ts'
  * Compile-time validation of a value shape: every channel must be a `number`,
  * every branch a plain object or array with at least one channel. Used as
  * `value: T & Shape<T>` so an invalid channel errors on that property rather
- * than on the whole argument. Purely structural — interfaces satisfy it
- * without index signatures — and mirrored by the runtime
- * validation for untyped callers. Optional and `undefined`-typed channels
+ * than on the whole argument. It is purely structural, so interfaces
+ * satisfy it without index signatures, and runtime validation mirrors it
+ * for untyped callers. Optional and `undefined`-typed channels
  * are rejected: a channel that may be absent would make two springs of the
  * same declared shape structurally incompatible at runtime.
  */
@@ -48,7 +48,8 @@ export type Shape<T> = 0 extends 1 & T
 
 /**
  * A partial view of a value shape: the same nesting with any subset of the
- * numeric channels present. Absent (or `undefined`) channels are left alone.
+ * numeric channels present. A write leaves absent or `undefined` channels
+ * unchanged.
  */
 export type PartialShape<T> = T extends number
   ? number
@@ -56,8 +57,8 @@ export type PartialShape<T> = T extends number
 
 /**
  * A deep-readonly view of a value shape. Composite reads (`target`, `value`,
- * `velocity`, `acceleration`) return the spring's live mirror objects —
- * refreshed in place on every read — so their channels are typed read-only.
+ * `velocity`, `acceleration`) return the spring's live mirror objects, and
+ * every read refreshes them in place, so their channels are typed read-only.
  */
 export type ReadonlyShape<T> = T extends number
   ? number
@@ -80,9 +81,9 @@ export type ConfigShape<T> =
 /**
  * What each channel of a composite spring animates: a single `Purpose`
  * for every channel, or a shape mirroring the value with purposes at any
- * level. A purpose at a subtree covers every channel below it, and any
- * channel it doesn't reach defaults to `'motion'`. Fixed when the spring
- * is created. See `Purpose`.
+ * level. A purpose at a subtree covers every channel below it, and a
+ * channel that no purpose reaches defaults to `'motion'`. The purposes
+ * are fixed when the spring is created. See `Purpose`.
  */
 export type PurposeShape<T> =
   | Purpose
@@ -91,8 +92,8 @@ export type PurposeShape<T> =
 /**
  * A partial target shape: the same nesting as the value with any subset
  * of the channels present, each taking a number to animate toward or a
- * scalar `SpringSource` to follow. Absent (or `undefined`) channels are
- * left alone.
+ * scalar `SpringSource` to follow. A write leaves absent or `undefined`
+ * channels unchanged.
  */
 export type TargetShape<T> = T extends number
   ? number | SpringSource
@@ -112,10 +113,11 @@ function invalidConfig(path: string): string {
 }
 
 /**
- * Decides what a config node means: `null` and `SpringDefinition` instances are
- * configs covering the whole subtree, any other object or array is a config
- * shape to descend into (its structure is checked on the way down), and
- * anything else — a bare number, string, or options object — is invalid.
+ * Decides what a config node means. `null` and `SpringDefinition` instances
+ * are configs that cover the whole subtree. Any other object or array is a
+ * config shape to descend into, and the descent checks its structure. A
+ * bare options object is such a shape, so its option keys fail as unknown
+ * channels. Anything else, such as a bare number or string, is invalid.
  */
 function resolveConfigNode(node: unknown, path: string): Coverage<SpringDefinition | null> {
   if (node === null) return null
@@ -182,27 +184,26 @@ const followChannel = (mine: Spring, theirs: Spring) => {
 }
 
 /**
- * A composite spring over a fixed numeric shape — a nested plain object
+ * A composite spring over a fixed numeric shape: a nested plain object
  * or array whose leaves are all numbers. Each leaf runs an independent
- * spring, called a channel, behind one API: targets, values, velocities,
- * and configs read and write as (partial) shapes, and events are
- * coalesced across channels. Create composite springs with
- * `SpringSystem.createSpring`.
+ * spring, called a channel, behind one API. Targets, values, velocities,
+ * and configs read and write as shapes, writes can name any subset of
+ * the channels, and events coalesce across channels. Create composite
+ * springs with `SpringSystem.createSpring`.
  *
- * A composite spring is a `SpringSource` of its value shape: `mapSpring`
- * derives scalar sources from it — alone or at the leaves of a shape —
- * which springs can then follow. Only scalar sources are followable
- * directly.
+ * A composite spring is a `SpringSource` of its value shape. Springs can
+ * follow only scalar sources, so use `mapSpring` to derive one from the
+ * composite, alone or at the leaves of a shape.
  *
- * The shape is fixed at construction. Writes naming unknown channels
- * throw with the channel's path (`position.z`), and so do non-finite
- * channel values.
+ * The shape is fixed at construction. A write that names an unknown
+ * channel throws with the channel's path (`position.z`), and so does a
+ * non-finite channel value.
  */
 export class CompositeSpring<in out T extends object> implements TargetedSource<ReadonlyShape<T>> {
   /** Brands the composite as a `TargetedSource` whose api is the composite itself. */
   get [SpringSourceSymbol](): TargetedSourceApi<ReadonlyShape<T>> {
-    // Backing registers on first use as a source — see `Spring`'s brand
-    // getter for why registration is lazy.
+    // Backing registers on first use as a source. `Spring`'s brand getter
+    // explains why registration is lazy.
     registerBacking(this, this.#tree.leaves)
     return this
   }
@@ -210,9 +211,9 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
   readonly #motions: MotionSet
   readonly #tree: ShapeTree<Spring>
   readonly #valueView: ShapeView<Spring>
-  // Built on first read: `value` is the hot read (one per frame), so it
-  // alone is eager; a composite that never reads its target, velocity, or
-  // acceleration never allocates those mirrors.
+  // Built on first read. `value` is the hot read (one per frame), so only
+  // its view is eager. A composite that never reads its target, velocity,
+  // or acceleration never allocates those mirrors.
   #targetView: ShapeView<Spring> | null = null
   #velocityView: ShapeView<Spring> | null = null
   #accelerationView: ShapeView<Spring> | null = null
@@ -225,8 +226,8 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
   #resolveSettled: (() => void) | null = null
   #disposed = false
 
-  // One flush per write batch or tick: the coalesced update is emitted
-  // before stop, so a stop always lands after the frame's final update.
+  // One flush runs per write batch or tick. It emits the coalesced update
+  // before stop, so a stop always comes after the frame's final update.
   readonly #flush = () => {
     if (this.#disposed) return
 
@@ -244,6 +245,16 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
       this.#running = true
       this.#emitter.emit('start')
     }
+
+    // A composite that leaves rest and returns within one batch emits
+    // neither `start` nor `stop`, so `settled` resolves on the state the
+    // flush finds, not on the event.
+    const resolve = this.#resolveSettled
+    if (resolve !== null && !this.#running) {
+      this.#settled = null
+      this.#resolveSettled = null
+      resolve()
+    }
   }
 
   constructor(
@@ -259,10 +270,11 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
       'Composite spring value must be a plain object or an array of numeric channels',
     )
 
-    // A channel spring's purpose is fixed at birth (no setter), so resolve
-    // the shape to a per-channel purpose before the springs exist. A
-    // throwaway tree of channel paths reuses `broadcast`'s cover/descend
-    // and validation; skipped when no purpose is given.
+    // A channel spring's purpose is fixed at construction (it has no
+    // setter), so the shape must resolve to a per-channel purpose before
+    // the springs exist. A throwaway tree of channel paths reuses the
+    // cover, descend, and validation logic of `broadcast`. Without a
+    // purpose, the constructor skips this step.
     let purposeByPath: Map<string, Purpose> | null = null
     if (purpose !== undefined) {
       const byPath = new Map<string, Purpose>()
@@ -303,20 +315,22 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
 
   /**
    * The value each channel is animating toward, as a read-only mirror of
-   * the shape. The mirror object is reused: every read refreshes its
-   * numbers in place, so read it fresh rather than holding it across
+   * the shape. The mirror object is reused. Every read refreshes its
+   * numbers in place, so read it fresh instead of holding it across
    * frames.
    *
    * Assignment accepts a `CompositeSpringTarget`:
    * - A partial shape retargets the channels it names and leaves the
    *   others alone. Each named channel takes a number, or a scalar
-   *   `SpringSource` to follow — a `Spring`, or a value derived with
-   *   `mapSpring`. While following a leader, naming a channel also
-   *   detaches that channel from it.
-   * - A `CompositeSpring` of the same shape follows the leader channel by
-   *   channel.
+   *   `SpringSource` to follow, such as a `Spring` or a value derived
+   *   with `mapSpring`. While the composite follows a leader, naming a
+   *   channel also detaches that channel from the leader.
+   * - A `CompositeSpring` of the same shape becomes the leader, and each
+   *   channel follows the matching leader channel.
    *
-   * Unknown channels throw with their path.
+   * Unknown channels throw with their path. Under reduced motion,
+   * retargets apply instantly, except on channels whose `purpose` is
+   * `'nonmotion'`.
    */
   get target(): ReadonlyShape<T> {
     const view = (this.#targetView ??= new ShapeView(this.#tree.root, readTarget))
@@ -325,6 +339,7 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
   }
 
   set target(value: CompositeSpringTarget<T>) {
+    this.#assertLive()
     if (value instanceof CompositeSpring) {
       this.#follow(value)
     } else {
@@ -336,15 +351,16 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
 
   /**
    * The current animated value of every channel, as a read-only mirror of
-   * the shape. The mirror object is reused: every read refreshes its
-   * numbers in place, so read it fresh rather than holding it across
+   * the shape. The mirror object is reused. Every read refreshes its
+   * numbers in place, so read it fresh instead of holding it across
    * frames.
    *
-   * Assignment takes a partial shape and displaces the channels it names:
-   * each keeps its target and springs back from the written value, with
-   * one coalesced `update` fired synchronously. Under reduced motion a
-   * write jumps the named channels — targets included — except channels
-   * whose `purpose` is `'nonmotion'`, which displace as normal.
+   * Assignment takes a partial shape and displaces the channels it names.
+   * Each named channel keeps its target and springs back from the written
+   * value, and the write fires one coalesced `update` synchronously. Under
+   * reduced motion, a write jumps the named channels to the written
+   * values, targets included. Channels whose `purpose` is `'nonmotion'`
+   * still displace as normal.
    */
   get value(): ReadonlyShape<T> {
     this.#valueView.refresh()
@@ -352,6 +368,7 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
   }
 
   set value(value: PartialShape<T>) {
+    this.#assertLive()
     this.#motions.flushes.batch(() => {
       this.#tree.root.scatter(value, acceptNumber, assignValue)
     })
@@ -359,12 +376,12 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
 
   /**
    * The current velocity of every channel in value units per second, as a
-   * read-only mirror of the shape — reused and refreshed in place on each
-   * read.
+   * read-only mirror of the shape. The mirror is reused and refreshed in
+   * place on each read.
    *
-   * Assignment takes a partial shape and flings the channels it names;
-   * the rest are untouched. Under reduced motion writes are ignored,
-   * except on channels whose `purpose` is `'nonmotion'`.
+   * Assignment takes a partial shape and flings the channels it names.
+   * The other channels are unchanged. Under reduced motion, writes are
+   * ignored, except on channels whose `purpose` is `'nonmotion'`.
    */
   get velocity(): ReadonlyShape<T> {
     const view = (this.#velocityView ??= new ShapeView(this.#tree.root, readVelocity))
@@ -373,6 +390,7 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
   }
 
   set velocity(value: PartialShape<T>) {
+    this.#assertLive()
     this.#motions.flushes.batch(() => {
       this.#tree.root.scatter(value, acceptNumber, assignVelocity)
     })
@@ -380,9 +398,10 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
 
   /**
    * The current acceleration of every channel in value units per second
-   * squared, as a read-only mirror of the shape — reused and refreshed in
-   * place on each read. Read-only, like each channel's: acceleration
-   * follows from the motion. To fling channels, write `velocity`.
+   * squared, as a read-only mirror of the shape. The mirror is reused and
+   * refreshed in place on each read. Acceleration follows from the motion,
+   * so it has no setter here, as on each channel. To fling channels,
+   * write `velocity`.
    */
   get acceleration(): ReadonlyShape<T> {
     const view = (this.#accelerationView ??= new ShapeView(this.#tree.root, readAcceleration))
@@ -396,8 +415,11 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
    *
    * Assignment accepts a `ConfigShape`: one config for every channel,
    * `null` to revert every channel to the default, or a shape mirroring
-   * the value with configs at any level — a config at a subtree covers
+   * the value with configs at any level. A config at a subtree covers
    * every channel below it. Non-config leaves throw with their path.
+   *
+   * A `null` read means the channels differ. Assigning that `null` back
+   * reverts every channel to the default.
    */
   get config(): SpringDefinition | null {
     const channels = this.#tree.leaves
@@ -409,6 +431,7 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
   }
 
   set config(value: ConfigShape<T>) {
+    this.#assertLive()
     this.#motions.flushes.batch(() => {
       this.#tree.root.broadcast(value ?? null, resolveConfigNode, assignConfig, 'config')
     })
@@ -416,8 +439,9 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
 
   /**
    * The shared purpose when every channel resolves to the same `Purpose`,
-   * and `null` when they differ. Fixed when the spring is created — an
-   * `'nonmotion'` channel opts out of reduced motion. See `Purpose`.
+   * and `null` when they differ. The purposes are fixed when the spring is
+   * created. A `'nonmotion'` channel opts out of reduced motion. See
+   * `Purpose`.
    */
   get purpose(): Purpose | null {
     const channels = this.#tree.leaves
@@ -428,7 +452,7 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
     return first
   }
 
-  /** The largest `timeRemaining` across channels, in milliseconds. */
+  /** The largest `timeRemaining` across channels, in ms. */
   get timeRemaining(): number {
     let max = 0
     for (const channel of this.#tree.leaves) {
@@ -447,42 +471,40 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
   }
 
   /**
-   * A promise that resolves when every channel next rests — already
-   * resolved while resting or after dispose. Retargeting any channel
-   * mid-flight extends the wait; disposing resolves it.
+   * A promise that resolves when every channel next rests. It is already
+   * resolved while the composite rests or after dispose. Retargeting any
+   * channel mid-flight extends the wait, and disposing resolves it.
    */
   get settled(): Promise<void> {
     if (this.#disposed || this.isResting) return RESOLVED
 
     this.#settled ??= new Promise((resolve) => {
       this.#resolveSettled = resolve
-      const unsubscribe = this.onStop(() => {
-        unsubscribe()
-        this.#settled = null
-        this.#resolveSettled = null
-        resolve()
-      })
     })
 
     return this.#settled
   }
 
   /**
-   * Snaps the channels the partial shape names to the given values with
-   * no animation, notifying listeners synchronously. Channels it leaves
-   * out are untouched.
+   * Snaps the channels that the partial shape names to the given values,
+   * with no animation: each named channel's target and value both become
+   * the given value. The composite fires one `update` synchronously, plus
+   * `stop` if the jump leaves every channel resting. Channels that the
+   * shape leaves out are unchanged.
    */
   jumpTo(value: PartialShape<T>) {
+    this.#assertLive()
     this.#motions.flushes.batch(() => {
       this.#tree.root.scatter(value, acceptNumber, applyJump)
     })
   }
 
   /**
-   * Releases every channel permanently: resolves `settled` and notifies
-   * dispose listeners. Calling it again is a no-op.
+   * Releases every channel permanently. Each channel stops following, and
+   * its followers detach and keep their current targets. `settled`
+   * resolves and dispose listeners fire. Calling it again is a no-op.
    *
-   * A disposed composite spring keeps its final values readable; writes
+   * A disposed composite spring keeps its final values readable. Writes
    * throw.
    */
   dispose() {
@@ -502,27 +524,28 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
   }
 
   /**
-   * Subscribes to coalesced value changes: at most one `update` per tick,
-   * fired after every channel has advanced, plus one per synchronous
-   * write. Returns an unsubscribe function.
+   * Subscribes to coalesced value changes. The composite fires at most one
+   * `update` per tick, after every channel advances. It also fires one for
+   * each synchronous write that moves a channel, such as a `value` write
+   * or a `jumpTo` call. Returns an unsubscribe function.
    */
   onUpdate(callback: () => void) {
     return this.#emitter.on('update', callback)
   }
 
   /**
-   * Subscribes to the composite leaving rest: a channel starts moving
-   * while all were resting. Always alternates with `stop`. Returns an
-   * unsubscribe function.
+   * Subscribes to the composite leaving rest. `start` fires when a channel
+   * starts to move and no other channel was moving. It always alternates
+   * with `stop`. Returns an unsubscribe function.
    */
   onStart(callback: () => void) {
     return this.#emitter.on('start', callback)
   }
 
   /**
-   * Subscribes to the composite coming to rest: every channel resting,
-   * fired after that tick's final `update`. Always alternates with
-   * `start`. Returns an unsubscribe function.
+   * Subscribes to the composite coming to rest. `stop` fires when every
+   * channel rests, after that tick's final `update`. It always alternates
+   * with `start`. Returns an unsubscribe function.
    */
   onStop(callback: () => void) {
     return this.#emitter.on('stop', callback)
@@ -530,9 +553,13 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
 
   /** Subscribes to `dispose`, which fires once. Returns an unsubscribe function. */
   onDispose(callback: () => void) {
-    // Channels dispose together, so the first channel's dispose event
-    // stands in for the composite's.
+    // Channels dispose together, so the composite uses the first
+    // channel's dispose event as its own.
     return this.#tree.leaves[0]!.onDispose(callback)
+  }
+
+  #assertLive() {
+    invariant(!this.#disposed, 'Cannot write to a disposed spring')
   }
 
   #follow(leader: CompositeSpring<T>) {

@@ -4,24 +4,24 @@ import { invariant } from './util.ts'
 /** Frame timing options for a spring system. */
 export interface TickerOptions {
   /**
-   * Frame-rate cap. 0 means uncapped: one tick per displayed frame,
-   * whatever rate the screen runs at — 60Hz, 120Hz, or adaptive. Capped
-   * ticks are paced to whole display frames, near the requested rate, and
-   * each still receives the true elapsed time.
+   * Frame-rate cap. 0 means uncapped: one tick per displayed frame, at
+   * whatever rate the screen runs, such as 60Hz, 120Hz, or adaptive. The
+   * ticker paces capped ticks to whole display frames near the requested
+   * rate, and each tick still receives the true elapsed time.
    * @default 0
    */
   readonly fps?: number | undefined
   /**
-   * Frame gap in milliseconds above which the gap is treated as lag — a
-   * backgrounded tab, a blocking task — and replaced with `adjustedLag`,
-   * so springs don't teleport when frames resume. 0 disables lag
-   * clamping.
+   * The longest frame gap, in ms, that counts as a normal frame. A longer
+   * gap is lag, such as a backgrounded tab or a blocking task. The ticker
+   * replaces it with `adjustedLag`, so springs do not teleport when
+   * frames resume. 0 disables lag clamping.
    * @default 500
    */
   readonly lagThreshold?: number | undefined
   /**
-   * The elapsed milliseconds a lagging frame is replaced with. Clamped to
-   * at most `lagThreshold`.
+   * The elapsed time, in ms, that replaces a lagging frame. It is clamped
+   * to at most `lagThreshold`.
    * @default 33
    */
   readonly adjustedLag?: number | undefined
@@ -45,18 +45,20 @@ const cancel = (id: number): void => {
 const now = (): number => performance.now()
 
 /**
- * Drives a `MotionSet` from animation frames. Schedules frames only
- * while motions exist — otherwise it sleeps and the set's `onWake`
- * rearms it — paces fps caps to whole display frames, and clamps lag
- * gaps. While started and asleep it counts idle wall time onto the
- * set's clock, leaving out time the document spends hidden: frames
- * stop in a hidden tab, and a set that kept stepping through the spell
- * would see it replaced with `adjustedLag`, not counted in full.
+ * Drives a `MotionSet` from animation frames. It schedules frames only
+ * while motions exist. Otherwise it sleeps, and the set's `onWake`
+ * rearms it. It paces fps caps to whole display frames and clamps lag
+ * gaps.
+ *
+ * While started and asleep, it counts idle wall time onto the set's
+ * clock, but not the time the document spends hidden. This matches an
+ * awake set. Frames stop in a hidden tab, and when they resume, the set
+ * gets `adjustedLag` for the gap instead of the full time.
  *
  * Idle time reads wall time once per microtask checkpoint, so the clock
- * holds still through synchronous code the way it holds still between
- * frames: every read of a ramp in one event handler or one render sees
- * the same moment.
+ * holds still through synchronous code, as it does between frames.
+ * Every read of a ramp in one event handler or one render sees the same
+ * moment.
  */
 export class Ticker {
   #fps: number
@@ -66,6 +68,7 @@ export class Ticker {
   #adjustedLag: number
 
   readonly #motions: MotionSet
+  readonly #onVisibility = () => this.#onVisibilityChange()
 
   #frame = 0
   #time = 0
@@ -77,6 +80,8 @@ export class Ticker {
   #id = 0
   #stopped = true
   #sleeping = false
+  /** Whether a frame callback is running. Its `finally` schedules the next frame. */
+  #inFrame = false
 
   /** Wall ms when the current idle spell began, or null outside one. */
   #idleSince: number | null = null
@@ -103,8 +108,8 @@ export class Ticker {
     this.#fps = fps
     this.#gap = fps === 0 ? 1000 / 60 : 1000 / fps
     this.#capGap = fps === 0 ? 0 : 1000 / fps
-    // 0 disables clamping; a threshold no real frame gap reaches avoids
-    // a separate disabled branch per frame.
+    // 0 disables clamping. A threshold that no real frame gap reaches
+    // saves a separate disabled branch per frame.
     this.#lagThreshold = lagThreshold === 0 ? 1e8 : lagThreshold
     this.#adjustedLag = Math.min(adjustedLag, this.#lagThreshold)
 
@@ -113,7 +118,7 @@ export class Ticker {
 
     if (typeof document !== 'undefined') {
       if (document.visibilityState === 'hidden') this.#hiddenSince = this.#taskNow()
-      document.addEventListener('visibilitychange', () => this.#onVisibilityChange())
+      document.addEventListener('visibilitychange', this.#onVisibility)
     }
   }
 
@@ -172,7 +177,9 @@ export class Ticker {
       this.#stopped = false
       this.#primed = false
       this.#acc = 0
-      this.#schedule(this.#taskNow())
+      // A restart from a listener inside a frame leaves scheduling to that
+      // frame, which would otherwise request a second callback alongside.
+      if (!this.#inFrame) this.#schedule(this.#taskNow())
     }
   }
 
@@ -190,6 +197,14 @@ export class Ticker {
 
   tick() {
     this.#step(this.#gap)
+  }
+
+  /** Stops the ticker and removes its document listener. */
+  dispose() {
+    this.stop()
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this.#onVisibility)
+    }
   }
 
   #schedule(timestamp: number) {
@@ -216,6 +231,7 @@ export class Ticker {
   #onFrame(timestamp: number) {
     if (this.#stopped) return
 
+    this.#inFrame = true
     try {
       if (this.#primed) {
         const wallElapsed = timestamp - this.#lastWallTime
@@ -233,10 +249,11 @@ export class Ticker {
         }
       } else {
         // The first frame after start or wake only records a baseline
-        // timestamp; stepping begins on the second. Idle time runs up
-        // to this frame, so the clock moves on without a gap. A frame's
-        // timestamp marks its start, which can precede a read made
-        // earlier in the frame, and the clock never runs backward.
+        // timestamp, and stepping begins on the second. Idle time runs
+        // up to this frame, so the clock moves on without a gap. The
+        // timestamp marks the frame's start, so it can be earlier than a
+        // read that ran before this callback. Crediting up to the later
+        // of the two keeps the clock from running backward.
         this.#primed = true
         this.#creditIdle(Math.max(timestamp, this.#lastTaskTime))
       }
@@ -246,6 +263,7 @@ export class Ticker {
       // step: the exception still surfaces from the frame callback, but
       // the loop keeps running. Skip only when a listener stopped the
       // ticker mid-step.
+      this.#inFrame = false
       if (!this.#stopped) {
         this.#schedule(timestamp)
       }

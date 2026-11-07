@@ -4,18 +4,19 @@ import type { SpringDefinition, SpringDefinitionOptions } from '../config.ts'
 import type { Purpose } from '../spring.ts'
 
 export interface SpringValueProps {
-  /** The value to animate toward. Changing it retargets the spring, momentum intact. */
+  /** The value to animate toward. A new value retargets the spring and keeps its momentum. */
   target: number
   /**
    * Spring config: a `SpringDefinition` or any option shape `defineSpring`
-   * accepts. Changing it reconfigures the spring in place; omit it for
-   * the default.
+   * accepts. A new config reconfigures the spring in place. Without it,
+   * the spring uses the default config.
    */
   config?: SpringDefinitionOptions | SpringDefinition
   /**
-   * What the spring animates — `'motion'` (default) or `'nonmotion'`.
-   * `'nonmotion'` (a cross-fade, a color) keeps animating under reduced
-   * motion. Read once at mount; later changes are ignored.
+   * What the spring animates, `'motion'` or `'nonmotion'`. A
+   * `'nonmotion'` spring, such as a cross-fade or a color, keeps
+   * animating under reduced motion. The component reads it once, in
+   * `setup()`, and ignores later changes.
    * @default 'motion'
    */
   purpose?: Purpose
@@ -34,7 +35,10 @@ export interface SpringValueSlotScope {
   isResting: boolean
   /** Estimated milliseconds until the spring rests. */
   timeRemaining: number
-  /** Snaps the spring to `value` with no animation, target included. */
+  /**
+   * Snaps the spring to `value` with no animation, target included. The
+   * spring rests there until the `target` prop changes.
+   */
   jumpTo: (value: number) => void
 }
 
@@ -42,9 +46,10 @@ export interface SpringValueSlotScope {
 export type SpringValueSlots = SlotsType<{ default: SpringValueSlotScope }>
 
 /**
- * Renderless component exposing one springed number through its default
- * slot — the template-only sibling of `useSpring`. Must sit below a
- * provided spring system.
+ * A renderless component that passes one spring's state to its default
+ * slot. It is the template-only form of `useSpring`. It must render
+ * below a provided spring system. A template ref to the component
+ * reads the same fields as the slot scope.
  *
  * @example
  * ```vue
@@ -61,7 +66,7 @@ export const SpringValue = defineComponent<
 >(
   (props, { slots, expose }) => {
     const { target, config } = toRefs(props)
-    // purpose is fixed at creation, so read it once rather than as a ref.
+    // Purpose is fixed at creation, so setup reads the prop once instead of passing a ref.
     const spring = useSpring(target, config, { purpose: props.purpose })
 
     expose({

@@ -3,26 +3,27 @@ import fc from 'fast-check'
 import { createSpringSystem, defineSpring } from '../src/index.ts'
 
 /**
- * Number of iterations for convergence tests.
- * We compute the analytical settling time and divide by this
- * to get the per-tick dt — no blind iteration needed.
+ * Number of ticks for convergence tests. Each test divides the solved
+ * rest time by this number to get the dt per tick, so no test has to
+ * guess how long to run.
  */
 const ITERATIONS = 300
 
 /**
- * Arbitrary for valid spring parameters.
- * Damping is derived as a fraction of critical damping so the
- * damping ratio is always physically meaningful.
+ * Arbitrary for valid spring parameters. Damping is derived as a fraction
+ * of critical damping, so the test controls the damping ratio directly.
  */
 const springParamsArb = fc
   .record({
     mass: fc.double({ min: 0.5, max: 50, noNaN: true }),
     tension: fc.double({ min: 10, max: 500, noNaN: true }),
-    // Damping ratio between 0.1 and 3 (covers underdamped, critical, overdamped)
+    // Damping ratio between 0.1 and 3, which covers the underdamped and
+    // overdamped regimes. A random double almost never resolves to a ratio
+    // of exactly 1, so the critically damped solver gets no coverage here.
     dampingRatio: fc.double({ min: 0.1, max: 3, noNaN: true }),
     // Displacement magnitude well above the resting threshold (0.005 at precision 2).
-    // Sub-threshold displacements rest immediately by design — not useful to
-    // test analytically.
+    // A displacement under the threshold rests at once by design, so it
+    // tells these tests nothing.
     displacement: fc.double({ min: 1, max: 500, noNaN: true }),
     target: fc.double({ min: -200, max: 200, noNaN: true }),
     sign: fc.constantFrom(1, -1),
@@ -39,8 +40,8 @@ const springParamsArb = fc
   })
 
 /**
- * Simulate a spring to completion using the analytical settling time estimate.
- * Returns the dt used per tick and the final spring state.
+ * Simulates a spring to completion over its solved rest time. Returns the
+ * dt used per tick and the final spring state.
  */
 function simulateToSettling(
   params: { mass: number; tension: number; damping: number; value: number; target: number },
@@ -167,7 +168,7 @@ describe('property-based: monotonicity for overdamped springs', () => {
       .record({
         mass: fc.double({ min: 0.5, max: 10, noNaN: true }),
         tension: fc.double({ min: 10, max: 200, noNaN: true }),
-        // ζ > 1 for overdamped
+        // zeta > 1 for overdamped
         dampingRatio: fc.double({ min: 1.5, max: 5, noNaN: true }),
         displacement: fc.double({ min: 10, max: 500, noNaN: true }),
       })
@@ -210,7 +211,7 @@ describe('property-based: energy', () => {
       .record({
         mass: fc.double({ min: 0.5, max: 10, noNaN: true }),
         tension: fc.double({ min: 10, max: 500, noNaN: true }),
-        // ζ < 1 for underdamped
+        // zeta < 1 for underdamped
         dampingRatio: fc.double({ min: 0.1, max: 0.9, noNaN: true }),
         displacement: fc.double({ min: 10, max: 200, noNaN: true }),
       })
@@ -235,7 +236,7 @@ describe('property-based: energy', () => {
           return 0.5 * mass * vel * vel + 0.5 * tension * pos * pos
         }
 
-        // Sample energy at intervals to smooth noise
+        // Sample the energy every 10 ticks to smooth out noise.
         const energies: number[] = []
         for (let i = 0; i < ITERATIONS; i++) {
           if (i % 10 === 0) energies.push(energy())
@@ -270,7 +271,7 @@ describe('property-based: target changes', () => {
           const spring = system.createSpring(params.value, config)
           spring.target = params.target
 
-          // Run for a fraction of estimated settling time
+          // Run for a fraction of the solved rest time.
           const initialEst = config.computeTimeRemaining({
             position: params.value - params.target,
             velocity: 0,
@@ -278,10 +279,9 @@ describe('property-based: target changes', () => {
           const warmupDt = initialEst / ITERATIONS
           for (let i = 0; i < 60; i++) system.advance(warmupDt)
 
-          // Change target
           spring.target = newTarget
 
-          // Compute new settling time from current state
+          // Solve the new rest time from the current state.
           const newEst = config.computeTimeRemaining({
             position: spring.value - newTarget,
             velocity: spring.velocity,

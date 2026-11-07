@@ -23,8 +23,8 @@ export interface UseRampOptions {
    */
   from?: number | undefined
   /**
-   * What the ramp drives: a `'motion'` ramp jumps to a bounded target
-   * under reduced motion and holds still on an endless one, and a
+   * What the ramp drives. Under reduced motion, a `'motion'` ramp jumps
+   * to a bounded target and holds still on an endless one. A
    * `'nonmotion'` ramp keeps moving. See `Purpose`.
    * @default 'motion'
    */
@@ -32,39 +32,42 @@ export interface UseRampOptions {
 }
 
 /**
- * The reactive handle `useRamp` returns: a writable ref of the ramp's
- * value, with `velocity`, `timeRemaining`, and `isResting` refs plus
- * `settled` and `jumpTo` attached. Writing the main ref places the ramp
- * at the written value, and it carries on toward its target from there.
+ * The reactive handle `useRamp` returns. It is a writable ref of the
+ * ramp's value. It carries `velocity`, `timeRemaining`, and `isResting`
+ * refs, plus `settled` and `jumpTo`. Writing the main ref places the
+ * ramp at the written value, and the ramp continues toward its target
+ * from there.
  *
- * Reading any of the refs subscribes the ramp to the frame loop, and the
- * subscription lapses once nothing reads them: a ramp shown in a
- * template advances every frame while it renders, and one read only in
- * an event handler advances for about two frames after each read. A
- * ramp nobody reads still moves, and the next read reports where it is.
+ * A read of any of the refs puts the ramp in the frame loop. The ramp
+ * leaves the loop when nothing reads the refs. A ramp shown in a
+ * template updates every frame while the template renders. A ramp read
+ * only in an event handler stays in the loop for about two frames after
+ * each read. A ramp that nothing reads still moves, and the next read
+ * returns its current value.
  *
- * The ref is a `TargetedSource`: `useSpring` follows it, and
+ * The ref is a `TargetedSource`, so `useSpring` can follow it, and
  * `velocityOf` and `targetOf` accept it. Followers subscribe to the
- * ramp directly, so following never depends on the ref being read.
+ * ramp directly, so following never depends on reads of the ref.
  */
 export interface RampRef extends Ref<number>, TargetedSource<number> {
   /**
-   * The current velocity in value units per second, as a reactive ref:
-   * `rate` signed toward the target while moving, 0 at rest. Writes are
-   * ignored.
+   * The current velocity in value units per second, as a reactive ref.
+   * It is `rate` with the sign of the direction to the target while the
+   * ramp moves, and 0 at rest. Writes are ignored.
    */
   readonly velocity: Ref<number>
   /**
-   * Milliseconds until the ramp reaches its target, as a reactive ref: 0
-   * at rest, Infinity toward an infinite target. Writes are ignored.
+   * Milliseconds until the ramp reaches its target, as a reactive ref. It
+   * is 0 at rest and `Infinity` toward an infinite target. Writes are
+   * ignored.
    */
   readonly timeRemaining: Ref<number>
   /** Whether the ramp is at rest, as a reactive ref. Writes are ignored. */
   readonly isResting: Ref<boolean>
   /**
-   * A promise that resolves when the ramp next comes to rest, already
-   * resolved while resting. A pending `settled` keeps a bounded ramp
-   * advancing with the frame loop until it arrives.
+   * A promise that resolves when the ramp next comes to rest. It is
+   * already resolved while the ramp rests. While the promise is pending,
+   * a bounded ramp stays in the frame loop until it arrives.
    */
   readonly settled: Promise<void>
   /**
@@ -75,18 +78,19 @@ export interface RampRef extends Ref<number>, TargetedSource<number> {
 }
 
 /**
- * Creates a ramp and returns it as a `RampRef`: a value that moves
- * toward `target` at `rate` value units per second, in a straight line,
- * and stops there. `Infinity` or `-Infinity` makes it endless. A spring
- * that follows the ref tracks its steady motion exactly, so an endless
- * ramp makes a spin that lags like an object with inertia.
+ * Creates a ramp and returns it as a `RampRef`. A ramp is a value that
+ * moves toward `target` in a straight line at `rate` value units per
+ * second, and stops there. A target of `Infinity` or `-Infinity` makes
+ * it endless. A spring that follows the ref tracks its steady motion
+ * exactly, with no frame-to-frame steps. A spring that follows an
+ * endless ramp makes a spin that lags behind it like a heavy object.
  *
- * `target` and `rate` are numbers, or refs or getters of one. A new
- * target sends the ramp there from its current value, and a new rate
- * applies from the current value on.
+ * `target` and `rate` are numbers, or refs or getters of a number. A new
+ * target sends the ramp there from its current value. A new rate applies
+ * from the current value on.
  *
- * Call it during `setup()` below a provided spring system (the
- * coily/nuxt module, or `useSpringSystem()` in an ancestor). The ramp is
+ * Call it during `setup()` below a provided spring system: the
+ * coily/nuxt module, or `useSpringSystem()` in an ancestor. The ramp is
  * disposed with the component's scope.
  *
  * @example
@@ -132,11 +136,11 @@ export function useRamp(
 }
 
 // A customRef cannot see when its last reader goes away, so the ref
-// infers it. Every update triggers the read refs and marks them unread;
-// any read clears the mark. An update that finds the mark still set
-// means no effect re-ran on the last trigger, so nothing tracks the refs
-// and the ramp's subscription lapses. Real frames run after Vue flushes
-// its effects, so a tracked ref is always read between two updates.
+// infers it. Every update triggers the read refs and marks them unread,
+// and any read clears the mark. If an update finds the mark still set,
+// no effect re-ran on the last trigger. Nothing tracks the refs, so the
+// ramp's subscription lapses. Real frames run after Vue flushes its
+// effects, so a tracked ref is always read between two updates.
 function createRampRef(ramp: Ramp): RampRef {
   const triggers = new Set<() => void>()
   let unread = false
@@ -161,9 +165,9 @@ function createRampRef(ramp: Ramp): RampRef {
     unread = false
     if (unsubscribe === null) {
       const offUpdate = ramp.onUpdate(onUpdate)
-      // Start and stop move `isResting`, `velocity`, and `timeRemaining`
-      // without an update when they come from a write, such as a rate of
-      // 0 or reduced motion holding an endless ramp.
+      // A write can start or stop the ramp without an update, for example
+      // a rate of 0, or reduced motion that holds an endless ramp. Start
+      // and stop still change `isResting`, `velocity`, and `timeRemaining`.
       const offStart = ramp.onStart(triggerAll)
       const offStop = ramp.onStop(triggerAll)
       unsubscribe = () => {
@@ -206,8 +210,8 @@ function createRampRef(ramp: Ramp): RampRef {
   Object.defineProperty(ref, 'settled', {
     get: () => ramp.settled,
   })
-  // The source slot hands followers the ramp itself, so their reads and
-  // subscriptions bypass the refs above.
+  // The source slot gives followers the ramp itself, so their reads and
+  // subscriptions skip the refs above.
   Object.defineProperty(ref, SpringSourceSymbol, { value: ramp[SpringSourceSymbol] })
 
   return ref

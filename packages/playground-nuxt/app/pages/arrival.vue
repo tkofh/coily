@@ -5,10 +5,11 @@ function onMouseMove(event: MouseEvent) {
   mouse.value = { x: event.clientX, y: event.clientY }
 }
 
-// High mass keeps wn = sqrt(tension / mass) low: a slow first step, then
-// real momentum. arrival -0.75 rebounds each axis off the cursor with
-// three quarters of its speed instead of overshooting it, so the balls
-// rattle into the pointer and come to rest on it.
+// High mass keeps the natural frequency, sqrt(tension / mass), low. The
+// balls start slowly and then carry real momentum. With arrival -0.75,
+// each axis rebounds off the cursor with three quarters of its speed
+// instead of overshooting it, so the balls rattle into the pointer and
+// come to rest on it.
 const heavy = useSpring(
   mouse,
   defineSpring({ mass: 8, tension: 400, dampingRatio: 0.25, arrival: -0.75 }),

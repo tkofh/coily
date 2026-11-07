@@ -71,7 +71,7 @@ mapSpring({ pos: composite, t: a }, ({ pos, t }) => pos.x * t)
 
 declare const p1: CompositeSpring<{ x: number; y: number }>
 declare const p2: CompositeSpring<{ x: number; y: number }>
-// `const T` infers bare array literals as tuples — no `as const` needed
+// `const T` infers bare array literals as tuples, so no `as const` is needed
 mapSpring([p1, p2], ([from, to]) => (to.y - from.y) / (to.x - from.x))
 
 // @ts-expect-error a composite is not a scalar source, so it cannot be followed
@@ -158,13 +158,13 @@ void current
 // @ts-expect-error the api's value is read-only
 api.value = 5
 
-// The source's public face carries nothing
+// Outside the slot, a source exposes nothing
 // @ts-expect-error reads go through the SpringSourceSymbol slot
 void custom.value
 // @ts-expect-error subscriptions go through the SpringSourceSymbol slot
 void custom.onUpdate
 
-// ── The contract carries values only — no config surface ────────────
+// ── The contract carries values only, with no config ────────────────
 
 // @ts-expect-error sources offer no config
 void custom.config
@@ -177,7 +177,7 @@ system.createSpring(a) satisfies Spring
 system.createSpring(a, cfg)
 system.createSpring(mapSpring(a, (value) => value * 2))
 system.createSpring(mapSpring(composite, ({ x, y }) => Math.hypot(x, y)))
-// @ts-expect-error a composite cannot be followed at creation; map it first
+// @ts-expect-error a composite cannot be followed at creation, so map it first
 system.createSpring(composite, cfg)
 
 // ── Invalid leaves are rejected where they are declared ─────────────

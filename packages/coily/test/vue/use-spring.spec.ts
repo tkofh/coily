@@ -79,18 +79,15 @@ describe('useSpring', () => {
     const options = ref({ mass: 1, tension: 100, damping: 10 })
     const { spring, system } = mountSpring(target, options)
 
-    // Move with default tension
     target.value = 100
     await nextTick()
     system.advance(16)
     const valueDefault = spring.value
 
-    // Reset
     target.value = 0
     await nextTick()
     for (let i = 0; i < 500; i++) system.advance(16)
 
-    // Move with very stiff spring
     options.value = { mass: 1, tension: 1000, damping: 10 }
     target.value = 100
     await nextTick()
@@ -350,8 +347,8 @@ describe('useSpring', () => {
       defineComponent({
         setup() {
           leader = useSpring(0)
-          // The follower subscribes through the leader ref's source slot;
-          // its retargets read the backing spring, not the tracked getter.
+          // The follower subscribes through the leader ref's source slot.
+          // Its retargets read the backing spring, not the tracked getter.
           useSpring(mapSpring(leader, (value) => value))
           watchSyncEffect(() => {
             runs++
@@ -369,8 +366,9 @@ describe('useSpring', () => {
 
     expect(runs).toBe(1)
 
-    // The leader springs back, updating every frame; a phantom dependency
-    // would re-run the effect (and re-displace the leader) each tick.
+    // The leader springs back and updates every frame. A phantom
+    // dependency would re-run the effect, and displace the leader again,
+    // on each frame.
     for (let i = 0; i < 60; i++) system.advance(16)
     expect(runs).toBe(1)
 
@@ -408,7 +406,7 @@ describe('useSpring', () => {
 
     wrapper.unmount()
 
-    // A disposed spring's motion is removed — advancing must not move it
+    // The unmount disposed the spring, so advancing must not move it.
     const valueAtUnmount = spring.value
     system.advance(16)
     expect(spring.value).toBe(valueAtUnmount)

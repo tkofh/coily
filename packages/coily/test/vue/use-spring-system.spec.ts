@@ -106,7 +106,7 @@ describe('useSpringSystem', () => {
     expect(received.fps).toBe(30)
   })
 
-  test('a created system starts on mount and stops on unmount', () => {
+  test('a created system starts on mount and is disposed on unmount', () => {
     let system!: SpringSystem
     const wrapper = mountTree(() => {
       system = useSpringSystem()
@@ -116,6 +116,7 @@ describe('useSpringSystem', () => {
 
     wrapper.unmount()
     expect(system.running).toBe(false)
+    expect(() => system.start()).toThrow('Cannot start a disposed spring system')
   })
 
   test('an injected system is not lifecycle-managed', () => {
@@ -134,6 +135,8 @@ describe('useSpringSystem', () => {
 
     wrapper.unmount()
     expect(received.running).toBe(false)
+    expect(() => received.start()).not.toThrow()
+    received.stop()
   })
 
   test('throws outside of setup', () => {

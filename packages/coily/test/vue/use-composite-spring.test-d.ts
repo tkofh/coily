@@ -61,10 +61,10 @@ targetOf(obj) satisfies SpringSource<{
   readonly opacity: number
 }>
 
-// ── Array shapes create object springs too — in every wrapping ──────
+// ── Array shapes create object springs too, in every wrapping ───────
 
 const tuple = useSpring([0, 0])
-// Array literals infer as tuples — the arity is part of the shape
+// Array literals infer as tuples, so the arity is part of the shape
 const tupleTyped: CompositeSpringRef<[number, number]> = tuple
 void tupleTyped
 useSpring(ref([0, 0]))
@@ -78,7 +78,7 @@ fixed.value = [1, 2, 3]
 // ── Options accept anything ConfigShape does, reactively ────────────
 
 useSpring({ x: 0, y: 0 }, cfg)
-// @ts-expect-error bare options are not a config — wrap in defineSpring
+// @ts-expect-error bare options are not a config, so wrap them in defineSpring
 useSpring({ x: 0, y: 0 }, { tension: 170, damping: 26 })
 useSpring({ x: 0, y: 0 }, { x: cfg })
 useSpring({ x: 0, y: 0 }, ref({ x: cfg }))

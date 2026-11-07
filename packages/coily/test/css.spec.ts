@@ -9,7 +9,7 @@ import {
   springToWaapi,
 } from '../src/css.ts'
 
-/** Parse a `linear()` string into its `{ output, input }` stops for assertions. */
+/** Parses a `linear()` string into its `{ output, input }` stops for assertions. */
 function stops(easing: string): Array<{ output: number; input: number | null }> {
   expect(easing.startsWith('linear(')).toBe(true)
   expect(easing.endsWith(')')).toBe(true)
@@ -148,7 +148,7 @@ describe('springFromState', () => {
 })
 
 describe('springStateAt', () => {
-  // Critically damped, ωₙ = 1: x(t) = (1 + t)·e^-t, v(t) = -t·e^-t.
+  // Critically damped with wn = 1: x(t) = (1 + t) * exp(-t), v(t) = -t * exp(-t).
   const critical = defineSpring({ tension: 1, damping: 2 })
 
   test('is the identity at zero elapsed', () => {
@@ -190,7 +190,8 @@ describe('springToWaapi', () => {
       to: 150,
       unit: 'px',
     })
-    // Undamped swings between `from` and 2·to − from, target at the midpoint.
+    // Undamped motion swings between `from` and `2 * to - from`, with the
+    // target at the midpoint.
     expect(keyframes).toEqual([{ translate: '0px' }, { translate: '300px' }])
     expect(options.iterations).toBe(Number.POSITIVE_INFINITY)
     expect(options.direction).toBe('alternate')

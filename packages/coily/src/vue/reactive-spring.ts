@@ -18,15 +18,15 @@ import { SpringSystemKey } from './system.ts'
 
 /**
  * Config for a scalar `useSpring`: a `SpringDefinition`, any option shape
- * `defineSpring` accepts, or a ref/getter of either. Reactive config
- * reconfigures the spring in place when it changes; `undefined` means the
+ * `defineSpring` accepts, or a ref or getter of either. When a reactive
+ * config changes, the spring reconfigures in place. `undefined` means the
  * default config.
  */
 export type UseSpringConfig = MaybeRefOrGetter<
   SpringDefinitionOptions | SpringDefinition | undefined
 >
 
-/** The spring surface the reactive wrapper needs — satisfied by both `Spring` and `CompositeSpring`. */
+/** The spring members the reactive wrapper uses. `Spring` and `CompositeSpring` both have them. */
 interface SpringLike<V, W, C> {
   readonly [SpringSourceSymbol]: TargetedSourceApi<V>
   get value(): V
@@ -45,26 +45,27 @@ interface SpringLike<V, W, C> {
 }
 
 /**
- * The reactive surface `useSpring` returns: a writable ref of the
- * animated value with the rest of the spring attached. Reads track
- * reactively and update once per tick while the spring moves.
+ * The ref `useSpring` returns: a writable ref of the animated value, with
+ * the rest of the spring attached. Reads are tracked, and the ref
+ * triggers once per frame while the spring moves.
  *
- * Writing the main ref displaces the spring — it springs back toward its
- * target. To move the spring, drive the target you passed to
+ * Writing the main ref displaces the spring, and it springs back toward
+ * its target. To move the spring, change the target you passed to
  * `useSpring`.
  *
- * The ref is also a `SpringSource`: it goes anywhere a source does —
- * another `useSpring`, a `mapSpring` leaf, a composite channel target.
- * It is a `TargetedSource` too, so `velocityOf`, `accelerationOf`, and
- * `targetOf` accept it as they accept the spring it wraps. Followers read the backing spring through `SpringSourceSymbol`, never
- * through the ref's tracked getter, so following registers no Vue
- * dependencies — an effect that touches a follower's leader stays
- * independent of the leader's animation.
+ * The ref is also a `SpringSource`, so another `useSpring` can follow
+ * it. A scalar ref can also be a `mapSpring` leaf or a composite channel
+ * target. The ref is a `TargetedSource` too, so `velocityOf`,
+ * `accelerationOf`, and `targetOf` accept it as they accept the spring
+ * it wraps. Followers read the backing spring directly, never through
+ * the ref's tracked getter. Following therefore registers no Vue
+ * dependencies, and an effect that touches a follower's leader does not
+ * re-run while the leader animates.
  */
 export interface ReactiveSpringRef<V, W = V> extends Ref<V, W>, TargetedSource<V> {
   /**
    * The current velocity in value units per second, as a writable ref.
-   * Writing flings the spring; it settles back to its target.
+   * Writing flings the spring, and it settles back to its target.
    */
   readonly velocity: Ref<V, W>
   /**
@@ -75,17 +76,21 @@ export interface ReactiveSpringRef<V, W = V> extends Ref<V, W>, TargetedSource<V
   /** Whether the spring is resting, as a reactive ref. Writes are ignored. */
   readonly isResting: Ref<boolean>
   /**
-   * A promise that resolves when the spring next comes to rest — already
-   * resolved while resting. Retargeting mid-flight extends the wait;
-   * disposal resolves it.
+   * A promise that resolves when the spring next comes to rest. It is
+   * already resolved while the spring rests. A retarget mid-flight
+   * extends the wait, and disposal resolves it.
    */
   readonly settled: Promise<void>
-  /** Snaps the spring to `value` with no animation, target included. */
+  /**
+   * Snaps the spring to `value` with no animation, target included. The
+   * spring rests there until the target you passed to `useSpring`
+   * changes, or until a leader it follows moves.
+   */
   readonly jumpTo: (value: W) => void
 }
 
-// customRef's public typing fixes get and set to one type; spring refs
-// read composites (deep-readonly) but accept partials on write, so the
+// The public type of customRef gives get and set one type. Spring refs
+// read deep-readonly composites but accept partials on write, so the
 // cast recovers a divergent Ref<G, S>.
 const divergentRef = customRef as unknown as <G, S>(
   factory: (track: () => void, trigger: () => void) => { get(): G; set(value: S): void },
@@ -122,8 +127,8 @@ export function createReactiveSpringRef<V, W, C>(
     spring.config = config.value ?? null
   })
 
-  // Triggers are captured lazily on first read, so refs nobody reads
-  // never pay for per-tick invalidation.
+  // Each trigger is captured on the first read, so the update handler
+  // skips refs nobody has read.
   let triggerValue: (() => void) | undefined
   let triggerVelocity: (() => void) | undefined
   let triggerTimeRemaining: (() => void) | undefined
@@ -191,14 +196,14 @@ export function createReactiveSpringRef<V, W, C>(
     jumpTo: (next: W) => spring.jumpTo(next),
   }) as ReactiveSpringRef<V, W>
 
-  // A getter so each read returns the spring's current settled promise,
-  // not one captured at creation.
+  // A getter, so each read returns the spring's current settled promise
+  // instead of one captured at creation.
   Object.defineProperty(ref, 'settled', {
     get: () => spring.settled,
   })
   Object.defineProperty(ref, instanceKey, { value: spring })
-  // The source slot hands followers the backing spring's own api, so
-  // their reads bypass the customRef getter and can never track into an
+  // The source slot gives followers the backing spring's own api. Their
+  // reads skip the customRef getter, so they never add a dependency to an
   // active effect.
   Object.defineProperty(ref, SpringSourceSymbol, { value: spring[SpringSourceSymbol] })
 

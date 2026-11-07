@@ -1,9 +1,9 @@
 /**
  * Type-level tests for the `defineSpring` input shapes.
  *
- * This file is compiled by `tsc` but never executed (vitest only picks up
+ * `tsc` compiles this file, but nothing executes it (vitest picks up only
  * `*.spec.ts`, `*.browser.ts`, and `*.bench.ts`). Each `@ts-expect-error`
- * is self-validating: tsc fails if the line stops erroring.
+ * checks itself, because tsc fails if the line stops erroring.
  */
 import { defineSpring } from '../src/index.ts'
 
@@ -25,7 +25,7 @@ defineSpring({ tension: 170, bounce: 0.1, duration: 500 })
 defineSpring({ damping: 26, dampingRatio: 1, duration: 500 })
 defineSpring({ damping: 26, bounce: 0.1, duration: 500 })
 
-// Explicit undefined is equivalent to absence (exactOptionalPropertyTypes)
+// Explicit undefined is the same as absence (exactOptionalPropertyTypes).
 defineSpring({ mass: undefined, tension: 170, damping: 26 })
 
 // ── `arrival` joins every shape family ───────────────────────────────

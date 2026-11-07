@@ -58,7 +58,7 @@ describe('shape tree: views', () => {
 })
 
 describe('shape tree: scatter', () => {
-  test('applies only the mentioned channels, skipping undefined and holes', () => {
+  test('applies only the mentioned channels, skipping undefined and missing entries', () => {
     const { root } = createTree({ position: { x: 0, y: 0 }, color: [0, 0, 0] })
     const seen: [string, number][] = []
 
