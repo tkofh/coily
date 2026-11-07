@@ -1,300 +1,93 @@
-import { SpringDefinition } from './config.ts'
-import { Emitter } from './emitter.ts'
-import { State } from './state.ts'
-import { CriticallyDampedSolver, OverdampedSolver, UnderdampedSolver } from './solver.ts'
 import type { FollowEdge } from './follow-graph.ts'
-import type { TickMember } from './tick-member.ts'
-import { invariant } from './util.ts'
 
-// Shared by every kind of tick member. It lives here, beside the member
-// created in bulk, so `Motion` increments a module-local binding.
 let nextId = 0
 
-/** The next tick-member creation id, for members other than `Motion`. */
-export function nextTickMemberId(): number {
-  return nextId++
-}
-
 /**
- * One spring simulation in displacement space: position is measured from
- * the target (0 means settled), so retargeting is a rebase performed by
- * the owning `Spring`. Picks the closed-form solver for the config's
- * damping regime and emits update/start/stop/dispose events.
+ * Something the system advances frame by frame: a spring's
+ * `SpringMotion` or a ramp's `RampMotion`. `MotionSet` ticks motions and
+ * `FollowGraph` orders them, both through the members declared here.
+ * Owners keep their motion in a private field, so none of this reaches
+ * the public api.
+ *
+ * A tick runs in two phases. Every moving motion advances first, with no
+ * events, so followers recouple against values that are current for the
+ * frame. Then each one that advanced delivers its events in `endFrame`.
  */
-export class Motion implements TickMember {
-  // Tick bookkeeping; see `TickMember` for what each field means.
-  readonly _id = nextId++
-  _pass = 0
-  _frame = 0
-  _rank = -1
-  _edge: FollowEdge | null = null
-  _followers: FollowEdge[] | null = null
-
-  // Set by the owning Spring from its `purpose`; `MotionSet.finishAll`
-  // leaves motions that don't respect reduced motion running, so
-  // 'nonmotion' springs keep animating when it turns on.
-  respectsReducedMotion = true
+export abstract class Motion {
+  /**
+   * Creation order across every kind of motion. Wherever motions need a
+   * deterministic order and nothing else decides it, the lower id goes
+   * first.
+   */
+  readonly id = nextId++
 
   /**
-   * A first-order-hold slope in value units per second, armed by a
-   * sloped `recouple` immediately before the `_advance` that consumes
-   * it (read-and-clear; no user code runs between the two). 0 means the
-   * target holds still across the step — every path but a sloped
-   * recouple.
+   * The last ordered pass that advanced the motion, written by
+   * `MotionSet`, so a motion queued twice in one pass advances once.
    */
-  _slope = 0
-
-  #config: SpringDefinition
-  readonly #state: State
-
-  #underdampedSolver: UnderdampedSolver | null = null
-  #criticallyDampedSolver: CriticallyDampedSolver | null = null
-  #overdampedSolver: OverdampedSolver | null = null
-  #currentSolver: UnderdampedSolver | CriticallyDampedSolver | OverdampedSolver | null = null
-
-  // Solver work is deferred to the next tick: #needsUpdate swaps solvers
-  // after a reconfigure, #needsReset re-anchors after a position or
-  // velocity write.
-  #needsUpdate = false
-  #needsReset = false
-  #running: boolean
-
-  readonly #emitter: Emitter
-
-  constructor(config: SpringDefinition, position: number, velocity: number) {
-    this.#config = config
-    this.#state = new State(config, position, velocity)
-    this.#emitter = new Emitter()
-    this.#running = !this.#state.isResting
-
-    this.#updateSolver()
-  }
-
-  get position() {
-    return this.#state.position
-  }
-
-  set position(value: number) {
-    this.#state.position = value
-    this.#needsReset = true
-    this.#syncStart()
-  }
-
-  get velocity() {
-    return this.#state.velocity
-  }
-
-  set velocity(value: number) {
-    this.#state.velocity = value
-    this.#needsReset = true
-    this.#syncStart()
-  }
-
-  get timeRemaining() {
-    // Solved from the live state on read: the closed forms are
-    // time-invariant, so nothing needs maintaining per tick — chains of
-    // followers disturb every motion every frame, and eager bookkeeping
-    // here is a per-frame bisection nobody asked for.
-    return this.#config.computeTimeRemaining(this.#state)
-  }
-
-  get isResting() {
-    return this.#state.isResting
-  }
-
-  configure(config: SpringDefinition) {
-    this.#config = config
-    this.#state.configure(config)
-    this.#needsUpdate = true
-    this.#syncStart()
-  }
-
-  tick(dt: number, emit = true) {
-    this._advance(dt)
-
-    if (emit) {
-      this._settleFrame()
-    } else {
-      this.#reconcileRunning()
-    }
-  }
+  pass = 0
 
   /**
-   * Advances the simulation and emits nothing. The tick pass advances
-   * every motion through this, then delivers the frame's events with
-   * `_settleFrame`; the synchronous `tick` wraps the two.
-   *
-   * A pending `_slope` integrates the step against a target moving at
-   * that slope instead of holding still: one affine transform around
-   * the unchanged solver. With the target at `p(t) = p0 + g*t`, the
-   * displacement u = x - p(t) obeys the homogeneous equation shifted by
-   * the constant u_ss = -(2*zeta/wn)*g = -(damping/tension)*g, so the
-   * solver ticks w = u - u_ss exactly and the results shift back.
-   * Measuring u from the moving target makes the slope endpoint and the
-   * new target coincide — the armer assigns the target, no rebase
-   * arithmetic exists. The slope is an argument of the step, never
-   * persistent solver state: g = 0 takes the plain step below, so a
-   * motion never armed with a slope steps bit-exactly like an isolated
-   * spring.
+   * The last ordered frame that advanced the motion, written by
+   * `MotionSet`. Sub-steps share one frame, and the first advance in it
+   * queues the motion for `endFrame`.
    */
-  _advance(dt: number) {
-    invariant(this.#currentSolver, 'Cannot tick a disposed motion')
-
-    const g = this._slope
-    if (g !== 0) {
-      this._slope = 0
-      const state = this.#state
-      const shift = (this.#config.damping / this.#config.tension) * g
-      state.position += shift
-      state.velocity -= g
-      // Anchor in slope space from the shifted state: unconditionally,
-      // and again next step — the slope-space anchor is wrong for any
-      // other frame.
-      if (this.#needsUpdate) {
-        this.#updateSolver()
-        this.#needsUpdate = false
-      } else {
-        this.#currentSolver.configure()
-      }
-
-      this.#currentSolver.tick(dt)
-
-      state.position -= shift
-      state.velocity += g
-      this.#needsReset = true
-      if (state.isResting) {
-        state.position = 0
-        state.velocity = 0
-      }
-      return
-    }
-
-    if (this.#needsUpdate) {
-      this.#updateSolver()
-
-      this.#needsUpdate = false
-      this.#needsReset = false
-    } else if (this.#needsReset) {
-      this.#currentSolver.configure()
-
-      this.#needsReset = false
-    }
-
-    this.#currentSolver.tick(dt)
-
-    if (this.#state.isResting) {
-      // Snap exactly to the target at rest; the deferred reset re-anchors
-      // the solver if the spring is disturbed again.
-      this.#state.position = 0
-      this.#state.velocity = 0
-      this.#needsReset = true
-    }
-  }
+  frame = 0
 
   /**
-   * Emits the frame's `update`, then reconciles `stop`/`start`. The tick
-   * pass calls this in dependency order after every motion has advanced,
-   * so update callbacks read frame-final values everywhere.
+   * Dependency rank, written by `FollowGraph`: motions the follow graph
+   * touches count up from 0, leaders before followers, and -1 marks a
+   * motion outside the graph.
    */
-  _settleFrame() {
-    this.#emitter.emit('update')
-    this.#reconcileRunning()
-  }
+  rank = -1
 
-  // Reads state fresh rather than caching around the update emit: an
-  // update callback can re-displace the motion, and a stale boolean
-  // would emit a bogus 'stop'.
-  #reconcileRunning() {
-    if (this.#state.isResting) {
-      if (this.#running) {
-        this.#running = false
-        this.#emitter.emit('stop')
-      }
-    } else if (!this.#running) {
-      this.#running = true
-      this.#emitter.emit('start')
-    }
-  }
+  /**
+   * The edge this motion follows through, or null. Written by
+   * `FollowGraph`; only a spring follows.
+   */
+  edge: FollowEdge | null = null
 
-  finish() {
-    this.position = 0
-    this.velocity = 0
-    this.tick(0)
-  }
+  /**
+   * The edges reading this motion, or null when none. `FollowGraph`
+   * rebuilds them with the ranks, so they can lag a mid-pass edge change
+   * until the next recompute. The tick tolerates stale entries.
+   */
+  followers: FollowEdge[] | null = null
+
+  /** Whether the motion has stopped moving. `MotionSet` drops it once true. */
+  abstract get isResting(): boolean
+
+  /** The current velocity, in value units per second. */
+  abstract get velocity(): number
+
+  /** The current acceleration, in value units per second squared. */
+  abstract get acceleration(): number
+
+  /** Advances by `h` seconds and emits nothing. Events wait for `endFrame`. */
+  abstract advance(h: number): void
+
+  /** Delivers the frame's events, after every motion has advanced. */
+  abstract endFrame(): void
+
+  /**
+   * Applies a change of the system's reduced-motion setting, which
+   * `MotionSet.reduced` already holds. A motion whose purpose is
+   * `'nonmotion'` ignores it.
+   */
+  abstract applyReducedMotion(reduced: boolean): void
 
   /**
    * The sub-step controller's shock signal, read by a follower's `plan`
-   * with this motion as its leader: deviation from the quasi-steady
-   * tracking manifold x = -(damping/tension) * v, where damping/tension
-   * is 2*zeta/wn. Near zero while chasing any smoothly moving target at
-   * any speed; the full displacement after a target teleport;
-   * (damping/tension) * |v| after a fling.
+   * with this motion as its leader: how far the motion sits from steady
+   * tracking. 0 for a motion that cannot be knocked off its course.
    */
-  _manifoldDeviation() {
-    const config = this.#config
-    return Math.abs(this.#state.position + (config.damping / config.tension) * this.#state.velocity)
-  }
+  abstract manifoldDeviation(): number
 
-  /** Acceleration from current state, for `plan`'s kinematic bound on a shock frame. */
-  _acceleration() {
-    const config = this.#config
-    return (
-      -(config.tension * this.#state.position + config.damping * this.#state.velocity) / config.mass
-    )
-  }
-
-  /** A spring's slope never changes at a moment known in advance. */
-  _kinksWithin(_dt: number) {
-    return false
-  }
-
-  onUpdate(callback: () => void) {
-    return this.#emitter.on('update', callback)
-  }
-
-  onStart(callback: () => void) {
-    return this.#emitter.on('start', callback)
-  }
-
-  onStop(callback: () => void) {
-    return this.#emitter.on('stop', callback)
-  }
-
-  onDispose(callback: () => void) {
-    return this.#emitter.on('dispose', callback)
-  }
-
-  dispose() {
-    this.#emitter.emit('dispose')
-    this.#emitter.clear()
-    this.#underdampedSolver = null
-    this.#criticallyDampedSolver = null
-    this.#overdampedSolver = null
-    this.#currentSolver = null
-  }
-
-  #syncStart() {
-    if (!this.#running && !this.#state.isResting) {
-      this.#running = true
-      this.#emitter.emit('start')
-    }
-  }
-
-  #updateSolver() {
-    if (this.#config.dampingRatio < 1) {
-      this.#underdampedSolver ||= new UnderdampedSolver(this.#state)
-
-      this.#currentSolver = this.#underdampedSolver
-    } else if (this.#config.dampingRatio === 1) {
-      this.#criticallyDampedSolver ||= new CriticallyDampedSolver(this.#state)
-
-      this.#currentSolver = this.#criticallyDampedSolver
-    } else {
-      this.#overdampedSolver ||= new OverdampedSolver(this.#state)
-
-      this.#currentSolver = this.#overdampedSolver
-    }
-
-    this.#currentSolver.configure(this.#config)
-  }
+  /**
+   * Whether the motion's slope changes within the next `dt` seconds at a
+   * moment it can name in advance, which history-based planning cannot
+   * see coming. A follower's `plan` demands the sub-step cap on such a
+   * frame.
+   */
+  abstract kinksWithin(dt: number): boolean
 }

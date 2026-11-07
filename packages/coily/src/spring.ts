@@ -1,11 +1,12 @@
 import { SpringDefinition } from './config.ts'
 import type { MotionSet } from './motion-set.ts'
-import { Motion } from './motion.ts'
+import { SpringMotion } from './spring-motion.ts'
 import { type SpringSource, SpringSourceSymbol, isSpringSource } from './spring-source.ts'
 import type { TargetedSource, TargetedSourceApi } from './kinematic-source.ts'
 import {
   type FollowEdge,
   MANIFOLD_GATE,
+  TargetTrail,
   registerBacking,
   resolveLeaderMotions,
 } from './follow-graph.ts'
@@ -56,7 +57,7 @@ export class Spring implements TargetedSource {
   #target: number
   #config: SpringDefinition
   readonly #purpose: Purpose
-  readonly #motion: Motion
+  readonly #motion: SpringMotion
   readonly #motions: MotionSet
 
   #leader: SpringSource | null = null
@@ -81,10 +82,10 @@ export class Spring implements TargetedSource {
     this.#config = config ?? SpringDefinition.default
     this.#target = value
     this.#purpose = purpose
-    this.#motion = new Motion(this.#config, 0, 0)
     // A 'nonmotion' spring opts out of reduced motion: its own writes
-    // stay animated (below), and MotionSet.finishAll leaves it running.
-    this.#motion.respectsReducedMotion = purpose === 'motion'
+    // stay animated (below), and its motion keeps running when reduced
+    // motion turns on.
+    this.#motion = new SpringMotion(this.#config, 0, 0, purpose)
   }
 
   /**
@@ -178,11 +179,7 @@ export class Spring implements TargetedSource {
    * To fling the spring, write `velocity` instead.
    */
   get acceleration() {
-    // Newton's second law for the damped spring, a = -(k*x + c*v) / m,
-    // with x the displacement from the target. Exact from state and
-    // config, like value and velocity.
-    const { tension, damping, mass } = this.#config
-    return -(tension * this.#motion.position + damping * this.#motion.velocity) / mass
+    return this.#motion.acceleration
   }
 
   /**
@@ -412,10 +409,8 @@ export class Spring implements TargetedSource {
       const edge: FollowEdge = {
         follower: this.#motion,
         leaders,
-        _cyclic: false,
-        _prevValue: 0,
-        _d1: 0,
-        _d2: 0,
+        cyclic: false,
+        trail: new TargetTrail(0),
         recouple: (h) => {
           // A slope may arm only where it is safe: never inside a cycle
           // (delayed velocity feedback around a loop is negative damping
@@ -425,7 +420,7 @@ export class Spring implements TargetedSource {
           // rebase exactly — reduced motion, a zero-length step. Those
           // keep the exact step path.
           if (
-            edge._cyclic ||
+            edge.cyclic ||
             h === 0 ||
             this.#config.arrival !== 1 ||
             (this.#motions.reduced && this.#purpose === 'motion')
@@ -435,22 +430,20 @@ export class Spring implements TargetedSource {
           }
           const value = api.value
           invariant(Number.isFinite(value), 'Spring target must be a finite number')
-          if (value === this.#target) return
+          const previous = this.#target
+          if (value === previous) return
           this.#motions.add(this.#motion)
           // The delta is tick-path by construction: sync writes already
           // landed as steps through the emitter before this pass. The
           // position stays measured from the old target — the slope's
           // start — and the sloped advance ends it measured from the
           // new one.
-          this.#motion._slope = (value - this.#target) / h
           this.#target = value
+          this.#motion.armSlope((value - previous) / h)
         },
         plan: (dt) => {
-          const target = this.#target
-          const d = target - edge._prevValue
-          edge._d2 = edge._d1
-          edge._d1 = d
-          edge._prevValue = target
+          const trail = edge.trail
+          const d = trail.observe(this.#target)
 
           // History covers smooth motion; a leader knocked off its
           // tracking manifold — teleported, flung — escalates with its
@@ -459,14 +452,14 @@ export class Spring implements TargetedSource {
           // passthrough (the common case), a slope ~1 heuristic through
           // map code.
           let dHat = Math.abs(d)
-          let error = Math.abs(d - edge._d2) / 8
+          let error = Math.abs(trail.curvature) / 8
           for (const leader of leaders) {
             // A kink the leader can schedule, such as a ramp arriving
             // mid-frame, is invisible to history: a held slope would
             // spread the change over the whole frame, so take the cap.
-            if (leader._kinksWithin(dt)) return Number.POSITIVE_INFINITY
-            if (leader._manifoldDeviation() > MANIFOLD_GATE * Math.abs(d)) {
-              const accel = Math.abs(leader._acceleration())
+            if (leader.kinksWithin(dt)) return Number.POSITIVE_INFINITY
+            if (leader.manifoldDeviation() > MANIFOLD_GATE * Math.abs(d)) {
+              const accel = Math.abs(leader.acceleration)
               const speed = Math.abs(leader.velocity)
               dHat = Math.max(dHat, speed * dt + 0.5 * accel * dt * dt)
               error = Math.max(error, (accel * dt * dt) / 8)
@@ -481,7 +474,7 @@ export class Spring implements TargetedSource {
           // is linear in the frame's move. Where it slopes, only the
           // curvature residual remains — the second difference — and it
           // shrinks with the square of the sub-step.
-          return edge._cyclic || this.#config.arrival !== 1
+          return edge.cyclic || this.#config.arrival !== 1
             ? Math.ceil(dHat / (2 * tol))
             : Math.ceil(Math.sqrt(error / tol))
         },
@@ -495,7 +488,7 @@ export class Spring implements TargetedSource {
       this.#setTarget(api.value)
       // Anchor the estimator on the target the follow just synced;
       // plan's first delta then measures leader movement, not wiring.
-      edge._prevValue = this.#target
+      edge.trail.anchor(this.#target)
       return
     }
     this.#unsubLeader = () => {

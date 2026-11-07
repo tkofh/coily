@@ -71,12 +71,12 @@ export interface SpringSystemOptions extends TickerOptions {
 }
 
 class SpringSystemImpl implements SpringSystem {
-  readonly #motion: MotionSet
+  readonly #motions: MotionSet
   readonly #ticker: Ticker
 
   constructor(options?: SpringSystemOptions) {
-    this.#motion = new MotionSet(options?.debug)
-    this.#ticker = new Ticker(this.#motion, options)
+    this.#motions = new MotionSet(options?.debug)
+    this.#ticker = new Ticker(this.#motions, options)
 
     if (options?.couplingTolerance !== undefined) {
       this.couplingTolerance = options.couplingTolerance
@@ -84,7 +84,7 @@ class SpringSystemImpl implements SpringSystem {
 
     const mode = options?.reducedMotion ?? 'user'
     if (mode === 'always') {
-      this.#motion.reduced = true
+      this.#motions.reduced = true
     } else if (
       mode === 'user' &&
       typeof window !== 'undefined' &&
@@ -99,15 +99,15 @@ class SpringSystemImpl implements SpringSystem {
   }
 
   #applyReducedMotion(reduced: boolean) {
-    this.#motion.setReduced(reduced)
+    this.#motions.setReduced(reduced)
   }
 
   get reducedMotion() {
-    return this.#motion.reduced
+    return this.#motions.reduced
   }
 
   get couplingTolerance() {
-    return this.#motion.couplingTolerance
+    return this.#motions.couplingTolerance
   }
 
   set couplingTolerance(value: number) {
@@ -115,7 +115,7 @@ class SpringSystemImpl implements SpringSystem {
       Number.isFinite(value) && value >= 0,
       'couplingTolerance must be a finite, non-negative number',
     )
-    this.#motion.couplingTolerance = value
+    this.#motions.couplingTolerance = value
   }
 
   createSpring(value: number, config?: SpringDefinition, options?: SpringOptions): Spring
@@ -132,7 +132,7 @@ class SpringSystemImpl implements SpringSystem {
   ): Spring | CompositeSpring<Record<string, number>> {
     if (typeof value === 'number') {
       return new Spring(
-        this.#motion,
+        this.#motions,
         value,
         config as SpringDefinition | undefined,
         (options as SpringOptions | undefined)?.purpose,
@@ -145,7 +145,7 @@ class SpringSystemImpl implements SpringSystem {
         'A spring can only follow a scalar SpringSource; derive one from a composite with mapSpring',
       )
       const spring = new Spring(
-        this.#motion,
+        this.#motions,
         api.value,
         config as SpringDefinition | undefined,
         (options as SpringOptions | undefined)?.purpose,
@@ -154,7 +154,7 @@ class SpringSystemImpl implements SpringSystem {
       return spring
     }
     return new CompositeSpring(
-      this.#motion,
+      this.#motions,
       value,
       config as ConfigShape<Record<string, number>> | undefined,
       (options as CompositeSpringOptions<Record<string, number>> | undefined)?.purpose,
@@ -162,12 +162,12 @@ class SpringSystemImpl implements SpringSystem {
   }
 
   createRamp(from: number, options: RampOptions): Ramp {
-    return new Ramp(this.#motion, from, options)
+    return new Ramp(this.#motions, from, options)
   }
 
   advance(dt: number) {
     invariant(Number.isFinite(dt), 'dt must be a finite number of milliseconds')
-    this.#motion.tick(dt / 1000)
+    this.#motions.tick(dt / 1000)
   }
 
   start() {

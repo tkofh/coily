@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { SpringDefinition } from '../src/config.ts'
 import { MotionSet } from '../src/motion-set.ts'
-import { Motion } from '../src/motion.ts'
+import { SpringMotion } from '../src/spring-motion.ts'
 import { Ticker } from '../src/ticker.ts'
 
 /**
@@ -46,7 +46,7 @@ class FrameSource {
 
 /** A motion displaced far enough to stay active for the whole test. */
 function activeMotion() {
-  return new Motion(SpringDefinition.default, 1e6, 0)
+  return new SpringMotion(SpringDefinition.default, 1e6, 0)
 }
 
 afterEach(() => {
@@ -359,7 +359,7 @@ describe('Ticker', () => {
     test('stops requesting frames once every motion rests', () => {
       const source = new FrameSource().install()
       const motions = new MotionSet()
-      motions.add(new Motion(SpringDefinition.default, 1, 0))
+      motions.add(new SpringMotion(SpringDefinition.default, 1, 0))
       const ticker = new Ticker(motions)
 
       ticker.start()

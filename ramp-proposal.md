@@ -285,15 +285,18 @@ plain case.
 
 ## Implementation
 
-1. **A shared tick member.** `MotionSet` and `FollowGraph` read a fixed set of
-   fields from each motion: the bookkeeping (`_id`, `_pass`, `_frame`, `_rank`,
-   `_edge`, `_followers`), the step (`_advance`, `_settleFrame`, `isResting`,
-   `respectsReducedMotion`, `finish`), and, from leaders, `velocity`,
-   `_manifoldDeviation`, `_acceleration`, and `_kinksWithin`. The
-   `TickMember` interface in `src/tick-member.ts` names them, and `Motion` and
-   `RampMotion` each implement it. `resolveLeaderMotions` tells a member from
-   a composite's channel list with `Array.isArray`. A follower is always a
-   spring, so `FollowEdge.follower` stays a `Motion`.
+1. **A `Motion` base class.** `Motion` is the abstract class that `MotionSet`
+   ticks and `FollowGraph` orders: `isResting`, `velocity`, `acceleration`,
+   `advance`, `endFrame`, `applyReducedMotion`, and, read from leaders,
+   `manifoldDeviation` and `kinksWithin`. `SpringMotion` and `RampMotion`
+   extend it. It also carries the scheduler's bookkeeping as plain fields:
+   the creation id, the pass and frame markers, the rank, the edge the
+   motion follows through, and the edges that read it. `Spring` and `Ramp`
+   hold their motion in a private field, so none of it reaches the public
+   api. `FollowEdge`'s `cyclic` flag is a plain field the graph writes, and
+   the sub-step estimator's history is a `TargetTrail`.
+   `resolveLeaderMotions` tells a motion from a composite's channel list
+   with `Array.isArray`.
 2. **The clock.** `MotionSet.tick` adds each tick's `dt`, which covers both
    the ticker and `advance`. The ticker credits wall time from the moment it
    sleeps to the moment it wakes, minus time the document spent hidden, and
@@ -307,19 +310,21 @@ plain case.
    on a bounded ramp its `onStop` listeners and unresolved `settled` promise.
    It joins the `MotionSet` when the count leaves 0 while moving and leaves it
    when the count returns to 0.
-5. **The ramp set.** The system keeps its moving ramps, watched or not, and
-   applies reduced-motion changes to each: finish bounded ramps, hold and
-   resume endless ones.
+5. **The reducible set.** `MotionSet.reducible` holds the `'motion'` ramps
+   that are moving or holding, watched or not. A reduced-motion change calls
+   `applyReducedMotion` on those and on every active motion: springs finish,
+   bounded ramps finish at their targets, and endless ramps hold and resume.
 6. **Arrival demand.** The plan pass asks each ticking ramp whether it arrives
    within `dt`. If it does, every edge it leads demands the sub-step cap for
    that frame.
-7. **Rename `Motion._ramp` to `_slope`.** The internal first-order-hold slope
-   predates the public word and would collide with it in every comment that
-   touches both.
+7. **Rename the first-order-hold slope.** `Motion._ramp` becomes a private
+   `#slope` on `SpringMotion`, armed through `armSlope`. The old name predates
+   the public word and would collide with it in every comment that touches
+   both.
 8. **Public surface.** `SpringSystem.createRamp`, the `Ramp` and `RampOptions`
    types, and exports from `coily`. `useRamp` and `RampRef` from `coily/vue`,
    with `useRamp` in the Nuxt auto-imports.
-9. **Bench gate.** The tick's hot loop calls `_advance` on two classes where it
+9. **Bench gate.** The tick's hot loop calls `advance` on two classes where it
    called one. Measured with interleaved runs of the chain benches against
    the code before this change, medians matched by name:
    - While only springs have ticked in the process, the chains run at parity
@@ -328,6 +333,16 @@ plain case.
      run 2% to 5% slower (0.95x to 0.98x). A ramp-led chain bench runs first
      in its group to hold that state. Skipping the arrival query when no ramp
      ticks made no measurable difference, so it was left out.
+
+   A separate `MotionNode` holding the bookkeeping was tried and dropped. On
+   the built package it ran follow chains 1% to 6% slower, because the
+   ordered tick reached each motion through its node, and it did not recover
+   the two-class cost, which comes from the `advance`, `isResting`, and
+   `endFrame` calls. With the fields on `Motion`, measured in plain node
+   against the code before the restructure, creation runs about 4% faster
+   (a spring motion carries fewer fields), springs with no follows and
+   spring-led chains run at parity, and chains after a ramp has ticked run
+   about 2% faster.
 
 Docs: a README section on ramps, and a paragraph in PRECISION.md on what is
 exact (a spring following a ramp) and what is budgeted (a curved map of a

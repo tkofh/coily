@@ -1,34 +1,37 @@
-import { describe, expect } from 'vitest'
+import { describe, expect, vi } from 'vitest'
 import { SpringDefinition, defineSpring } from '../src/config.ts'
 import { CompositeSpring } from '../src/composite-spring.ts'
-import { type FollowEdge, FollowGraph, resolveLeaderMotions } from '../src/follow-graph.ts'
+import {
+  type FollowEdge,
+  FollowGraph,
+  TargetTrail,
+  resolveLeaderMotions,
+} from '../src/follow-graph.ts'
 import { accelerationOf, velocityOf } from '../src/kinematic-source.ts'
-import { Motion } from '../src/motion.ts'
+import type { Motion } from '../src/motion.ts'
 import { MotionSet } from '../src/motion-set.ts'
-import type { TickMember } from '../src/tick-member.ts'
 import { Spring } from '../src/spring.ts'
+import { SpringMotion } from '../src/spring-motion.ts'
 import { SpringSourceSymbol, mapSpring } from '../src/spring-source.ts'
 import { makeSource, test } from './helpers.ts'
 
 const config = defineSpring({ mass: 1, tension: 170, damping: 26 })
 
 /** Resolved motions as sorted creation ids, for same-set comparisons. */
-function idsOf(motions: readonly TickMember[]): number[] {
-  return motions.map((motion) => motion._id).sort((a, b) => a - b)
+function idsOf(motions: readonly Motion[]): number[] {
+  return motions.map((motion) => motion.id).sort((a, b) => a - b)
 }
 
 function makeMotion(): Motion {
-  return new Motion(SpringDefinition.default, 0, 0)
+  return new SpringMotion(SpringDefinition.default, 0, 0)
 }
 
 function link(graph: FollowGraph, follower: Motion, ...leaders: Motion[]): FollowEdge {
   const edge: FollowEdge = {
     follower,
     leaders,
-    _cyclic: false,
-    _prevValue: 0,
-    _d1: 0,
-    _d2: 0,
+    cyclic: false,
+    trail: new TargetTrail(0),
     recouple: () => {},
     plan: () => 1,
   }
@@ -38,7 +41,7 @@ function link(graph: FollowGraph, follower: Motion, ...leaders: Motion[]): Follo
 
 /** The single motion behind a scalar spring. */
 function motionOf(spring: Spring): Motion {
-  return resolveLeaderMotions(spring)[0] as Motion
+  return resolveLeaderMotions(spring)[0]!
 }
 
 describe('resolveLeaderMotions', () => {
@@ -56,7 +59,7 @@ describe('resolveLeaderMotions', () => {
     const a = system.createSpring(0, config)
     const b = system.createSpring(0, config)
 
-    expect(resolveLeaderMotions(a)[0]!._id).toBeLessThan(resolveLeaderMotions(b)[0]!._id)
+    expect(resolveLeaderMotions(a)[0]!.id).toBeLessThan(resolveLeaderMotions(b)[0]!.id)
   })
 
   test('a mapped source resolves to the spring it reads', ({ system }) => {
@@ -161,10 +164,10 @@ describe('FollowGraph: ordering', () => {
 
     graph.ensureOrder()
 
-    expect(a._rank).toBe(0)
-    expect(b._rank).toBe(1)
-    expect(c._rank).toBe(2)
-    expect(lone._rank).toBe(-1)
+    expect(a.rank).toBe(0)
+    expect(b.rank).toBe(1)
+    expect(c.rank).toBe(2)
+    expect(lone.rank).toBe(-1)
   })
 
   test('ranks are canonical: wiring order does not matter', () => {
@@ -177,13 +180,13 @@ describe('FollowGraph: ordering', () => {
     link(forward, b, a)
     link(forward, c, b)
     forward.ensureOrder()
-    const ranks = [a._rank, b._rank, c._rank]
+    const ranks = [a.rank, b.rank, c.rank]
 
     link(backward, c, b)
     link(backward, b, a)
     backward.ensureOrder()
 
-    expect([a._rank, b._rank, c._rank]).toEqual(ranks)
+    expect([a.rank, b.rank, c.rank]).toEqual(ranks)
   })
 
   test('a diamond ranks the shared leader first and the join last', () => {
@@ -198,10 +201,10 @@ describe('FollowGraph: ordering', () => {
 
     graph.ensureOrder()
 
-    expect(x._rank).toBe(0)
-    expect(y._rank).toBe(1)
-    expect(z._rank).toBe(2)
-    expect(w._rank).toBe(3)
+    expect(x.rank).toBe(0)
+    expect(y.rank).toBe(1)
+    expect(z.rank).toBe(2)
+    expect(w.rank).toBe(3)
   })
 
   test('a follower created before its leader still ranks after it', () => {
@@ -212,8 +215,8 @@ describe('FollowGraph: ordering', () => {
 
     graph.ensureOrder()
 
-    expect(leader._rank).toBe(0)
-    expect(follower._rank).toBe(1)
+    expect(leader.rank).toBe(0)
+    expect(follower.rank).toBe(1)
   })
 
   test('cycle members rank consecutively in creation order, before their followers', () => {
@@ -230,10 +233,10 @@ describe('FollowGraph: ordering', () => {
 
     graph.ensureOrder()
 
-    expect(a._rank).toBe(0)
-    expect(b._rank).toBe(1)
-    expect(c._rank).toBe(2)
-    expect(tail._rank).toBe(3)
+    expect(a.rank).toBe(0)
+    expect(b.rank).toBe(1)
+    expect(c.rank).toBe(2)
+    expect(tail.rank).toBe(3)
   })
 
   test('a self-follow ranks without hanging', () => {
@@ -243,7 +246,7 @@ describe('FollowGraph: ordering', () => {
 
     graph.ensureOrder()
 
-    expect(solo._rank).toBe(0)
+    expect(solo.rank).toBe(0)
   })
 
   test('replacing a follower edge rewires the order and resets stale ranks', () => {
@@ -253,14 +256,14 @@ describe('FollowGraph: ordering', () => {
     const c = makeMotion()
     link(graph, b, a)
     graph.ensureOrder()
-    expect(a._rank).toBe(0)
+    expect(a.rank).toBe(0)
 
     link(graph, b, c)
     graph.ensureOrder()
 
-    expect(a._rank).toBe(-1)
-    expect(c._rank).toBe(0)
-    expect(b._rank).toBe(1)
+    expect(a.rank).toBe(-1)
+    expect(c.rank).toBe(0)
+    expect(b.rank).toBe(1)
   })
 
   test('removing the last edge returns every motion to rank -1', () => {
@@ -273,8 +276,8 @@ describe('FollowGraph: ordering', () => {
     graph.removeEdge(b)
     graph.ensureOrder()
 
-    expect(a._rank).toBe(-1)
-    expect(b._rank).toBe(-1)
+    expect(a.rank).toBe(-1)
+    expect(b.rank).toBe(-1)
   })
 
   test('a deep tail-first chain ranks without recursion limits', () => {
@@ -288,7 +291,7 @@ describe('FollowGraph: ordering', () => {
     graph.ensureOrder()
 
     for (let i = 0; i < 10000; i++) {
-      expect(motions[i]!._rank).toBe(9999 - i)
+      expect(motions[i]!.rank).toBe(9999 - i)
     }
   })
 
@@ -300,13 +303,13 @@ describe('FollowGraph: ordering', () => {
     graph.ensureOrder()
 
     // A recompute would overwrite this sentinel; a clean call must not.
-    a._rank = 99
+    a.rank = 99
     graph.ensureOrder()
-    expect(a._rank).toBe(99)
+    expect(a.rank).toBe(99)
 
     link(graph, b, a)
     graph.ensureOrder()
-    expect(a._rank).toBe(0)
+    expect(a.rank).toBe(0)
   })
 })
 
@@ -321,8 +324,8 @@ describe('FollowGraph: cycle classification', () => {
 
     graph.ensureOrder()
 
-    expect(ab._cyclic).toBe(false)
-    expect(bc._cyclic).toBe(false)
+    expect(ab.cyclic).toBe(false)
+    expect(bc.cyclic).toBe(false)
   })
 
   test('diamond edges are acyclic', () => {
@@ -336,7 +339,7 @@ describe('FollowGraph: cycle classification', () => {
     graph.ensureOrder()
 
     for (const edge of edges) {
-      expect(edge._cyclic).toBe(false)
+      expect(edge.cyclic).toBe(false)
     }
   })
 
@@ -349,8 +352,8 @@ describe('FollowGraph: cycle classification', () => {
 
     graph.ensureOrder()
 
-    expect(ab._cyclic).toBe(true)
-    expect(ba._cyclic).toBe(true)
+    expect(ab.cyclic).toBe(true)
+    expect(ba.cyclic).toBe(true)
   })
 
   test('a self-follow edge is cyclic', () => {
@@ -360,7 +363,7 @@ describe('FollowGraph: cycle classification', () => {
 
     graph.ensureOrder()
 
-    expect(edge._cyclic).toBe(true)
+    expect(edge.cyclic).toBe(true)
   })
 
   test('a tail off a cycle classifies acyclic while the cycle edges classify', () => {
@@ -375,9 +378,9 @@ describe('FollowGraph: cycle classification', () => {
     graph.ensureOrder()
 
     for (const edge of cycle) {
-      expect(edge._cyclic).toBe(true)
+      expect(edge.cyclic).toBe(true)
     }
-    expect(out._cyclic).toBe(false)
+    expect(out.cyclic).toBe(false)
   })
 
   test('breaking a cycle reclassifies the surviving edge', () => {
@@ -387,12 +390,12 @@ describe('FollowGraph: cycle classification', () => {
     link(graph, a, b)
     const ba = link(graph, b, a)
     graph.ensureOrder()
-    expect(ba._cyclic).toBe(true)
+    expect(ba.cyclic).toBe(true)
 
     graph.removeEdge(a)
     graph.ensureOrder()
 
-    expect(ba._cyclic).toBe(false)
+    expect(ba.cyclic).toBe(false)
   })
 
   test('a multi-leader edge is cyclic if any leader shares its SCC', () => {
@@ -405,7 +408,7 @@ describe('FollowGraph: cycle classification', () => {
 
     graph.ensureOrder()
 
-    expect(edge._cyclic).toBe(true)
+    expect(edge.cyclic).toBe(true)
   })
 })
 
@@ -418,8 +421,8 @@ describe('FollowGraph: spring wiring', () => {
 
     motions.graph.ensureOrder()
 
-    expect(motionOf(leader)._rank).toBe(0)
-    expect(motionOf(follower)._rank).toBe(1)
+    expect(motionOf(leader).rank).toBe(0)
+    expect(motionOf(follower).rank).toBe(1)
   })
 
   test('retargeting to a number unfollows and drops the edge', () => {
@@ -431,8 +434,8 @@ describe('FollowGraph: spring wiring', () => {
 
     motions.graph.ensureOrder()
 
-    expect(motionOf(leader)._rank).toBe(-1)
-    expect(motionOf(follower)._rank).toBe(-1)
+    expect(motionOf(leader).rank).toBe(-1)
+    expect(motionOf(follower).rank).toBe(-1)
   })
 
   test('switching leaders rewires the edge', () => {
@@ -445,9 +448,9 @@ describe('FollowGraph: spring wiring', () => {
 
     motions.graph.ensureOrder()
 
-    expect(motionOf(first)._rank).toBe(-1)
-    expect(motionOf(second)._rank).toBe(0)
-    expect(motionOf(follower)._rank).toBe(1)
+    expect(motionOf(first).rank).toBe(-1)
+    expect(motionOf(second).rank).toBe(0)
+    expect(motionOf(follower).rank).toBe(1)
   })
 
   test('disposing the follower drops its edge', () => {
@@ -459,7 +462,7 @@ describe('FollowGraph: spring wiring', () => {
 
     motions.graph.ensureOrder()
 
-    expect(motionOf(leader)._rank).toBe(-1)
+    expect(motionOf(leader).rank).toBe(-1)
   })
 
   test('disposing the leader detaches followers and drops their edges', () => {
@@ -471,7 +474,7 @@ describe('FollowGraph: spring wiring', () => {
 
     motions.graph.ensureOrder()
 
-    expect(motionOf(follower)._rank).toBe(-1)
+    expect(motionOf(follower).rank).toBe(-1)
   })
 
   test('a foreign source registers no edge', () => {
@@ -482,7 +485,7 @@ describe('FollowGraph: spring wiring', () => {
 
     motions.graph.ensureOrder()
 
-    expect(motionOf(follower)._rank).toBe(-1)
+    expect(motionOf(follower).rank).toBe(-1)
   })
 
   test('a mapped leader orders the spring it reads first', () => {
@@ -493,8 +496,8 @@ describe('FollowGraph: spring wiring', () => {
 
     motions.graph.ensureOrder()
 
-    expect(motionOf(leader)._rank).toBe(0)
-    expect(motionOf(follower)._rank).toBe(1)
+    expect(motionOf(leader).rank).toBe(0)
+    expect(motionOf(follower).rank).toBe(1)
   })
 
   test('shape-mapped leaders all rank before the follower', () => {
@@ -506,10 +509,10 @@ describe('FollowGraph: spring wiring', () => {
 
     motions.graph.ensureOrder()
 
-    expect(motionOf(x)._rank).toBeGreaterThanOrEqual(0)
-    expect(motionOf(y)._rank).toBeGreaterThanOrEqual(0)
-    expect(motionOf(follower)._rank).toBeGreaterThan(motionOf(x)._rank)
-    expect(motionOf(follower)._rank).toBeGreaterThan(motionOf(y)._rank)
+    expect(motionOf(x).rank).toBeGreaterThanOrEqual(0)
+    expect(motionOf(y).rank).toBeGreaterThanOrEqual(0)
+    expect(motionOf(follower).rank).toBeGreaterThan(motionOf(x).rank)
+    expect(motionOf(follower).rank).toBeGreaterThan(motionOf(y).rank)
   })
 
   test('mutual followers rank in creation order', () => {
@@ -522,8 +525,8 @@ describe('FollowGraph: spring wiring', () => {
 
     motions.graph.ensureOrder()
 
-    expect(motionOf(a)._rank).toBe(0)
-    expect(motionOf(b)._rank).toBe(1)
+    expect(motionOf(a).rank).toBe(0)
+    expect(motionOf(b).rank).toBe(1)
   })
 
   test('a composite follow orders channel-wise', () => {
@@ -537,8 +540,8 @@ describe('FollowGraph: spring wiring', () => {
     const leaderMotions = resolveLeaderMotions(leader)
     const followerMotions = resolveLeaderMotions(follower)
     for (let i = 0; i < leaderMotions.length; i++) {
-      expect(leaderMotions[i]!._rank).toBeGreaterThanOrEqual(0)
-      expect(followerMotions[i]!._rank).toBeGreaterThan(leaderMotions[i]!._rank)
+      expect(leaderMotions[i]!.rank).toBeGreaterThanOrEqual(0)
+      expect(followerMotions[i]!.rank).toBeGreaterThan(leaderMotions[i]!.rank)
     }
   })
 
@@ -551,9 +554,9 @@ describe('FollowGraph: spring wiring', () => {
     motions.graph.ensureOrder()
 
     const [x, y] = resolveLeaderMotions(composite)
-    expect(motionOf(leader)._rank).toBe(0)
-    expect(x!._rank).toBe(1)
-    expect(y!._rank).toBe(-1)
+    expect(motionOf(leader).rank).toBe(0)
+    expect(x!.rank).toBe(1)
+    expect(y!.rank).toBe(-1)
   })
 
   test('rest and wake churn leaves ranks untouched', () => {
@@ -567,8 +570,8 @@ describe('FollowGraph: spring wiring', () => {
     for (let i = 0; i < 600; i++) motions.tick(1 / 60)
 
     expect(follower.value).toBeCloseTo(100, 0)
-    expect(motionOf(leader)._rank).toBe(0)
-    expect(motionOf(follower)._rank).toBe(1)
+    expect(motionOf(leader).rank).toBe(0)
+    expect(motionOf(follower).rank).toBe(1)
   })
 
   test('following through a wrapper registers the edge and orders the pair', () => {
@@ -579,8 +582,8 @@ describe('FollowGraph: spring wiring', () => {
 
     motions.graph.ensureOrder()
 
-    expect(motionOf(leader)._rank).toBe(0)
-    expect(motionOf(follower)._rank).toBe(1)
+    expect(motionOf(leader).rank).toBe(0)
+    expect(motionOf(follower).rank).toBe(1)
   })
 })
 
@@ -590,25 +593,23 @@ describe('FollowGraph: planning', () => {
     const leader = new Spring(motions, 0)
     const follower = new Spring(motions, 0)
     follower.target = leader
-    const edge = motionOf(follower)._edge!
-    expect(edge._prevValue).toBe(follower.target)
+    const trail = motionOf(follower).edge!.trail
 
     leader.target = 100
     motions.tick(1 / 60)
     // This frame's plan ran before its recouple: the observed delta is
     // still zero, the leader's first move lands in the next plan.
-    expect(edge._d1).toBe(0)
+    expect(trail.delta).toBe(0)
     const first = follower.target
 
     motions.tick(1 / 60)
-    expect(edge._d1).toBe(first)
-    expect(edge._d2).toBe(0)
+    expect(trail.delta).toBe(first)
+    expect(trail.curvature).toBe(first)
     const second = follower.target
 
     motions.tick(1 / 60)
-    expect(edge._d1).toBe(second - first)
-    expect(edge._d2).toBe(first)
-    expect(edge._prevValue).toBe(second)
+    expect(trail.delta).toBe(second - first)
+    expect(trail.curvature).toBe(second - 2 * first)
   })
 
   test('an edge with resting leaders is not planned', () => {
@@ -616,16 +617,14 @@ describe('FollowGraph: planning', () => {
     const leader = new Spring(motions, 0)
     const follower = new Spring(motions, 0)
     follower.target = leader
-    const edge = motionOf(follower)._edge!
-    // An unplanned edge must not touch its estimator; the sentinel
-    // survives frames where only the follower moves.
-    edge._prevValue = 42
+    const edge = motionOf(follower).edge!
+    const plan = vi.spyOn(edge, 'plan')
 
     follower.value = 50
     motions.tick(1 / 60)
     motions.tick(1 / 60)
 
-    expect(edge._prevValue).toBe(42)
+    expect(plan).not.toHaveBeenCalled()
   })
 
   test('planning reads no user map code', () => {
@@ -663,7 +662,7 @@ describe('FollowGraph: planning', () => {
 
     motions.graph.ensureOrder()
 
-    expect(motionOf(a)._edge!._cyclic).toBe(true)
-    expect(motionOf(b)._edge!._cyclic).toBe(true)
+    expect(motionOf(a).edge!.cyclic).toBe(true)
+    expect(motionOf(b).edge!.cyclic).toBe(true)
   })
 })

@@ -60,7 +60,7 @@ export class Ticker {
   #lagThreshold: number
   #adjustedLag: number
 
-  readonly #motion: MotionSet
+  readonly #motions: MotionSet
 
   #frame = 0
   #time = 0
@@ -81,7 +81,7 @@ export class Ticker {
   #hiddenSince: number | null = null
 
   constructor(motions: MotionSet, options?: TickerOptions) {
-    this.#motion = motions
+    this.#motions = motions
 
     const fps = options?.fps ?? 0
     const lagThreshold = options?.lagThreshold ?? 500
@@ -184,7 +184,7 @@ export class Ticker {
   }
 
   #schedule(timestamp: number) {
-    if (this.#motion.size === 0) {
+    if (this.#motions.size === 0) {
       this.#sleeping = true
       this.#acc = 0
       if (this.#idleSince === null) {
@@ -253,7 +253,7 @@ export class Ticker {
 
   #creditIdle(timestamp: number) {
     if (this.#idleSince === null) return
-    this.#motion.credit(this.#idleMs(timestamp) / 1000)
+    this.#motions.credit(this.#idleMs(timestamp) / 1000)
     this.#idleSince = null
   }
 
@@ -274,6 +274,6 @@ export class Ticker {
     this.#frame++
     this.#delta = dt
 
-    this.#motion.tick(dt / 1000)
+    this.#motions.tick(dt / 1000)
   }
 }

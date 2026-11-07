@@ -14,7 +14,7 @@ import type { State } from './state.ts'
 // splits at that time — it evaluates there, writes position as an exact
 // 0, scales velocity by the multiplier, and re-anchors — then spends
 // what remains of the step from the new anchor. Rest reached at a
-// crossing ends the tick with the state held for `Motion` to snap.
+// crossing ends the tick with the state held for `SpringMotion` to snap.
 
 /** dampingRatio < 1: decaying oscillation, x(t) = exp(-sigma*t) * (c1*cos(wd*t) + c2*sin(wd*t)). */
 export class UnderdampedSolver {

@@ -1,9 +1,10 @@
 // Prototype ramp source for the constant-rate proposal: a value moving
 // toward `target` at a fixed `rate` (units per second), wired into the
-// real MotionSet / FollowGraph as a Motion subclass so followers get
+// real MotionSet / FollowGraph as a `Motion` subclass so followers get
 // ranked, sub-stepped, and FOH-recoupled exactly as they would against a
-// shipped primitive. Probe-only: the proposal replaces the subclass with
-// a shared tick-member interface.
+// shipped primitive. Probe-only: the shipped `RampMotion` in
+// src/ramp-motion.ts adds the clock anchor, subscriptions, reduced
+// motion, and the arrival kink signal.
 import { SpringDefinition } from '../../packages/coily/src/config.ts'
 import { Emitter } from '../../packages/coily/src/emitter.ts'
 import { registerBacking } from '../../packages/coily/src/follow-graph.ts'
@@ -19,7 +20,7 @@ export class RampMotion extends Motion {
   readonly emitter = new Emitter()
 
   constructor(from: number, rate: number, target: number) {
-    super(SpringDefinition.default, 0, 0)
+    super()
     this.value = from
     this.rate = rate
     this.rampTarget = target
@@ -34,7 +35,11 @@ export class RampMotion extends Motion {
     return Math.sign(this.rampTarget - this.value) * this.rate
   }
 
-  override _advance(dt: number): void {
+  override get acceleration(): number {
+    return 0
+  }
+
+  override advance(dt: number): void {
     if (this.isResting) return
     const remaining = this.rampTarget - this.value
     const step = this.rate * dt
@@ -42,16 +47,19 @@ export class RampMotion extends Motion {
       Math.abs(remaining) <= step ? this.rampTarget : this.value + Math.sign(remaining) * step
   }
 
-  override _settleFrame(): void {
+  override endFrame(): void {
     this.emitter.emit('update')
   }
 
-  override _manifoldDeviation(): number {
+  override applyReducedMotion(): void {}
+
+  override manifoldDeviation(): number {
     return 0
   }
 
-  override _acceleration(): number {
-    return 0
+  // The probe measures the arrival kink without the shipped demand.
+  override kinksWithin(): boolean {
+    return false
   }
 }
 
