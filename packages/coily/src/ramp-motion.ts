@@ -257,9 +257,11 @@ export class RampMotion extends Motion {
     const speed = this.#speed()
     const remaining = this.#target - this.#anchorValue
     if (speed === 0 || remaining === 0) return this.#anchorValue
-    // A guard. The ticker never credits idle time behind an earlier
-    // read, but a negative `advance` dt moves the clock back, and the
-    // ramp must not then move back past its anchor.
+    // A guard. The clock only moves forward, since `advance` rejects a
+    // negative dt and the ticker never credits idle time behind an
+    // earlier read. Idle time still comes from `performance.now()`, so a
+    // wall clock that reads earlier, such as a stubbed one in a test,
+    // must not move the ramp back past its anchor.
     const travel = speed * Math.max(0, time - this.#anchorTime)
     return Math.abs(remaining) <= travel
       ? this.#target

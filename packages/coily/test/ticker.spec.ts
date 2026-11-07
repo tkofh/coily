@@ -147,21 +147,28 @@ describe('Ticker', () => {
       expect(ticker.adjustedLag).toBe(33)
     })
 
-    test('setting lagThreshold to 0 sets it to a very large value', () => {
+    test('lagThreshold reads 0 after it is set to 0', () => {
       const ticker = new Ticker(new MotionSet())
       ticker.lagThreshold = 0
-      expect(ticker.lagThreshold).toBe(1e8)
+      expect(ticker.lagThreshold).toBe(0)
     })
 
-    test('adjustedLag is clamped to lagThreshold', () => {
+    test('lagThreshold: 0 in the constructor reads 0', () => {
+      const ticker = new Ticker(new MotionSet(), { lagThreshold: 0 })
+      expect(ticker.lagThreshold).toBe(0)
+    })
+
+    test('a lower lagThreshold leaves adjustedLag as set', () => {
       const ticker = new Ticker(new MotionSet())
       ticker.lagThreshold = 20
-      expect(ticker.adjustedLag).toBeLessThanOrEqual(20)
+      expect(ticker.adjustedLag).toBe(33)
     })
 
-    test('lagThreshold: 0 in constructor sets it to a very large value', () => {
-      const ticker = new Ticker(new MotionSet(), { lagThreshold: 0 })
-      expect(ticker.lagThreshold).toBe(1e8)
+    test('adjustedLag reads back a value above lagThreshold', () => {
+      const ticker = new Ticker(new MotionSet(), { lagThreshold: 20, adjustedLag: 50 })
+      expect(ticker.adjustedLag).toBe(50)
+      ticker.adjustedLag = 40
+      expect(ticker.adjustedLag).toBe(40)
     })
   })
 
@@ -332,6 +339,48 @@ describe('Ticker', () => {
       source.frame(8.33) // priming frame
       source.frame(8.33)
 
+      source.frame(600)
+      expect(ticker.delta).toBe(33)
+    })
+
+    test('lagThreshold 0 passes every gap in full', () => {
+      const source = new FrameSource().install()
+      const motions = new MotionSet()
+      motions.add(activeMotion())
+      const ticker = new Ticker(motions, { lagThreshold: 0 })
+
+      ticker.start()
+      source.frame(8.33) // priming frame
+      source.frame(600)
+      expect(ticker.delta).toBe(600)
+      source.frame(2e8)
+      expect(ticker.delta).toBe(2e8)
+    })
+
+    test('a lagging frame steps at most lagThreshold', () => {
+      const source = new FrameSource().install()
+      const motions = new MotionSet()
+      motions.add(activeMotion())
+      const ticker = new Ticker(motions, { lagThreshold: 20 })
+
+      ticker.start()
+      source.frame(8.33) // priming frame
+      source.frame(600)
+      expect(ticker.delta).toBe(20)
+    })
+
+    test('raising lagThreshold again restores the full adjustedLag', () => {
+      const source = new FrameSource().install()
+      const motions = new MotionSet()
+      motions.add(activeMotion())
+      const ticker = new Ticker(motions)
+
+      ticker.lagThreshold = 10
+      ticker.lagThreshold = 500
+      expect(ticker.adjustedLag).toBe(33)
+
+      ticker.start()
+      source.frame(8.33) // priming frame
       source.frame(600)
       expect(ticker.delta).toBe(33)
     })

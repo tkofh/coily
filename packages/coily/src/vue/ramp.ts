@@ -81,9 +81,10 @@ export interface RampRef extends Ref<number>, TargetedSource<number> {
  * Creates a ramp and returns it as a `RampRef`. A ramp is a value that
  * moves toward `target` in a straight line at `rate` value units per
  * second, and stops there. A target of `Infinity` or `-Infinity` makes
- * it endless. A spring that follows the ref tracks its steady motion
- * exactly, with no frame-to-frame steps. A spring that follows an
- * endless ramp makes a spin that lags behind it like a heavy object.
+ * it endless. A spring that follows the ref with the default `arrival`
+ * tracks its steady motion exactly, with no frame-to-frame steps. A
+ * spring that follows an endless ramp makes a spin that lags behind it
+ * like a heavy object.
  *
  * `target` and `rate` are numbers, or refs or getters of a number. A new
  * target sends the ramp there from its current value. A new rate applies

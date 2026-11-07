@@ -15,13 +15,15 @@ export interface TickerOptions {
    * The longest frame gap, in ms, that counts as a normal frame. A longer
    * gap is lag, such as a backgrounded tab or a blocking task. The ticker
    * replaces it with `adjustedLag`, so springs do not teleport when
-   * frames resume. 0 disables lag clamping.
+   * frames resume. 0 disables lag clamping, and `lagThreshold` then
+   * reads 0.
    * @default 500
    */
   readonly lagThreshold?: number | undefined
   /**
-   * The elapsed time, in ms, that replaces a lagging frame. It is clamped
-   * to at most `lagThreshold`.
+   * The elapsed time, in ms, that replaces a lagging frame. A frame
+   * uses at most `lagThreshold` ms of it. `adjustedLag` still reads the
+   * value as given, even above `lagThreshold`.
    * @default 33
    */
   readonly adjustedLag?: number | undefined
@@ -51,9 +53,10 @@ const now = (): number => performance.now()
  * gaps.
  *
  * While started and asleep, it counts idle wall time onto the set's
- * clock, but not the time the document spends hidden. This matches an
- * awake set. Frames stop in a hidden tab, and when they resume, the set
- * gets `adjustedLag` for the gap instead of the full time.
+ * clock, but not the time the document spends hidden. An awake set gets
+ * no frames in a hidden tab. When frames resume, it gets the gap as one
+ * frame, which lag clamping turns into `adjustedLag` when the gap
+ * exceeds `lagThreshold`.
  *
  * Idle time reads wall time once per microtask checkpoint, so the clock
  * holds still through synchronous code, as it does between frames.
@@ -66,6 +69,10 @@ export class Ticker {
   #capGap: number
   #lagThreshold: number
   #adjustedLag: number
+  /** Frame gaps longer than this count as lag: `#lagThreshold`, or Infinity when 0 disables clamping. */
+  #lagLimit = 0
+  /** The ms a lagging frame steps: `#adjustedLag` clamped to `#lagThreshold`. */
+  #lagStep = 0
 
   readonly #motions: MotionSet
   readonly #onVisibility = () => this.#onVisibilityChange()
@@ -108,10 +115,9 @@ export class Ticker {
     this.#fps = fps
     this.#gap = fps === 0 ? 1000 / 60 : 1000 / fps
     this.#capGap = fps === 0 ? 0 : 1000 / fps
-    // 0 disables clamping. A threshold that no real frame gap reaches
-    // saves a separate disabled branch per frame.
-    this.#lagThreshold = lagThreshold === 0 ? 1e8 : lagThreshold
-    this.#adjustedLag = Math.min(adjustedLag, this.#lagThreshold)
+    this.#lagThreshold = lagThreshold
+    this.#adjustedLag = adjustedLag
+    this.#updateLag()
 
     motions.onWake = () => this.#wake()
     motions.idleTime = () => (this.#idleSince === null ? 0 : this.#idleMs(this.#taskNow()) / 1000)
@@ -139,8 +145,8 @@ export class Ticker {
 
   set lagThreshold(value: number) {
     invariant(value >= 0, 'Lag threshold must be greater than or equal to 0')
-    this.#lagThreshold = value === 0 ? 1e8 : value
-    this.#adjustedLag = Math.min(this.#adjustedLag, this.#lagThreshold)
+    this.#lagThreshold = value
+    this.#updateLag()
   }
 
   get adjustedLag() {
@@ -149,7 +155,8 @@ export class Ticker {
 
   set adjustedLag(value: number) {
     invariant(value >= 0, 'Adjusted lag must be greater than or equal to 0')
-    this.#adjustedLag = Math.min(value, this.#lagThreshold)
+    this.#adjustedLag = value
+    this.#updateLag()
   }
 
   get time() {
@@ -235,7 +242,7 @@ export class Ticker {
     try {
       if (this.#primed) {
         const wallElapsed = timestamp - this.#lastWallTime
-        const elapsed = wallElapsed > this.#lagThreshold ? this.#adjustedLag : wallElapsed
+        const elapsed = wallElapsed > this.#lagLimit ? this.#lagStep : wallElapsed
 
         this.#acc += elapsed
 
@@ -268,6 +275,14 @@ export class Ticker {
         this.#schedule(timestamp)
       }
     }
+  }
+
+  // The settings keep what the user wrote, and frames read these derived
+  // values. An Infinity limit is a threshold no gap exceeds, which saves
+  // a separate disabled branch per frame.
+  #updateLag() {
+    this.#lagLimit = this.#lagThreshold === 0 ? Number.POSITIVE_INFINITY : this.#lagThreshold
+    this.#lagStep = Math.min(this.#adjustedLag, this.#lagThreshold)
   }
 
   // Idle wall ms since the spell began, less the time the document was

@@ -154,9 +154,11 @@ export interface FollowEdge {
    * acyclic, the follower's arrival is passthrough, `h > 0`, and the
    * retarget is not a reduced-motion jump. Then it retargets and arms
    * the follower's slope with the delta over `h`, so the coming advance
-   * integrates against the leader's motion. Every other edge retargets
-   * with the exact semantics of the leader-update handler (finite
-   * guard, reduced-motion jump).
+   * integrates against the leader's motion. A reduced-motion jump puts
+   * the follower at rest on the new target and emits nothing. Its
+   * `endFrame` delivers the events in the settle sweep. Every other
+   * edge retargets with the exact semantics of the leader-update
+   * handler (finite guard, rebase).
    */
   recouple(h: number): void
   /**

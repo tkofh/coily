@@ -69,8 +69,9 @@ onMounted(() => {
 
 onBeforeUnmount(() => clearTimeout(autoTimer))
 
-// Tuned when duration carried a 2x safety margin; 265 under the exact
-// derivation reproduces the same dynamics (wn ~79) so links stay tight.
+// Each link rests 300 ms after a 1 px move, to within 0.0005 px
+// (precision 3). That tunes it to a natural frequency of about 35 rad/s,
+// with a dampingRatio of 0.85.
 const chainConfig = defineSpring({ bounce: 0.15, duration: 300, precision: 3 })
 
 // The first spring follows the mouse, and each later spring follows the one before it.

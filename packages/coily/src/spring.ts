@@ -116,10 +116,13 @@ export class Spring implements TargetedSource {
       this.#setTarget(value)
     } else {
       invariant(isSpringSource(value), 'Spring target must be a number or a SpringSource')
+      const current = value[SpringSourceSymbol].value
       invariant(
-        typeof value[SpringSourceSymbol].value === 'number',
+        typeof current === 'number',
         'A spring can only follow a scalar SpringSource; derive one from a composite with mapSpring',
       )
+      // Checked before following, so a rejected source keeps the old follow.
+      invariant(Number.isFinite(current), 'Spring target must be a finite number')
       this.#follow(value as SpringSource)
     }
   }
@@ -425,20 +428,26 @@ export class Spring implements TargetedSource {
         cyclic: false,
         trail: new TargetTrail(0),
         recouple: (h) => {
+          if (this.#motions.reduced && this.#purpose === 'motion') {
+            const value = api.value
+            invariant(Number.isFinite(value), 'Spring target must be a finite number')
+            if (value === this.#target) return
+            // The jump that `#setTarget` would make, minus its events.
+            // Listeners must not run mid-advance, so the motion joins
+            // the frame and its `endFrame` emits in the settle sweep.
+            this.#target = value
+            this.#motions.add(this.#motion)
+            this.#motion.rest()
+            return
+          }
           // A slope can arm only where it is safe. Never inside a cycle:
           // delayed velocity feedback around a loop acts as negative
           // damping, so a first-order hold destabilizes cycles that are
           // stable with a held target. Never on an arrival spring: its
           // crossings are closed-form only against a held target. Never
-          // where the retarget must jump or rebase exactly, as under
-          // reduced motion or in a zero-length step. Those cases keep the
-          // exact step path.
-          if (
-            edge.cyclic ||
-            h === 0 ||
-            this.#config.arrival !== 1 ||
-            (this.#motions.reduced && this.#purpose === 'motion')
-          ) {
+          // in a zero-length step, where the retarget must rebase
+          // exactly. Those cases keep the exact step path.
+          if (edge.cyclic || h === 0 || this.#config.arrival !== 1) {
             this.#setTarget(api.value)
             return
           }

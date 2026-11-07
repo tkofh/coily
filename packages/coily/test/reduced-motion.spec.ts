@@ -100,6 +100,83 @@ describe('reduced motion: always', () => {
     expect(tail.isResting).toBe(true)
   })
 
+  test('followers of a ticking leader emit after every motion has advanced', () => {
+    const system = createSpringSystem({ reducedMotion: 'always' })
+    const ramp = system.createRamp(0, { rate: 1000, target: Infinity, purpose: 'nonmotion' })
+    const a = system.createSpring(ramp)
+    const b = system.createSpring(ramp)
+
+    const events: string[] = []
+    ramp.onUpdate(() => events.push(`ramp ${ramp.value}`))
+    a.onUpdate(() => events.push(`a ${a.value} sees b ${b.value}`))
+    b.onUpdate(() => events.push(`b ${b.value} sees a ${a.value}`))
+
+    system.advance(16)
+    expect(events).toEqual(['ramp 16', 'a 16 sees b 16', 'b 16 sees a 16'])
+
+    events.length = 0
+    system.advance(16)
+    expect(events).toEqual(['ramp 32', 'a 32 sees b 32', 'b 32 sees a 32'])
+  })
+
+  test("followers of a moving 'nonmotion' spring emit after every motion has advanced", () => {
+    const system = createSpringSystem({ reducedMotion: 'always' })
+    const leader = system.createSpring(0, config, { purpose: 'nonmotion' })
+    const a = system.createSpring(leader)
+    const b = system.createSpring(leader)
+    const seen: number[][] = []
+    a.onUpdate(() => seen.push([leader.value, a.value, b.value]))
+
+    leader.target = 100
+    system.advance(1000 / 60)
+
+    const value = leader.value
+    expect(value).toBeGreaterThan(0)
+    expect(seen).toEqual([[value, value, value]])
+  })
+
+  test('a chain behind a ticking leader lands on the leader in the same frame', () => {
+    const system = createSpringSystem({ reducedMotion: 'always' })
+    const ramp = system.createRamp(0, { rate: 1000, target: Infinity, purpose: 'nonmotion' })
+    const middle = system.createSpring(ramp)
+    const tail = system.createSpring(middle)
+
+    const events: string[] = []
+    const onStart = vi.fn()
+    const onStop = vi.fn()
+    ramp.onUpdate(() => events.push('ramp'))
+    middle.onUpdate(() => events.push('middle'))
+    tail.onUpdate(() => events.push(`tail ${ramp.value} ${middle.value} ${tail.value}`))
+    middle.onStart(onStart)
+    middle.onStop(onStop)
+    tail.onStart(onStart)
+    tail.onStop(onStop)
+
+    system.advance(16)
+    system.advance(16)
+
+    expect(events).toEqual(['ramp', 'middle', 'tail 16 16 16', 'ramp', 'middle', 'tail 32 32 32'])
+    expect(onStart).not.toHaveBeenCalled()
+    expect(onStop).not.toHaveBeenCalled()
+    expect(tail.isResting).toBe(true)
+  })
+
+  test('a follower jumps synchronously on a leader write outside a tick', () => {
+    const system = createSpringSystem({ reducedMotion: 'always' })
+    const leader = system.createSpring(0, config)
+    const follower = system.createSpring(leader)
+    const onUpdate = vi.fn()
+    follower.onUpdate(onUpdate)
+
+    leader.target = 100
+    expect(follower.value).toBe(100)
+    expect(onUpdate).toHaveBeenCalledOnce()
+
+    // The jump already landed, so the next frame has nothing to report.
+    system.advance(1000 / 60)
+    expect(onUpdate).toHaveBeenCalledOnce()
+  })
+
   test('composite springs jump on every channel', () => {
     const system = createSpringSystem({ reducedMotion: 'always' })
     const spring = system.createSpring({ x: 0, y: 0 }, config)
@@ -321,6 +398,85 @@ describe("reduced motion: 'user' media query", () => {
     media.setMatches(true)
 
     expect(spring.value).toEqual({ x: 100, y: 200 })
+    expect(onUpdate).toHaveBeenCalledOnce()
+    expect(onStop).toHaveBeenCalledOnce()
+  })
+
+  function listen(spring: { onUpdate(f: () => void): unknown; onStop(f: () => void): unknown }) {
+    const onUpdate = vi.fn()
+    const onStop = vi.fn()
+    spring.onUpdate(onUpdate)
+    spring.onStop(onStop)
+    return { onUpdate, onStop }
+  }
+
+  test('a follower of a moving leader finishes with one update and stop', () => {
+    const media = stubMatchMedia(false)
+    const system = createSpringSystem()
+    const leader = system.createSpring(0, config)
+    const follower = system.createSpring(leader)
+    leader.target = 100
+    system.advance(1000 / 60)
+
+    const { onUpdate, onStop } = listen(follower)
+    media.setMatches(true)
+
+    expect(follower.value).toBe(100)
+    expect(onUpdate).toHaveBeenCalledOnce()
+    expect(onStop).toHaveBeenCalledOnce()
+  })
+
+  test('every spring in a chain of three finishes with one update and stop', () => {
+    const media = stubMatchMedia(false)
+    const system = createSpringSystem()
+    const head = system.createSpring(0, config)
+    const middle = system.createSpring(head)
+    const tail = system.createSpring(middle)
+    head.target = 100
+    system.advance(1000 / 60)
+
+    const springs = [head, middle, tail]
+    const listeners = springs.map(listen)
+    media.setMatches(true)
+
+    for (const [i, spring] of springs.entries()) {
+      expect(spring.value).toBe(100)
+      expect(listeners[i]!.onUpdate).toHaveBeenCalledOnce()
+      expect(listeners[i]!.onStop).toHaveBeenCalledOnce()
+    }
+  })
+
+  test('a follower that started moving before its leader finishes once, on the leader', () => {
+    const media = stubMatchMedia(false)
+    const system = createSpringSystem()
+    const leader = system.createSpring(0, config)
+    const follower = system.createSpring(leader)
+    // Displacing the follower first puts it ahead of its leader among the moving motions.
+    follower.value = 5
+    leader.target = 100
+    system.advance(1000 / 60)
+
+    const { onUpdate, onStop } = listen(follower)
+    const values: number[] = []
+    follower.onUpdate(() => values.push(follower.value))
+    media.setMatches(true)
+
+    expect(values).toEqual([100])
+    expect(onUpdate).toHaveBeenCalledOnce()
+    expect(onStop).toHaveBeenCalledOnce()
+  })
+
+  test('a follower of a moving ramp finishes with one update and stop', () => {
+    const media = stubMatchMedia(false)
+    const system = createSpringSystem()
+    const ramp = system.createRamp(0, { rate: 100, target: 100 })
+    const follower = system.createSpring(ramp)
+    system.advance(1000 / 60)
+
+    const { onUpdate, onStop } = listen(follower)
+    media.setMatches(true)
+
+    expect(follower.value).toBe(100)
     expect(onUpdate).toHaveBeenCalledOnce()
     expect(onStop).toHaveBeenCalledOnce()
   })

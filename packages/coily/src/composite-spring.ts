@@ -153,12 +153,13 @@ const readAcceleration = (spring: Spring) => spring.acceleration
 /**
  * The target scatter's leaf guard: a channel animates toward a number,
  * or follows a scalar source. Checked here so the error carries the
- * channel's path.
+ * channel's path. A source's value must be finite too, because the
+ * channel's follow would otherwise throw after the write has begun.
  */
 function acceptChannelTarget(input: unknown, path: string): number | SpringSource {
   invariant(
     (isNumber(input) && Number.isFinite(input)) ||
-      (isSpringSource(input) && typeof input[SpringSourceSymbol].value === 'number'),
+      (isSpringSource(input) && Number.isFinite(input[SpringSourceSymbol].value)),
     () => `Invalid value at '${path}': expected a finite number or a scalar SpringSource`,
   )
   return input as SpringSource
@@ -197,7 +198,7 @@ const followChannel = (mine: Spring, theirs: Spring) => {
  *
  * The shape is fixed at construction. A write that names an unknown
  * channel throws with the channel's path (`position.z`), and so does a
- * non-finite channel value.
+ * non-finite channel value. A write that throws changes nothing.
  */
 export class CompositeSpring<in out T extends object> implements TargetedSource<ReadonlyShape<T>> {
   /** Brands the composite as a `TargetedSource` whose api is the composite itself. */
@@ -339,13 +340,10 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
   }
 
   set target(value: CompositeSpringTarget<T>) {
-    this.#assertLive()
     if (value instanceof CompositeSpring) {
       this.#follow(value)
     } else {
-      this.#motions.flushes.batch(() => {
-        this.#tree.root.scatter(value, acceptChannelTarget, assignTarget)
-      })
+      this.#scatter(value, acceptChannelTarget, assignTarget)
     }
   }
 
@@ -368,10 +366,7 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
   }
 
   set value(value: PartialShape<T>) {
-    this.#assertLive()
-    this.#motions.flushes.batch(() => {
-      this.#tree.root.scatter(value, acceptNumber, assignValue)
-    })
+    this.#scatter(value, acceptNumber, assignValue)
   }
 
   /**
@@ -390,10 +385,7 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
   }
 
   set velocity(value: PartialShape<T>) {
-    this.#assertLive()
-    this.#motions.flushes.batch(() => {
-      this.#tree.root.scatter(value, acceptNumber, assignVelocity)
-    })
+    this.#scatter(value, acceptNumber, assignVelocity)
   }
 
   /**
@@ -432,8 +424,11 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
 
   set config(value: ConfigShape<T>) {
     this.#assertLive()
+    const root = this.#tree.root
+    const config = value ?? null
+    root.broadcast(config, resolveConfigNode, null, 'config')
     this.#motions.flushes.batch(() => {
-      this.#tree.root.broadcast(value ?? null, resolveConfigNode, assignConfig, 'config')
+      root.broadcast(config, resolveConfigNode, assignConfig, 'config')
     })
   }
 
@@ -493,10 +488,7 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
    * shape leaves out are unchanged.
    */
   jumpTo(value: PartialShape<T>) {
-    this.#assertLive()
-    this.#motions.flushes.batch(() => {
-      this.#tree.root.scatter(value, acceptNumber, applyJump)
-    })
+    this.#scatter(value, acceptNumber, applyJump)
   }
 
   /**
@@ -562,9 +554,28 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
     invariant(!this.#disposed, 'Cannot write to a disposed spring')
   }
 
-  #follow(leader: CompositeSpring<T>) {
+  // Writes run their traversal dry over the whole input first (here, in
+  // `config`, and in `#follow`), so a write that throws leaves every
+  // channel and every event untouched.
+  #scatter<V>(
+    input: unknown,
+    accept: (input: unknown, path: string) => V,
+    apply: (channel: Spring, value: V) => void,
+  ) {
+    this.#assertLive()
+    const root = this.#tree.root
+    root.scatter(input, accept, null)
     this.#motions.flushes.batch(() => {
-      this.#tree.root.zip(leader.#tree.root, followChannel)
+      root.scatter(input, accept, apply)
+    })
+  }
+
+  #follow(leader: CompositeSpring<T>) {
+    this.#assertLive()
+    const root = this.#tree.root
+    root.zip(leader.#tree.root, null)
+    this.#motions.flushes.batch(() => {
+      root.zip(leader.#tree.root, followChannel)
     })
   }
 }

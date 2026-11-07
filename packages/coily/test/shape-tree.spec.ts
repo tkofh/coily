@@ -110,6 +110,36 @@ describe('shape tree: scatter', () => {
   })
 })
 
+describe('shape tree: dry runs', () => {
+  test('a null apply runs every check and touches no leaf', () => {
+    const a = createTree({ position: { x: 0, y: 0 }, color: [0, 0] })
+    const b = createTree({ position: { x: 0, z: 0 }, color: [0, 0] })
+    const accept = vi.fn(acceptNumber)
+    const resolve = vi.fn(
+      (input: unknown): Coverage<number> => (typeof input === 'number' ? input : BRANCH),
+    )
+
+    expect(() => a.root.scatter({ position: { x: 1 }, color: [2] }, accept, null)).not.toThrow()
+    expect(accept).toHaveBeenCalledTimes(2)
+    expect(() =>
+      a.root.broadcast({ position: 1, color: [2] }, resolve, null, 'config'),
+    ).not.toThrow()
+    expect(resolve).toHaveBeenCalledTimes(4)
+
+    expect(() => a.root.scatter({ position: { x: 1, y: Number.NaN } }, acceptNumber, null)).toThrow(
+      "Expected a finite number for channel 'position.y'",
+    )
+    expect(() => a.root.scatter({ color: [1, 2, 3] }, acceptNumber, null)).toThrow(
+      "Unknown channel 'color.2'",
+    )
+    expect(() => a.root.broadcast({ position: { z: 1 } }, resolve, null, 'config')).toThrow(
+      "Unknown channel 'position.z' in config",
+    )
+    expect(() => a.root.zip(b.root, null)).toThrow("Shape mismatch at 'position'")
+    expect(a.leaves.map((leaf) => leaf.value)).toEqual([0, 0, 0, 0])
+  })
+})
+
 describe('shape tree: zip', () => {
   test('pairs leaves by position', () => {
     const a = createTree({ position: { x: 1, y: 2 }, opacity: 3 })

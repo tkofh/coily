@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { defineComponent, h, nextTick, ref, watchSyncEffect } from 'vue'
+import { defineComponent, h, nextTick, ref, watchEffect, watchSyncEffect } from 'vue'
 import { mount } from '@vue/test-utils'
 import { createSpringSystem, mapSpring, targetOf, velocityOf } from '../../src/index.ts'
 import { SpringSystemKey } from '../../src/vue/system.ts'
@@ -394,6 +394,36 @@ describe('useSpring', () => {
 
     expect(resolved).toBe(true)
     expect(spring.value).toBe(100)
+  })
+
+  test('timeRemaining effects see a retarget from rest before the next frame', async () => {
+    const system = createSpringSystem()
+    const target = ref(0)
+    const seen: number[] = []
+    let spring!: SpringRef
+    mount(
+      defineComponent({
+        setup() {
+          spring = useSpring(target)
+          watchEffect(() => {
+            seen.push(spring.timeRemaining.value)
+          })
+          return {}
+        },
+        render: () => h('div'),
+      }),
+      { global: { provide: { [SpringSystemKey as symbol]: system } } },
+    )
+
+    target.value = 100
+    await nextTick()
+
+    expect(spring.timeRemaining.value).toBeGreaterThan(0)
+    expect(seen.at(-1)).toBe(spring.timeRemaining.value)
+
+    for (let i = 0; i < 500 && !spring.isResting.value; i++) system.advance(16)
+    await nextTick()
+    expect(seen.at(-1)).toBe(0)
   })
 
   test('disposing the component disposes the spring', async () => {

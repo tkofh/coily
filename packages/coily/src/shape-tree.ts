@@ -63,6 +63,13 @@ export function channelParser<L>(factory: (value: number, path: string) => L): L
 
 type Read<L> = (leaf: L) => unknown
 
+/**
+ * What a write traversal does at each leaf it reaches. `null` makes the
+ * traversal a dry run: it runs every check and throws the same errors,
+ * but touches no leaf.
+ */
+export type Apply<L, V> = ((leaf: L, value: V) => void) | null
+
 /** One mirror position a view rewrites on refresh: `carrier[key] = read(leaf)`. */
 interface ViewSlot<L> {
   readonly leaf: L
@@ -92,27 +99,29 @@ export interface ShapeTreeNode<L> {
 
   /**
    * Scatters a partial shape into the leaves that the input names.
-   * `accept` validates and narrows the value at each named leaf.
+   * `accept` validates and narrows the value at each named leaf. A leaf
+   * is applied as soon as it is reached, so a later error leaves the
+   * earlier leaves written: run a `null` apply first for an
+   * all-or-nothing write.
    */
-  scatter<V>(
-    input: unknown,
-    accept: (input: unknown, path: string) => V,
-    apply: (leaf: L, value: V) => void,
-  ): void
+  scatter<V>(input: unknown, accept: (input: unknown, path: string) => V, apply: Apply<L, V>): void
 
-  /** Pairs this subtree's leaves with a structurally identical one's. */
-  zip(theirs: ShapeTreeNode<L>, fn: (mine: L, theirs: L) => void): void
+  /**
+   * Pairs this subtree's leaves with a structurally identical one's. A
+   * `null` fn only checks that the structures match.
+   */
+  zip(theirs: ShapeTreeNode<L>, fn: Apply<L, L>): void
 
   /**
    * Broadcasts a covering shape. At each node, `resolve` returns a value
    * that covers the subtree, or `BRANCH` to descend. `apply` runs once per
    * covered leaf, and `label` names the input shape (such as `config`) in
-   * error messages.
+   * error messages. Like `scatter`, it applies as it goes.
    */
   broadcast<V>(
     input: unknown,
     resolve: (input: unknown, path: string) => Coverage<V>,
-    apply: (leaf: L, value: V) => void,
+    apply: Apply<L, V>,
     label: string,
   ): void
 
@@ -142,25 +151,26 @@ export class LeafNode<L> implements ShapeTreeNode<L> {
   scatter<V>(
     input: unknown,
     accept: (input: unknown, path: string) => V,
-    apply: (leaf: L, value: V) => void,
+    apply: Apply<L, V>,
   ): void {
-    apply(this.leaf, accept(input, this.path))
+    const value = accept(input, this.path)
+    if (apply !== null) apply(this.leaf, value)
   }
 
-  zip(theirs: ShapeTreeNode<L>, fn: (mine: L, theirs: L) => void): void {
+  zip(theirs: ShapeTreeNode<L>, fn: Apply<L, L>): void {
     invariant(theirs instanceof LeafNode, () => `Shape mismatch at ${describePath(this.path)}`)
-    fn(this.leaf, theirs.leaf)
+    if (fn !== null) fn(this.leaf, theirs.leaf)
   }
 
   broadcast<V>(
     input: unknown,
     resolve: (input: unknown, path: string) => Coverage<V>,
-    apply: (leaf: L, value: V) => void,
+    apply: Apply<L, V>,
     _label: string,
   ): void {
     const resolved = resolve(input, this.path)
     invariant(resolved !== BRANCH, `Cannot descend into channel '${this.path}'`)
-    apply(this.leaf, resolved)
+    if (apply !== null) apply(this.leaf, resolved)
   }
 
   cover<V>(value: V, apply: (leaf: L, value: V) => void): void {
@@ -197,7 +207,7 @@ export class ListNode<L> implements ShapeTreeNode<L> {
   scatter<V>(
     input: unknown,
     accept: (input: unknown, path: string) => V,
-    apply: (leaf: L, value: V) => void,
+    apply: Apply<L, V>,
   ): void {
     invariant(isArray(input), () => `Expected an array at ${describePath(this.path)}`)
     invariant(
@@ -210,7 +220,7 @@ export class ListNode<L> implements ShapeTreeNode<L> {
     }
   }
 
-  zip(theirs: ShapeTreeNode<L>, fn: (mine: L, theirs: L) => void): void {
+  zip(theirs: ShapeTreeNode<L>, fn: Apply<L, L>): void {
     invariant(
       theirs instanceof ListNode && theirs.children.length === this.children.length,
       () => `Shape mismatch at ${describePath(this.path)}`,
@@ -223,12 +233,12 @@ export class ListNode<L> implements ShapeTreeNode<L> {
   broadcast<V>(
     input: unknown,
     resolve: (input: unknown, path: string) => Coverage<V>,
-    apply: (leaf: L, value: V) => void,
+    apply: Apply<L, V>,
     label: string,
   ): void {
     const resolved = resolve(input, this.path)
     if (resolved !== BRANCH) {
-      this.cover(resolved, apply)
+      if (apply !== null) this.cover(resolved, apply)
       return
     }
     invariant(isArray(input), () => `Expected an array at ${describePath(this.path)} in ${label}`)
@@ -272,7 +282,7 @@ export class RecordNode<L> implements ShapeTreeNode<L> {
   scatter<V>(
     input: unknown,
     accept: (input: unknown, path: string) => V,
-    apply: (leaf: L, value: V) => void,
+    apply: Apply<L, V>,
   ): void {
     invariant(isRecord(input), () => `Expected an object at ${describePath(this.path)}`)
     for (const key of Object.keys(input)) {
@@ -284,7 +294,7 @@ export class RecordNode<L> implements ShapeTreeNode<L> {
     }
   }
 
-  zip(theirs: ShapeTreeNode<L>, fn: (mine: L, theirs: L) => void): void {
+  zip(theirs: ShapeTreeNode<L>, fn: Apply<L, L>): void {
     invariant(
       theirs instanceof RecordNode && theirs.children.size === this.children.size,
       () => `Shape mismatch at ${describePath(this.path)}`,
@@ -299,12 +309,12 @@ export class RecordNode<L> implements ShapeTreeNode<L> {
   broadcast<V>(
     input: unknown,
     resolve: (input: unknown, path: string) => Coverage<V>,
-    apply: (leaf: L, value: V) => void,
+    apply: Apply<L, V>,
     label: string,
   ): void {
     const resolved = resolve(input, this.path)
     if (resolved !== BRANCH) {
-      this.cover(resolved, apply)
+      if (apply !== null) this.cover(resolved, apply)
       return
     }
     invariant(isRecord(input), () => `Expected an object at ${describePath(this.path)} in ${label}`)

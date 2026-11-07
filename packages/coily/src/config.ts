@@ -18,7 +18,9 @@ interface BaseOptions {
    * remaining motion cannot reach half a unit in the last place, which is
    * `0.5 * 10^-precision`, or 0.005 at the default.
    *
-   * Values are never rounded. Precision only decides rest. See
+   * Values are never rounded. Precision only decides rest. A duration
+   * config is tuned against this threshold, so it rests at its `duration`
+   * at any precision. See
    * https://github.com/tkofh/coily/blob/main/PRECISION.md.
    *
    * @default 2
@@ -107,7 +109,8 @@ interface WithBounce {
    * as fast as possible without overshooting. Positive values overshoot
    * and bounce. At 1, the maximum bounce, the ratio is clamped just short
    * of undamped, so the spring still settles. Negative values settle
-   * without bounce, more slowly. Must be between -1 and 1.
+   * without bounce, more slowly. Must be between -1 and 1, and below 1
+   * in a config that sets `damping` without `duration`.
    */
   readonly bounce: number
 }
@@ -116,8 +119,9 @@ interface WithDuration {
   /**
    * Settle time in ms. The spring is tuned to rest at this time when it
    * starts `displacement` away from the target. Rest lands within a frame
-   * of the requested duration, and a bouncy config can rest up to one
-   * oscillation earlier. Must be greater than 0.
+   * of the requested duration at any `precision`. A bouncy config can
+   * rest earlier, by up to about one oscillation, or several short ones
+   * when `bounce` is near 1. Must be greater than 0.
    */
   readonly duration: number
 }
@@ -127,7 +131,8 @@ interface WithDisplacement {
    * The initial displacement the duration tuning assumes. Set it to your
    * animation's range (300 when animating 0 to 300) so the settle timing
    * holds. The timing drifts as the real displacement moves away from
-   * this value. Must not be 0.
+   * this value. The sign does not matter. The magnitude must be greater
+   * than the resting threshold, `0.5 * 10^-precision`.
    * @default 1
    */
   readonly displacement?: number | undefined
@@ -278,7 +283,6 @@ export class SpringDefinition {
     if (dampingRatio !== undefined)
       invariant(dampingRatio >= 0, 'Damping ratio must be greater than or equal to 0')
     if (duration !== undefined) invariant(duration > 0, 'Duration must be greater than 0')
-    invariant(displacement !== 0, 'Displacement must not be 0')
     invariant(precision >= 0, 'Precision must be greater than or equal to 0')
     invariant(
       arrival === undefined ||
@@ -318,29 +322,35 @@ export class SpringDefinition {
       this.damping = 2 * dampingRatio * Math.sqrt(this.mass * tension)
     } else if (hasC && hasZ && !hasK && !hasT) {
       invariant(dampingRatio > 0, 'dampingRatio must be > 0 to derive tension')
+      // bounce 1 clamps to a near-zero ratio, and tension grows with
+      // 1 / ratio^2 from there.
+      invariant(bounce === undefined || bounce < 1, 'bounce must be < 1 to derive tension')
       this.mass = mass ?? 1
       this.tension = damping ** 2 / (4 * dampingRatio ** 2 * this.mass)
       this.damping = damping
     } else if (hasK && hasC && hasZ && !hasT) {
       invariant(!hasM, 'mass is derived when tension, damping, and dampingRatio are all provided')
       invariant(dampingRatio > 0, 'dampingRatio must be > 0 to derive mass')
+      invariant(bounce === undefined || bounce < 1, 'bounce must be < 1 to derive mass')
       this.mass = damping ** 2 / (4 * dampingRatio ** 2 * tension)
       this.tension = tension
       this.damping = damping
     }
     // ── Group 3: Duration-based ─────────────────────────────────────
     else if (hasZ && hasT) {
-      // A fixed threshold for the duration derivation, so precision does not change the physics.
-      const threshold = 0.005
       const x0 = Math.abs(displacement)
 
-      invariant(x0 > threshold, 'displacement must be greater than the precision threshold')
+      invariant(
+        x0 > this.restingMagnitude,
+        () =>
+          `Displacement magnitude must be greater than the resting threshold (${this.restingMagnitude} at precision ${precision})`,
+      )
       invariant(dampingRatio > 0, 'dampingRatio must be > 0 for duration-based config')
 
       // The natural frequency that makes the decay bound from rest enter
-      // the threshold exactly at `duration`, so rest lands on the
+      // the resting threshold exactly at `duration`, so rest lands on the
       // requested time instead of well before it.
-      const wn = restUnits(dampingRatio, x0 / threshold) / duration
+      const wn = restUnits(dampingRatio, x0 / this.restingMagnitude) / duration
 
       if (!hasK && !hasC) {
         this.mass = mass ?? 1
@@ -378,7 +388,8 @@ export class SpringDefinition {
    * spring is resting at the first tick at or after it. An underdamped
    * spring can also rest earlier. Its rest amplitude pulses, and a frame
    * that samples a dip inside the resting threshold rests there. Read the
-   * value as "no later than", which is tight in practice. See
+   * value as "no later than". The motion an early rest cuts off never
+   * leaves the resting threshold. See
    * https://github.com/tkofh/coily/blob/main/PRECISION.md.
    *
    * Returns 0 when `state` is already inside the resting threshold.
@@ -573,7 +584,8 @@ export function defineSpring(input: Exact<TensionBounceOptions>): SpringDefiniti
 export function defineSpring(input: Exact<DampingRatioOptions>): SpringDefinition
 /**
  * Creates a config from friction and bounciness. Tension is derived to
- * match the requested bounce. `bounce` must be less than 1.
+ * match the requested bounce. `bounce` must be less than 1, because the
+ * derived tension grows without limit as `bounce` nears 1.
  */
 export function defineSpring(input: Exact<DampingBounceOptions>): SpringDefinition
 /**
@@ -585,7 +597,8 @@ export function defineSpring(input: Exact<TensionDampingRatioOptions>): SpringDe
 /**
  * Creates a config from all three physical parameters. Mass is derived
  * from tension, damping, and the requested bounce, and cannot be
- * provided. `bounce` must be less than 1.
+ * provided. `bounce` must be less than 1, because the derived mass
+ * grows without limit as `bounce` nears 1.
  */
 export function defineSpring(input: Exact<TensionDampingBounceOptions>): SpringDefinition
 /**

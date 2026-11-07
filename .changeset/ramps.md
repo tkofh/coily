@@ -5,11 +5,11 @@
 Add ramps. `system.createRamp(from, { rate, target })` makes a value that
 moves toward its target at a fixed speed, in a straight line, and stops
 there. A target of `Infinity` or `-Infinity` makes the ramp endless. A ramp
-is a source, so a spring can follow it. The spring tracks the ramp's steady
-motion exactly. A target that you write once per frame lands about half a
-frame behind instead. Use a ramp for an endless spin, a heading that turns
-at a capped speed, or a clock in milliseconds mapped into a shape with
-`mapSpring`.
+is a source, so a spring can follow it. With the default `arrival`, the
+spring tracks the ramp's steady motion exactly. A target that you write once
+per frame lands about half a frame behind instead. Use a ramp for an endless
+spin, a heading that turns at a capped speed, or a clock in milliseconds
+mapped into a shape with `mapSpring`.
 
 ```ts
 const sweep = system.createRamp(0, { rate: 270, target: Infinity })

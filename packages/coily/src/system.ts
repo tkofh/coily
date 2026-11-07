@@ -175,7 +175,10 @@ class SpringSystemImpl implements SpringSystem {
   }
 
   advance(dt: number) {
-    invariant(Number.isFinite(dt), 'dt must be a finite number of milliseconds')
+    invariant(
+      Number.isFinite(dt) && dt >= 0,
+      'dt must be a finite, non-negative number of milliseconds',
+    )
     this.#motions.tick(dt / 1000)
   }
 
@@ -271,10 +274,10 @@ export interface SpringSystem {
   /**
    * Creates a ramp at `from`: a value that moves toward `options.target`
    * at `options.rate` value units per second, in a straight line, and
-   * stops there. A spring that follows a ramp integrates against its
-   * steady motion exactly, not against a per-frame staircase. Without a
-   * target, the ramp starts at rest. `Infinity` or `-Infinity` makes it
-   * endless.
+   * stops there. A spring that follows a ramp with the default
+   * `arrival` integrates against its steady motion exactly, not against
+   * a per-frame staircase. Without a target, the ramp starts at rest.
+   * `Infinity` or `-Infinity` makes it endless.
    *
    * ```ts
    * // An endless spin at 270 deg/s, with a spring lagging behind it.
@@ -292,9 +295,10 @@ export interface SpringSystem {
    */
   createRamp(from: number, options: RampOptions): Ramp
   /**
-   * Advances every moving spring and ramp by `dt` milliseconds. Use it
-   * for manual stepping in place of `start()`: in tests, custom loops,
-   * or offline rendering.
+   * Advances every moving spring and ramp by `dt` ms. Use it for manual
+   * stepping in place of `start()`: in tests, custom loops, or offline
+   * rendering. `dt` must be a finite number >= 0, so time never runs
+   * backward. A negative or non-finite `dt` throws.
    */
   advance(dt: number): void
 
@@ -348,10 +352,15 @@ export interface SpringSystem {
    * Frame gap, in ms, above which the system treats the gap as lag,
    * such as a backgrounded tab or a blocking task. It replaces a lagging
    * gap with `adjustedLag`, so springs do not teleport when frames
-   * resume. 0 disables lag clamping.
+   * resume. Reads return the value last set. Assignment accepts any
+   * number >= 0, and 0 disables lag clamping.
    */
   lagThreshold: number
-  /** The elapsed ms that replaces a lagging frame's gap. Clamped to at most `lagThreshold`. */
+  /**
+   * The elapsed ms that replaces a lagging frame's gap. A frame uses at
+   * most `lagThreshold` ms of it. Reads return the value last set, even
+   * above `lagThreshold`. Assignment accepts any number >= 0.
+   */
   adjustedLag: number
 }
 

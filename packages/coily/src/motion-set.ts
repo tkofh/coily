@@ -176,10 +176,10 @@ export class MotionSet {
 
   /**
    * Applies a change of the reduced-motion setting to the `reducible`
-   * registry, then to every moving motion. The registry goes first
-   * because a ramp's jump retargets its followers. Each motion decides
-   * what the change means for it, and a motion reached twice changes
-   * once.
+   * registry, then to every moving motion, leaders before followers. The
+   * registry goes first because a ramp's jump retargets its followers.
+   * Each motion decides what the change means for it, and a motion
+   * reached twice changes once.
    */
   setReduced(reduced: boolean) {
     this.reduced = reduced
@@ -189,7 +189,12 @@ export class MotionSet {
       for (const motion of this.reducible) {
         motion.applyReducedMotion(reduced)
       }
-      for (const motion of this.#motions) {
+      // A follower reached before its leader would finish at the stale
+      // target, then jump again when the leader finishes.
+      this.graph.ensureOrder()
+      const motions = [...this.#motions]
+      if (!this.graph.isEmpty) motions.sort(compareMotions)
+      for (const motion of motions) {
         motion.applyReducedMotion(reduced)
         if (motion.isResting) this.#motions.delete(motion)
       }

@@ -92,28 +92,40 @@ describe('SpringSystem', () => {
 })
 
 describe('SpringSystem: advance', () => {
+  const message = 'dt must be a finite, non-negative number of milliseconds'
+
   test('rejects a non-finite dt', ({ system }) => {
-    expect(() => system.advance(Number.NaN)).toThrow('dt must be a finite number of milliseconds')
-    expect(() => system.advance(Number.POSITIVE_INFINITY)).toThrow(
-      'dt must be a finite number of milliseconds',
-    )
+    expect(() => system.advance(Number.NaN)).toThrow(message)
+    expect(() => system.advance(Number.POSITIVE_INFINITY)).toThrow(message)
   })
 
-  test('a negative dt steps the simulation backward and reversibly', ({ system }) => {
+  test('rejects a negative dt and changes nothing', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 10 }))
     spring.target = 100
+    const ramp = system.createRamp(0, { rate: 1000, target: Infinity })
 
     system.advance(1000 / 60)
-    const forward = spring.value
-    expect(forward).toBeGreaterThan(0)
+    const value = spring.value
+    const velocity = spring.velocity
+    const position = ramp.value
+    expect(value).toBeGreaterThan(0)
+    expect(position).toBeGreaterThan(0)
 
-    // The closed-form solver evaluates at absolute time, so reversing the
-    // exact step lands back on the same trajectory point, with no drift
-    // and no NaN.
-    system.advance(-1000 / 60)
-    expect(spring.value).toBeCloseTo(0, 6)
-    expect(spring.value).toBeLessThan(forward)
-    expect(Number.isFinite(spring.velocity)).toBe(true)
+    expect(() => system.advance(-1000 / 60)).toThrow(message)
+    expect(() => system.advance(-Number.MIN_VALUE)).toThrow(message)
+    expect(spring.value).toBe(value)
+    expect(spring.velocity).toBe(velocity)
+    expect(ramp.value).toBe(position)
+  })
+
+  test('accepts a dt of 0', ({ system }) => {
+    const spring = system.createSpring(0)
+    spring.target = 100
+    system.advance(1000 / 60)
+    const value = spring.value
+
+    expect(() => system.advance(0)).not.toThrow()
+    expect(spring.value).toBe(value)
   })
 })
 
@@ -169,6 +181,18 @@ describe('SpringSystem: ticker options', () => {
     expect(system.fps).toBe(120)
     expect(system.lagThreshold).toBe(250)
     expect(system.adjustedLag).toBe(16)
+  })
+
+  test('reads the lag settings back as written', () => {
+    const system = createSpringSystem({ lagThreshold: 0, adjustedLag: 50 })
+    expect(system.lagThreshold).toBe(0)
+    expect(system.adjustedLag).toBe(50)
+
+    system.lagThreshold = 10
+    expect(system.adjustedLag).toBe(50)
+    system.lagThreshold = 500
+    expect(system.lagThreshold).toBe(500)
+    expect(system.adjustedLag).toBe(50)
   })
 })
 

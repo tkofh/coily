@@ -27,11 +27,13 @@ import { invariant } from './util.ts'
 
 export interface LinearEasingOptions {
   /**
-   * Animation range the duration is tuned for, in value units. The easing
-   * shape is identical regardless. Only the settle time scales with it.
-   * The keyframe helpers (`springToWaapi`, `springToCss`,
-   * `springToTransition`) default it to the largest move among their
-   * specs instead.
+   * The size of the move the easing is timed for, in value units. The
+   * spring's motion is the same at any size, but a larger move takes
+   * longer to come within the fixed rest threshold. Its easing covers a
+   * longer duration, so the `linear()` stops land at different
+   * percentages, and the stop count can change. The keyframe helpers
+   * (`springToWaapi`, `springToCss`, `springToTransition`) default it to
+   * the largest move among their specs instead.
    * @default 1
    */
   readonly displacement?: number
@@ -514,13 +516,34 @@ export function springToCss(
  * attribute. Pass several specs to build one `transition` for several
  * properties.
  *
- * A transition cannot loop, so an undamped (looping) config throws. A
- * transition also cannot carry momentum. When a change interrupts it
- * mid-flight, the easing restarts from rest instead of reversing through
- * the current velocity, so the motion stalls at the turn. For motion that
- * reverses often, drive a live `Spring` instead. The `from` and `to` of
- * each spec only tune the duration. The actual values come from your CSS
- * rules.
+ * A transition cannot loop, so an undamped (looping) config throws. The
+ * values come from your CSS rules. The `from` and `to` of each spec give
+ * the size of the move, which tunes the duration.
+ *
+ * A transition starts from rest unless its spec carries a `velocity`, in
+ * the property's units per second. A velocity hands off the speed of a
+ * moving value, such as a drag at release, and it reshapes both the
+ * curve and the duration. Build the transition at the handoff, because
+ * the result depends on the speed. A spec with a velocity must be the
+ * only spec in the call.
+ *
+ * ```ts
+ * // Release a dragged card back to 0 at the drag's speed.
+ * card.style.transition = springToTransition(config, {
+ *   property: 'translate',
+ *   from: dragX,
+ *   to: 0,
+ *   velocity: releaseVelocity,
+ * })
+ * card.style.translate = '0px'
+ * ```
+ *
+ * The browser does not carry momentum from one transition into the next.
+ * When a change interrupts a transition mid-flight, the new one starts
+ * from rest, so the motion stalls at the turn. To keep the momentum,
+ * read the current velocity with `springStateAt` and rebuild the
+ * transition with it. For motion that reverses often, drive a live
+ * `Spring` instead.
  */
 export function springToTransition(
   config: SpringDefinition,

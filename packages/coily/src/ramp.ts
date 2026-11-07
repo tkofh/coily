@@ -49,12 +49,14 @@ function assertValue(value: number): void {
  * A value that moves toward its target at a fixed speed, in a straight
  * line, and stops there. Create ramps with `SpringSystem.createRamp`.
  *
- * A ramp is a `SpringSource`, so a spring can follow it. The spring
- * integrates against the ramp's steady motion exactly. A target that you
- * assign once per frame reaches the spring as a staircase instead.
- * Typical uses are an endless spin, a heading that turns at a capped
- * speed, and a clock in milliseconds mapped into a shape with
- * `mapSpring`.
+ * A ramp is a `SpringSource`, so a spring can follow it. With the
+ * default `arrival`, the spring integrates against the ramp's steady
+ * motion exactly. A target that you assign once per frame reaches the
+ * spring as a staircase instead. With any other `arrival`, the spring
+ * holds the target still within each of a frame's internal sub-steps,
+ * so it tracks a staircase too, one step per sub-step. Typical uses are
+ * an endless spin, a heading that turns at a capped speed, and a clock
+ * in milliseconds mapped into a shape with `mapSpring`.
  *
  * ```ts
  * const system = createSpringSystem()
@@ -72,7 +74,11 @@ function assertValue(value: number): void {
  * watches it. An unwatched ramp keeps moving on the system's clock, and
  * a read reports where it is. That clock counts each frame's time,
  * `advance` calls, and the time a started system spends asleep. It
- * stops while the system is stopped and while the page is hidden.
+ * stops while the system is stopped. A sleeping system also skips the
+ * time the page is hidden. An awake system gets no frames in a hidden
+ * tab, so the whole hidden spell counts as one frame when the page
+ * returns: `adjustedLag` ms if it lasted longer than `lagThreshold`, in
+ * full otherwise, and in full with lag clamping off.
  *
  * The clock holds still through synchronous code, so every read in one
  * event handler or one render sees the same moment. A ramp that you

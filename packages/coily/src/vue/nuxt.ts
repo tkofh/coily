@@ -26,8 +26,8 @@ export interface CoilyModuleOptions {
    */
   lagThreshold?: number
   /**
-   * The elapsed time in ms that replaces a lagging frame. The system
-   * clamps it to at most `lagThreshold`.
+   * The elapsed time in ms that replaces a lagging frame. A frame uses
+   * at most `lagThreshold` ms of it.
    * @default 33
    */
   adjustedLag?: number

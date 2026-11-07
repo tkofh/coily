@@ -83,7 +83,7 @@ function deriveView<T>(source: SpringSource<unknown>, read: () => T): SpringSour
 }
 
 const NOT_KINEMATIC =
-  'expected a source in motion (a Spring or CompositeSpring); a value derived with mapSpring has neither velocity nor acceleration'
+  'expected a source in motion (a Spring, CompositeSpring, or Ramp); a derived source, such as a mapSpring result, has neither velocity nor acceleration'
 
 /**
  * Derives a source from another's velocity: the rate its value changes,
@@ -150,7 +150,7 @@ function isTargetedSource(value: unknown): value is TargetedSource<unknown> {
 }
 
 const NO_TARGET =
-  'expected a spring (a Spring or CompositeSpring); a value derived with mapSpring has no target'
+  'expected a source with a target (a Spring, CompositeSpring, or Ramp); a derived source, such as a mapSpring result, has no target'
 
 /**
  * Derives a source from a spring's or ramp's target: where it is

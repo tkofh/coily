@@ -217,16 +217,35 @@ export class SpringMotion extends Motion {
     }
   }
 
+  /**
+   * Puts the motion at rest on the target and emits nothing. The next
+   * `endFrame` delivers `update`, plus `stop` if it was moving. A
+   * follower jumps through this mid-tick, so its listeners wait for the
+   * settle sweep.
+   */
+  rest() {
+    this.#state.position = 0
+    this.#state.velocity = 0
+    this.#needsReset = true
+  }
+
   /** Ends the motion at the target at once and emits `update`, plus `stop` if it was moving. */
   finish() {
-    this.position = 0
-    this.velocity = 0
+    this.rest()
     this.tick(0)
   }
 
-  /** Finishes the motion when reduced motion turns on, unless its purpose is `'nonmotion'`. */
+  /**
+   * Finishes the motion when reduced motion turns on, unless its purpose
+   * is `'nonmotion'`. A motion already at rest on its target stays
+   * silent. A leader's finish can jump its followers before the change
+   * reaches them, and they must not emit twice.
+   */
   applyReducedMotion(reduced: boolean) {
-    if (reduced && this.#reduces) this.finish()
+    if (!reduced || !this.#reduces) return
+    const state = this.#state
+    if (!this.#running && state.position === 0 && state.velocity === 0) return
+    this.finish()
   }
 
   /**

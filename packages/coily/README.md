@@ -47,10 +47,10 @@ defineSpring({ tension: 500, bounce: 0.9, arrival: 'stop' }) // stops dead at th
 - `tension`: stiffness, greater than 0. Higher tension makes the whole motion faster.
 - `damping`: friction, 0 or greater. Higher damping slows the spring down faster and reduces bounce.
 - `dampingRatio`: friction as a fraction of the amount that just stops the bounce. At 0 the spring never settles. Below 1 it overshoots and bounces. At 1 (critically damped) it settles as fast as it can without overshoot. Above 1 (overdamped) it settles more slowly, still without overshoot.
-- `bounce`: another way to set the damping ratio, as `1 - dampingRatio`. It goes from -1 (overdamped) to 1 (maximum bounce).
-- `duration`: the settle time in ms. The spring rests at this time, within one frame, and a bouncy config can rest up to one oscillation earlier. The timing assumes that the motion starts 1 unit from the target. For accurate timing, set `displacement` to the range of your animation.
+- `bounce`: another way to set the damping ratio, as `1 - dampingRatio`. It goes from -1 (overdamped) to 1 (maximum bounce). A config that sets `damping` without `duration` needs it below 1.
+- `duration`: the settle time in ms. The spring rests at this time, within one frame, at any `precision`. A bouncy config can rest up to about one oscillation earlier, or several short ones when `bounce` is near 1. The timing assumes that the motion starts 1 unit from the target. For accurate timing, set `displacement` to the range of your animation.
 - `mass`: the weight of the moving value. Defaults to 1.
-- `precision`: the number of decimal places that decide rest. Defaults to 2. A spring is _resting_ once its remaining motion cannot reach half a unit in the last place, which is 0.005 at the default. Coily never rounds values. Set `precision` to match the resolution of your values (see [PRECISION.md](https://github.com/tkofh/coily/blob/main/PRECISION.md)).
+- `precision`: the number of decimal places that decide rest. Defaults to 2. A spring is _resting_ once its remaining motion cannot reach half a unit in the last place, which is 0.005 at the default. Coily never rounds values. A `duration` config is tuned against this threshold, so it still rests at its `duration`. Set `precision` to match the resolution of your values (see [PRECISION.md](https://github.com/tkofh/coily/blob/main/PRECISION.md)).
 - `arrival`: what the motion does when the value reaches the target. `'passthrough'` (the default) swings through and settles. `'stop'` ends the motion exactly on the target the first time the value gets there, however bouncy the config. A number between -1 and 1 multiplies the velocity at every crossing, and negative values rebound. A spring that never crosses its target ignores `arrival`. For example, a spring with a `dampingRatio` of 1 or above that starts from rest closes in from one side and never crosses. Coily solves each crossing exactly and never samples it frame by frame (see [PRECISION.md](https://github.com/tkofh/coily/blob/main/PRECISION.md)).
 
 Without a config, a spring is critically damped and settles in about 500 ms.
@@ -120,7 +120,7 @@ spring.value // { position: { x, y }, opacity }, a read-only object that every r
 
 The shape is fixed at creation. An unknown channel throws an error that names its path (`position.z`). `value`, `velocity`, and `jumpTo` take the same partial shapes. A composite coalesces its events. `update` fires at most once per frame, with every channel in its final state for that frame, and `stop` always comes after that frame's final `update`. `settled` and reduced motion apply channel by channel.
 
-The `Shape` type also checks shapes at compile time. Interfaces such as your own `Vector2` work without index signatures. It rejects channels that are non-numeric, optional, or typed `undefined` where you declare them.
+The `Shape` type, exported from `coily`, also checks shapes at compile time. Interfaces such as your own `Vector2` work without index signatures. It rejects channels that are non-numeric, optional, or typed `undefined` where you declare them.
 
 Configs apply per channel. Pass one `SpringDefinition` for every channel, or a shape that mirrors the value. The shape can hold a config, or `null` to revert to the default, at any level. A config at a subtree covers every channel below it:
 
@@ -181,11 +181,11 @@ const clock = system.createRamp(0, { rate: 1000, target: 600 })
 const pulse = system.createSpring(mapSpring(clock, (ms) => Math.sin((Math.PI * ms) / 600)))
 ```
 
-Following a ramp is exact. The spring moves against the ramp's steady motion. By contrast, a target that you write once per frame reaches the spring as a staircase, about half a frame behind.
+With the default `arrival`, following a ramp is exact. The spring moves against the ramp's steady motion. With any other `arrival`, the spring holds the target still within each of a frame's internal sub-steps. By contrast, a target that you write once per frame reaches the spring as a staircase, about half a frame behind.
 
 A ramp has the parts of the spring API that apply to it. These are `value`, `target`, `rate`, a read-only `velocity`, `isResting`, `timeRemaining` in ms, `settled`, `jumpTo`, `dispose`, and the same four events. You can write `value`, and the ramp carries on from where you put it. A `target` of `Infinity` or `-Infinity` makes the ramp endless. `rate` is in units per second. `velocityOf`, `accelerationOf`, and `targetOf` accept a ramp.
 
-A ramp's value is a function of time. A ramp costs nothing per frame unless something listens to it frame by frame. An update listener does, and every follower is one. On a bounded ramp, a stop listener or a pending `settled` does too. A ramp that nothing watches keeps moving on the system's clock and reports its position when you read it. The clock counts frames, `advance` calls, and the time a started system sleeps. It stops while the system is stopped or the page is hidden.
+A ramp's value is a function of time. A ramp costs nothing per frame unless something listens to it frame by frame. An update listener does, and every follower is one. On a bounded ramp, a stop listener or a pending `settled` does too. A ramp that nothing watches keeps moving on the system's clock and reports its position when you read it. The clock counts frames, `advance` calls, and the time a started system sleeps. It stops while the system is stopped. A sleeping system also skips the time the page is hidden. An awake system gets no frames in a hidden tab, so the hidden spell counts as one frame when the page returns, clamped like any other lag.
 
 ## Reduced motion
 
@@ -272,11 +272,11 @@ const { keyframes, options } = springToWaapi(config, {
 element.animate(keyframes, options)
 ```
 
-`springToLinear` returns the easing and its duration alone. `springToCss` returns a `@keyframes` rule and an `animation` value, and `springToTransition` returns a `transition` value. `springFromState` and `springStateAt` let you continue an interrupted animation with its momentum. A config with a `dampingRatio` of 0 and the default `arrival` never rests. `springToLinear`, `springToWaapi`, and `springToCss` turn it into an endless alternating loop, and `springToTransition` throws for it.
+`springToLinear` returns the easing and its duration alone. `springToCss` returns a `@keyframes` rule and an `animation` value, and `springToTransition` returns a `transition` value. Give a spec a `velocity` to start the animation or transition at a moving value's speed, such as a drag at release. `springFromState` and `springStateAt` let you continue an interrupted animation with its momentum. A config with a `dampingRatio` of 0 and the default `arrival` never rests. `springToLinear`, `springToWaapi`, and `springToCss` turn it into an endless alternating loop, and `springToTransition` throws for it.
 
 ## Timing
 
-The built-in ticker advances springs once per displayed frame, so motion is as smooth as the screen allows: 60Hz, 120Hz, or adaptive sync. The loop sleeps while every spring is resting, so an idle system schedules no frames. It wakes on the next write. Set `fps`, as an option or a property, to cap the rate. Capped ticks land on whole display frames and still receive the true elapsed time. The ticker clamps large gaps between frames, such as when a backgrounded tab comes back, so springs do not teleport. A gap longer than `lagThreshold` (default 500 ms) counts as `adjustedLag` (default 33 ms). For manual stepping, skip `system.start()` and call `system.advance(dtMs)` yourself. Each system listens for page visibility and, by default, the reduced-motion setting. Call `system.dispose()` to remove those listeners when you no longer need the system.
+The built-in ticker advances springs once per displayed frame, so motion is as smooth as the screen allows: 60Hz, 120Hz, or adaptive sync. The loop sleeps while every spring is resting, so an idle system schedules no frames. It wakes on the next write. Set `fps`, as an option or a property, to cap the rate. Capped ticks land on whole display frames and still receive the true elapsed time. The ticker clamps large gaps between frames, such as when a backgrounded tab comes back, so springs do not teleport. A gap longer than `lagThreshold` (default 500 ms) counts as `adjustedLag` (default 33 ms). Set `lagThreshold` to 0 to turn lag clamping off. For manual stepping, skip `system.start()` and call `system.advance(dtMs)` yourself, with a `dtMs` of 0 or more. Each system listens for page visibility and, by default, the reduced-motion setting. Call `system.dispose()` to remove those listeners when you no longer need the system.
 
 ## License
 

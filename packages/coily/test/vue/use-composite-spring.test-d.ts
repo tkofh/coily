@@ -6,8 +6,9 @@
  * `*.spec.ts`, `*.browser.ts`, and `*.bench.ts`). Each `@ts-expect-error`
  * is self-validating: tsc fails if the line stops erroring.
  */
-import { type Ref, ref } from 'vue'
+import { type Ref, computed, ref } from 'vue'
 import {
+  type CompositeSpring,
   type SpringDefinition,
   type SpringSource,
   type TargetedSource,
@@ -108,6 +109,25 @@ const follower = useSpring(obj)
 const followerTyped: CompositeSpringRef<{ position: { x: number; y: number }; opacity: number }> =
   follower
 void followerTyped
+
+// Getters, computeds, and pooled composites lead too, and a getter can
+// switch leaders.
+declare const pick: Ref<boolean>
+declare const left: CompositeSpringRef<{ x: number; y: number }>
+declare const right: CompositeSpringRef<{ x: number; y: number }>
+declare const pooled: CompositeSpring<{ x: number; y: number }>
+type Point = CompositeSpringRef<{ x: number; y: number }>
+useSpring(() => (pick.value ? left : right)) satisfies Point
+useSpring(() => (pick.value ? left : pooled)) satisfies Point
+useSpring(computed(() => (pick.value ? left : right))) satisfies Point
+useSpring(pooled) satisfies Point
+useSpring(() => (pick.value ? left : { x: 0, y: 0 })) satisfies Point
+// @ts-expect-error every leader must have the follower's shape
+useSpring(() => (pick.value ? left : { x: 0 }))
+useSpring(pooled, { x: cfg }) satisfies Point
+
+// @ts-expect-error a shape-valued source that is not a composite cannot be followed
+useSpring(velocityOf(obj))
 
 // ── Invalid shapes are rejected ─────────────────────────────────────
 

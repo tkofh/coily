@@ -49,6 +49,18 @@ describe('Spring: following', () => {
       expect(follower.target).toBe(50)
     })
 
+    test('a source with a non-finite value is rejected and keeps the follow', ({ system }) => {
+      const leader = system.createSpring(0, config)
+      const follower = system.createSpring(leader, config)
+      const broken = mapSpring(leader, () => Number.NaN)
+
+      expect(() => {
+        follower.target = broken
+      }).toThrow('Spring target must be a finite number')
+      leader.jumpTo(50)
+      expect(follower.target).toBe(50)
+    })
+
     test('follows leader to new target', ({ system }) => {
       const leader = system.createSpring(0, config)
       const follower = system.createSpring(leader.value)

@@ -138,6 +138,11 @@ export function createReactiveSpringRef<V, W, C>(
     triggerVelocity?.()
     triggerTimeRemaining?.()
   })
+  // A retarget from rest changes the remaining time without an update
+  // until the next frame, so start and stop trigger it too.
+  const triggerRemaining = () => triggerTimeRemaining?.()
+  spring.onStart(triggerRemaining)
+  spring.onStop(triggerRemaining)
 
   const value = divergentRef<V, W>((track, trigger) => ({
     get() {

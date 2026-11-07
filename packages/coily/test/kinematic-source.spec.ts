@@ -340,4 +340,14 @@ describe('kinematic sources: rejection', () => {
     expect(() => velocityOf(source as never)).toThrow(/in motion/)
     expect(() => accelerationOf(source as never)).toThrow(/in motion/)
   })
+
+  test('the rejections name every source that qualifies, ramps included', ({ system }) => {
+    const motion = system.createSpring(0, config)
+    const mapped = mapSpring(motion, (v) => v * 2)
+    const qualifying = '(a Spring, CompositeSpring, or Ramp)'
+
+    expect(() => velocityOf(mapped as never)).toThrow(qualifying)
+    expect(() => accelerationOf(mapped as never)).toThrow(qualifying)
+    expect(() => targetOf(mapped as never)).toThrow(qualifying)
+  })
 })

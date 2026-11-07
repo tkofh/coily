@@ -76,6 +76,17 @@ describe('springToLinear', () => {
     expect(stops(large.easing).at(-1)!.output).toBe(1)
   })
 
+  test('displacement changes the stops, not only the duration', () => {
+    // A larger move takes longer to come within the fixed rest threshold,
+    // so the same motion spreads over a longer easing.
+    const lively = defineSpring({ tension: 170, damping: 10 })
+    const small = springToLinear(lively, { displacement: 1 })
+    const large = springToLinear(lively, { displacement: 100 })
+    expect(large.duration).toBeGreaterThan(small.duration)
+    expect(large.easing).not.toBe(small.easing)
+    expect(large.stops).not.toBe(small.stops)
+  })
+
   test('reported error stays within the requested budget', () => {
     const result = springToLinear(bouncy, { maxError: 0.005 })
     expect(result.maxError).toBeLessThanOrEqual(0.005)
@@ -285,5 +296,19 @@ describe('springToTransition', () => {
 
   test('throws on an undamped (looping) config', () => {
     expect(() => springToTransition(undamped, { property: 'left', from: 0, to: 100 })).toThrow()
+  })
+
+  test('a velocity hands off momentum, reshaping the curve and the duration', () => {
+    const rest = springToTransition(settling, { property: 'translate', from: 0, to: 300 })
+    const moving = springToTransition(settling, {
+      property: 'translate',
+      from: 0,
+      to: 300,
+      velocity: 2000,
+    })
+    const handoff = springFromState(settling, { position: -300, velocity: 2000 })
+
+    expect(moving).not.toBe(rest)
+    expect(moving).toBe(`translate ${Number(handoff.duration.toFixed(1))}ms ${handoff.easing}`)
   })
 })

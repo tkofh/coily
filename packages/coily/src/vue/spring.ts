@@ -1,5 +1,5 @@
-import { type MaybeRefOrGetter, toValue, watchSyncEffect } from 'vue'
-import type { Shape } from '../composite-spring.ts'
+import { type MaybeRef, type MaybeRefOrGetter, toValue, watchSyncEffect } from 'vue'
+import type { CompositeSpring, Shape } from '../composite-spring.ts'
 import type { Spring } from '../spring.ts'
 import type { SpringOptions, CompositeSpringOptions } from '../system.ts'
 import { type SpringSource, SpringSourceSymbol, isSpringSource } from '../spring-source.ts'
@@ -14,9 +14,7 @@ import {
   type AnyShape,
   type CompositeSpringRef,
   type UseCompositeSpringConfig,
-  createLinkedCompositeSpringRef,
   createCompositeSpringRef,
-  hasCompositeSpringInstance,
 } from './composite-spring.ts'
 
 /**
@@ -84,14 +82,17 @@ export function useSpring(
   options?: SpringOptions,
 ): SpringRef
 /**
- * Creates a composite spring that follows another `useSpring` object ref
- * channel by channel and animates toward the leader's live values.
+ * Creates a composite spring that follows a leader channel by channel
+ * and animates toward the leader's live values. The leader is another
+ * object `useSpring` ref or a pooled `CompositeSpring` of the same
+ * shape. A ref of a leader, such as a `computed`, works too, and the
+ * spring follows each new leader the ref holds.
  *
  * Call it during `setup()` below a provided spring system. The springs
  * are disposed with the component's scope.
  */
 export function useSpring<T extends object>(
-  target: CompositeSpringRef<T>,
+  target: MaybeRef<CompositeSpringRef<T> | CompositeSpring<T>>,
   config?: UseCompositeSpringConfig<T>,
   options?: CompositeSpringOptions<T>,
 ): CompositeSpringRef<T>
@@ -120,11 +121,15 @@ export function useSpring<T extends object>(
   options?: CompositeSpringOptions<T>,
 ): CompositeSpringRef<T>
 /**
- * Creates a composite spring driven by a getter of a numeric shape. The
- * channels retarget when the getter's reactive dependencies change. The
- * shape is fixed at creation.
+ * Creates a composite spring driven by a getter. The getter returns a
+ * numeric shape to animate toward, or a leader to follow as in the
+ * leader overload above. When the getter's reactive dependencies change,
+ * the spring retargets the channels or follows the new leader, so
+ * `useSpring(() => (split.value ? left : right))` switches leaders while
+ * they move. Every shape and leader must match the spring's shape, which
+ * is fixed at creation.
  *
- * This is the getter case of the shape overload above. It is a separate
+ * This is the getter case of the overloads above. It is a separate
  * overload because TypeScript cannot infer the shape through the
  * function member of `MaybeRefOrGetter`.
  *
@@ -132,7 +137,7 @@ export function useSpring<T extends object>(
  * are disposed with the component's scope.
  */
 export function useSpring<T extends object>(
-  target: () => T & Shape<T>,
+  target: () => (T & Shape<T>) | CompositeSpringRef<T> | CompositeSpring<T>,
   config?: UseCompositeSpringConfig<T>,
   options?: CompositeSpringOptions<T>,
 ): CompositeSpringRef<T>
@@ -148,33 +153,25 @@ export function useSpring(
       options as SpringOptions | undefined,
     )
   }
-  if (hasCompositeSpringInstance(target)) {
-    return createLinkedCompositeSpringRef(
-      target,
-      config as UseCompositeSpringConfig<AnyShape>,
-      options as CompositeSpringOptions<AnyShape> | undefined,
-    )
-  }
-  // A source is followed as itself. A `RampRef` is also a ref, and
-  // unwrapping it would read its number and retarget on every update
-  // instead of following.
-  if (isSpringSource(target)) {
+  // A source is followed as itself. A `RampRef` or a `CompositeSpringRef`
+  // is also a ref, and unwrapping it would read its value and retarget
+  // on every update instead of following.
+  const follow = isSpringSource(target) ? () => target : (target as MaybeRefOrGetter<unknown>)
+  const resolved = toValue(follow)
+  if (
+    typeof resolved === 'number' ||
+    (isSpringSource(resolved) && typeof resolved[SpringSourceSymbol].value === 'number')
+  ) {
     return createSpringRef(
-      () => target as SpringSource,
+      follow as MaybeRefOrGetter<number | SpringSource>,
       config as UseSpringConfig,
       options as SpringOptions | undefined,
     )
   }
-  const resolved = toValue(target as MaybeRefOrGetter<unknown>)
-  if (typeof resolved === 'number' || isSpringSource(resolved)) {
-    return createSpringRef(
-      target as MaybeRefOrGetter<number | SpringSource>,
-      config as UseSpringConfig,
-      options as SpringOptions | undefined,
-    )
-  }
+  // Shapes and composite leaders. Other shape-valued sources reach here
+  // too, and the composite path rejects them.
   return createCompositeSpringRef(
-    target as MaybeRefOrGetter<AnyShape>,
+    follow as MaybeRefOrGetter<AnyShape>,
     config as UseCompositeSpringConfig<AnyShape>,
     options as CompositeSpringOptions<AnyShape> | undefined,
   )

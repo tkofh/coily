@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { createSpringSystem, defineSpring, mapSpring, targetOf, velocityOf } from '../src/index.ts'
 import { MotionSet } from '../src/motion-set.ts'
 import { Ramp } from '../src/ramp.ts'
-import { Ticker } from '../src/ticker.ts'
+import { Ticker, type TickerOptions } from '../src/ticker.ts'
 import { FRAME, flush } from './helpers.ts'
 
 const smooth = defineSpring({ duration: 300, dampingRatio: 1 })
@@ -334,6 +334,25 @@ describe('followers', () => {
     expect(worst).toBeLessThan(0.01)
   })
 
+  test('only the default arrival integrates a ramp exactly', () => {
+    function land(arrival: 'passthrough' | 'stop' | number, frame: number, frames: number) {
+      const system = createSpringSystem({ reducedMotion: 'never' })
+      const ramp = system.createRamp(0, { rate: 1000, target: Infinity })
+      const spring = system.createSpring(
+        ramp,
+        defineSpring({ duration: 300, dampingRatio: 1, arrival }),
+      )
+      for (let i = 0; i < frames; i++) system.advance(frame)
+      return spring.value
+    }
+    // Exact integration lands in the same place whatever the frame size.
+    expect(land('passthrough', 400, 1)).toBeCloseTo(land('passthrough', 1, 400), 9)
+    // Any other arrival holds the target within each sub-step.
+    for (const arrival of ['stop', 0.5] as const) {
+      expect(Math.abs(land(arrival, 400, 1) - land(arrival, 1, 400))).toBeGreaterThan(1)
+    }
+  })
+
   test('derives velocity and target sources', () => {
     const system = createSpringSystem({ reducedMotion: 'never' })
     const ramp = system.createRamp(0, { rate: 50, target: 100 })
@@ -537,6 +556,34 @@ describe('the system clock', () => {
     await frames.setHidden(false)
     await frames.wait(50)
     expect(ramp.value).toBe(250)
+  })
+
+  test('an awake system counts a hidden spell as one frame, clamped as lag', async () => {
+    const cases: [TickerOptions, number, number][] = [
+      [{}, 5000, 33],
+      [{}, 300, 300],
+      [{ lagThreshold: 0 }, 5000, 5000],
+    ]
+    for (const [options, hiddenMs, counted] of cases) {
+      const frames = new Frames().install()
+      const motions = new MotionSet()
+      const ticker = new Ticker(motions, options)
+      const ramp = new Ramp(motions, 0, { rate: 1000, target: Infinity })
+      ramp.onUpdate(() => {})
+      ticker.start()
+      await frames.frame(16) // priming frame
+      await frames.frame(16)
+      expect(ramp.value).toBeCloseTo(16, 9)
+
+      // No frames arrive while hidden, so the whole spell lands on the
+      // first frame back.
+      await frames.setHidden(true)
+      await frames.wait(hiddenMs)
+      await frames.setHidden(false)
+      await frames.frame(0)
+      expect(ramp.value).toBeCloseTo(16 + counted, 9)
+      ticker.stop()
+    }
   })
 
   test('hands over from idle time to frames without a gap', async () => {
