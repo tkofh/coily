@@ -21,7 +21,8 @@ A ramp has the spring surface where it applies: writable `value`,
 `accelerationOf`, and `targetOf` accept it. A ramp runs in the frame loop
 only while something listens to it frame by frame. Otherwise it keeps
 moving on the system's clock without costing a frame, and a read reports
-where it is.
+where it is. The clock holds still through synchronous code, so reads in
+one render or event handler agree.
 
 Under reduced motion a ramp jumps to a bounded target, and an endless ramp
 holds still until reduced motion turns off. `purpose: 'nonmotion'` keeps a

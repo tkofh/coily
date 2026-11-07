@@ -52,6 +52,11 @@ const now = (): number => performance.now()
  * set's clock, leaving out time the document spends hidden: frames
  * stop in a hidden tab, and a set that kept stepping through the spell
  * would see it replaced with `adjustedLag`, not counted in full.
+ *
+ * Idle time reads wall time once per microtask checkpoint, so the clock
+ * holds still through synchronous code the way it holds still between
+ * frames: every read of a ramp in one event handler or one render sees
+ * the same moment.
  */
 export class Ticker {
   #fps: number
@@ -79,6 +84,10 @@ export class Ticker {
   #hiddenIdle = 0
   /** Wall ms when the document was last hidden, or null while visible. */
   #hiddenSince: number | null = null
+  /** The wall ms synchronous code reads until the next microtask checkpoint, or null until it first reads. */
+  #taskTime: number | null = null
+  /** The latest task time, so a frame never credits the clock back past a read. */
+  #lastTaskTime = 0
 
   constructor(motions: MotionSet, options?: TickerOptions) {
     this.#motions = motions
@@ -100,10 +109,10 @@ export class Ticker {
     this.#adjustedLag = Math.min(adjustedLag, this.#lagThreshold)
 
     motions.onWake = () => this.#wake()
-    motions.idleTime = () => this.#idleMs(now()) / 1000
+    motions.idleTime = () => (this.#idleSince === null ? 0 : this.#idleMs(this.#taskNow()) / 1000)
 
     if (typeof document !== 'undefined') {
-      if (document.visibilityState === 'hidden') this.#hiddenSince = now()
+      if (document.visibilityState === 'hidden') this.#hiddenSince = this.#taskNow()
       document.addEventListener('visibilitychange', () => this.#onVisibilityChange())
     }
   }
@@ -163,7 +172,7 @@ export class Ticker {
       this.#stopped = false
       this.#primed = false
       this.#acc = 0
-      this.#schedule(now())
+      this.#schedule(this.#taskNow())
     }
   }
 
@@ -175,7 +184,7 @@ export class Ticker {
       this.#stopped = true
       this.#sleeping = false
       // A stopped system freezes its clock, as it holds its springs.
-      this.#creditIdle(now())
+      this.#creditIdle(this.#taskNow())
     }
   }
 
@@ -200,7 +209,7 @@ export class Ticker {
   #wake() {
     if (!this.#stopped && this.#sleeping) {
       this.#primed = false
-      this.#schedule(now())
+      this.#schedule(this.#taskNow())
     }
   }
 
@@ -225,9 +234,11 @@ export class Ticker {
       } else {
         // The first frame after start or wake only records a baseline
         // timestamp; stepping begins on the second. Idle time runs up
-        // to this frame, so the clock moves on without a gap.
+        // to this frame, so the clock moves on without a gap. A frame's
+        // timestamp marks its start, which can precede a read made
+        // earlier in the frame, and the clock never runs backward.
         this.#primed = true
-        this.#creditIdle(timestamp)
+        this.#creditIdle(Math.max(timestamp, this.#lastTaskTime))
       }
     } finally {
       this.#lastWallTime = timestamp
@@ -251,6 +262,20 @@ export class Ticker {
     return Math.max(0, timestamp - since - hidden)
   }
 
+  // Wall ms as the running synchronous code sees it: the first call reads
+  // the wall clock and later calls repeat it, until a microtask clears it.
+  #taskNow(): number {
+    if (this.#taskTime === null) {
+      const time = now()
+      this.#taskTime = time
+      this.#lastTaskTime = time
+      queueMicrotask(() => {
+        this.#taskTime = null
+      })
+    }
+    return this.#taskTime
+  }
+
   #creditIdle(timestamp: number) {
     if (this.#idleSince === null) return
     this.#motions.credit(this.#idleMs(timestamp) / 1000)
@@ -258,7 +283,7 @@ export class Ticker {
   }
 
   #onVisibilityChange() {
-    const timestamp = now()
+    const timestamp = this.#taskNow()
     if (document.visibilityState === 'hidden') {
       this.#hiddenSince ??= timestamp
     } else if (this.#hiddenSince !== null) {

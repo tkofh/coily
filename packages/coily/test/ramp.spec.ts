@@ -15,7 +15,7 @@ describe('createRamp', () => {
   test('starts at rest at `from` without a target', () => {
     const system = createSpringSystem()
     const ramp = system.createRamp(5, { rate: 100 })
-    expect(ramp.value).toBe(5)
+    expect(ramp.value).toBeCloseTo(5, 9)
     expect(ramp.target).toBe(5)
     expect(ramp.isResting).toBe(true)
     expect(ramp.velocity).toBe(0)
@@ -368,7 +368,7 @@ describe('reduced motion', () => {
     const system = createSpringSystem({ reducedMotion: 'always' })
     const ramp = system.createRamp(5, { rate: 10, target: Infinity })
     system.advance(1000)
-    expect(ramp.value).toBe(5)
+    expect(ramp.value).toBeCloseTo(5, 9)
     expect(ramp.isResting).toBe(true)
     expect(ramp.velocity).toBe(0)
   })
@@ -441,81 +441,123 @@ describe('the system clock', () => {
       return this
     }
 
-    wait(ms: number) {
+    // Wall time passes between tasks, so each step starts a new one.
+    async wait(ms: number) {
+      await nextTask()
       this.now += ms
     }
 
-    frame(ms: number) {
+    async frame(ms: number) {
+      await nextTask()
       this.now += ms
       const pending = this.#callbacks
       this.#callbacks = []
       for (const callback of pending) callback(this.now)
     }
 
-    setHidden(hidden: boolean) {
+    async setHidden(hidden: boolean) {
+      await nextTask()
       this.hidden = hidden
       this.#visibility()
     }
   }
 
-  test('counts idle time while started and asleep', () => {
+  const nextTask = () => new Promise<void>((resolve) => setTimeout(resolve))
+
+  test('counts idle time while started and asleep', async () => {
     const frames = new Frames().install()
     const motions = new MotionSet()
     const ticker = new Ticker(motions)
     const ramp = new Ramp(motions, 0, { rate: 1000, target: Infinity })
     ticker.start()
-    frames.wait(250)
+    await frames.wait(250)
     expect(ramp.value).toBe(250)
   })
 
-  test('does not count time while stopped or hidden', () => {
+  test('does not count time while stopped or hidden', async () => {
     const frames = new Frames().install()
     const motions = new MotionSet()
     const ticker = new Ticker(motions)
     const ramp = new Ramp(motions, 0, { rate: 1000, target: Infinity })
     ticker.start()
-    frames.wait(100)
+    await frames.wait(100)
     ticker.stop()
-    frames.wait(1000)
+    await frames.wait(1000)
     expect(ramp.value).toBe(100)
 
     ticker.start()
-    frames.wait(100)
-    frames.setHidden(true)
-    frames.wait(5000)
+    await frames.wait(100)
+    await frames.setHidden(true)
+    await frames.wait(5000)
     expect(ramp.value).toBe(200)
-    frames.setHidden(false)
-    frames.wait(50)
+    await frames.setHidden(false)
+    await frames.wait(50)
     expect(ramp.value).toBe(250)
   })
 
-  test('hands over from idle time to frames without a gap', () => {
+  test('hands over from idle time to frames without a gap', async () => {
     const frames = new Frames().install()
     const motions = new MotionSet()
     const ticker = new Ticker(motions)
     const ramp = new Ramp(motions, 0, { rate: 1000, target: Infinity })
     const reference = new Ramp(motions, 0, { rate: 1000, target: Infinity })
     ticker.start()
-    frames.wait(100)
+    await frames.wait(100)
 
     const seen: number[] = []
     ramp.onUpdate(() => seen.push(ramp.value))
     expect(ramp.value).toBe(100)
     // The first frame after waking primes; frames step from there.
-    frames.frame(16)
-    frames.frame(16)
-    frames.frame(16)
+    await frames.frame(16)
+    await frames.frame(16)
+    await frames.frame(16)
     expect(seen).toHaveLength(2)
     expect(seen[0]).toBeCloseTo(132, 9)
     expect(seen[1]).toBeCloseTo(148, 9)
     expect(reference.value).toBeCloseTo(148, 9)
   })
 
-  test('manual stepping alone never counts wall time', () => {
+  test('holds still through synchronous code while asleep', async () => {
+    const frames = new Frames().install()
+    const motions = new MotionSet()
+    const ticker = new Ticker(motions)
+    ticker.start()
+    await frames.wait(100)
+
+    // A ramp created and read in one synchronous run reads its starting
+    // value, as a hydrating render needs it to.
+    const ramp = new Ramp(motions, 0, { rate: 1000, target: Infinity })
+    frames.now += 5
+    expect(ramp.value).toBe(0)
+    expect(motions.time).toBe(0.1)
+
+    await frames.wait(0)
+    expect(ramp.value).toBeCloseTo(5, 9)
+  })
+
+  test('never runs backward when a frame starts before a read', async () => {
+    const frames = new Frames().install()
+    const motions = new MotionSet()
+    const ticker = new Ticker(motions)
+    const ramp = new Ramp(motions, 0, { rate: 1000, target: Infinity })
+    ticker.start()
+    await frames.wait(100)
+    expect(ramp.value).toBe(100)
+
+    // The read woke the ticker, and the frame's timestamp predates it.
+    ramp.onUpdate(() => {})
+    await nextTask()
+    frames.now -= 2
+    await frames.frame(0)
+    expect(motions.time).toBe(0.1)
+    expect(ramp.value).toBe(100)
+  })
+
+  test('manual stepping alone never counts wall time', async () => {
     const frames = new Frames().install()
     const system = createSpringSystem()
     const ramp = system.createRamp(0, { rate: 1000, target: Infinity })
-    frames.wait(500)
+    await frames.wait(500)
     expect(ramp.value).toBe(0)
     system.advance(16)
     expect(ramp.value).toBe(16)

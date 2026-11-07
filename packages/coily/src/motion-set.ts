@@ -121,7 +121,8 @@ export class MotionSet {
   /**
    * The system clock in seconds. It moves only forward: by each tick's
    * `dt` when the advance phase ends, and by idle wall time while the
-   * ticker sleeps. Ramps read their position from it.
+   * ticker sleeps. The ticker reads wall time once per microtask
+   * checkpoint, so the clock holds still through synchronous code. Ramps read their position from it.
    */
   get time(): number {
     const idle = this.idleTime

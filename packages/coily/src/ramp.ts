@@ -73,6 +73,10 @@ function assertValue(value: number): void {
  * `advance` calls, and the time a started system spends asleep. It
  * stops while the system is stopped and while the page is hidden.
  *
+ * The clock holds still through synchronous code, so every read in one
+ * event handler or one render sees the same moment, and a ramp created
+ * and read without an `await` between reads its starting value.
+ *
  * Under reduced motion a ramp behaves like a spring with the same
  * `purpose`: a `'motion'` ramp jumps to a bounded target, and an
  * endless one holds still and resumes when reduced motion turns off.
