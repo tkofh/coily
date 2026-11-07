@@ -36,6 +36,31 @@ describe('Spring: following', () => {
   })
 
   describe('following', () => {
+    test('a rejected number target keeps the follow', ({ system }) => {
+      const leader = system.createSpring(0, config)
+      const follower = system.createSpring(leader, config)
+
+      for (const bad of [Number.NaN, Infinity]) {
+        expect(() => {
+          follower.target = bad
+        }).toThrow('Spring target must be a finite number')
+      }
+      leader.jumpTo(50)
+      expect(follower.target).toBe(50)
+    })
+
+    test('a source with a non-finite value is rejected and keeps the follow', ({ system }) => {
+      const leader = system.createSpring(0, config)
+      const follower = system.createSpring(leader, config)
+      const broken = mapSpring(leader, () => Number.NaN)
+
+      expect(() => {
+        follower.target = broken
+      }).toThrow('Spring target must be a finite number')
+      leader.jumpTo(50)
+      expect(follower.target).toBe(50)
+    })
+
     test('follows leader to new target', ({ system }) => {
       const leader = system.createSpring(0, config)
       const follower = system.createSpring(leader.value)
@@ -86,8 +111,8 @@ describe('Spring: following', () => {
 
     test('a follow wired after creation propagates in the same frame', ({ system }) => {
       // Regression: applying a config during follow used to park the resting
-      // follower in the motion set, where it consumed its once-per-pass tick
-      // before the leader emitted — adding a frame of lag per chain link.
+      // follower in the motion set. There it used up its once-per-pass tick
+      // before the leader emitted, which added a frame of lag per chain link.
       const a = system.createSpring(0, config)
       const b = system.createSpring(0)
       const c = system.createSpring(0)
@@ -188,7 +213,6 @@ describe('Spring: following', () => {
 
       expect(follower.tension).toBe(400)
 
-      // Leader config change should not affect follower now
       leader.config = defineSpring({ mass: 1, tension: 999, damping: 99 })
       expect(follower.tension).toBe(400)
     })
@@ -239,9 +263,9 @@ describe('Spring: following', () => {
     test('a follower woken mid-pass by its leader does not tick twice in one frame', ({
       system,
     }) => {
-      // Construct a follower whose motion sits BEFORE its leader's in the
-      // motion set: it rests and is removed during the pass, then the leader's
-      // update re-adds it — it must not advance (or emit) twice that frame.
+      // The follower's motion sits before its leader's, rests and leaves
+      // the set mid-pass, then the leader's update re-adds it. It must not
+      // advance (or emit) twice that frame.
       const follower = system.createSpring(0, config)
       const leader = system.createSpring(0, config)
 
@@ -289,7 +313,6 @@ describe('Spring: following', () => {
 
       leader.dispose()
 
-      // Follower keeps its position
       expect(follower.value).toBe(posBeforeDispose)
     })
 
@@ -729,9 +752,8 @@ describe('Spring: following', () => {
   })
 
   describe('error-controlled sub-stepping', () => {
-    // The coupling investigation's demo config: stiff and overdamped,
-    // the regime where frame-grain coupling error is largest. A huge
-    // tolerance pins K = 1, standing in for the pre-controller library.
+    // Stiff and overdamped, where frame-grain coupling error is largest.
+    // A huge tolerance pins K = 1, the pre-controller baseline.
     const stiff = defineSpring({ bounce: -1, duration: 265 })
     const K1 = { couplingTolerance: 1e9 }
 
@@ -748,10 +770,9 @@ describe('Spring: following', () => {
     }
 
     test('a mutual pair settles at its midpoint on coarse frames', () => {
-      // Held-target coupling integrates whole frames against a stale
-      // partner and bleeds the pair's conserved mean: at 33ms frames the
-      // K = 1 baseline settles near 34 instead of the true 50
-      // (follower-coupling-investigation.md section 4). Sub-stepping
+      // Held-target coupling against a stale partner bleeds the conserved
+      // mean: at 33ms frames K = 1 settles near 34, not 50
+      // (docs/follower-coupling/investigation.md, section 4). Sub-stepping
       // converges it like 1/K.
       const [a, b] = releasePair()
       expect(Math.abs(a - b)).toBeLessThan(0.1)
@@ -821,9 +842,8 @@ describe('Spring: following', () => {
     })
 
     test('a teleport through a map escalates the same way', () => {
-      // A derived source has no leader state in the mapped value's
-      // units; the controller still catches the shock through the
-      // underlying leader's own state.
+      // A derived source has no leader state in mapped units. The
+      // controller catches the shock through the underlying leader's.
       const viaMap = (leader: Spring, follower: Spring) => {
         follower.target = mapSpring(leader, (value) => value + 5)
       }
@@ -857,9 +877,8 @@ describe('Spring: following', () => {
     })
 
     test('a smoothly driven follower tracks its finely-stepped reference', () => {
-      // First-order hold: the follower integrates against the leader's
-      // actual within-frame move, so even 30fps frames stay within a
-      // fraction of a unit of the finely-coupled trajectory.
+      // First-order hold integrates the leader's actual within-frame move,
+      // so 30fps frames stay within a unit of the fine trajectory.
       const chase = (sub: number): number[] => {
         const system = createSpringSystem()
         const leader = system.createSpring(0, stiff)
@@ -890,18 +909,15 @@ describe('Spring: following', () => {
       const before = follower.value
       leader.jumpTo(50)
 
-      // The retarget lands synchronously and exactly; the follower's
-      // value moves only by animating — no ramp smears the jump across
-      // the next frame.
+      // The retarget lands synchronously and exactly. The value moves only
+      // by animating, with no slope spreading the jump over the next frame.
       expect(follower.target).toBe(50)
       expect(follower.value).toBe(before)
     })
 
     test('an arrival follower never overshoots while following', () => {
-      // arrival: 0 clamps at the target via closed-form crossings, which
-      // only exist against a held target: the ramp fence must route this
-      // follower to sub-stepped holds. An armed ramp would shift the
-      // crossing equation and let the follower punch through.
+      // arrival: 0 clamps via closed-form crossings, which exist only
+      // against a held target. An armed slope would let it punch through.
       const system = createSpringSystem()
       const leader = system.createSpring(0, stiff)
       const follower = system.createSpring(
@@ -932,7 +948,8 @@ describe('Spring: following', () => {
       follower.onUpdate(() => counts.follower++)
       compositeFollower.onUpdate(() => counts.composite++)
 
-      // Teleports rail K for the frame; notification must not scale.
+      // The teleports push K to its cap for the frame. The update count
+      // must not grow with K.
       leader.target = 200
       composite.target = { x: 200, y: 200 }
       system.advance(33)

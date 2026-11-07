@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
-import { defineComponent, h, nextTick, reactive, ref } from 'vue'
+import { type Ref, computed, defineComponent, h, nextTick, reactive, ref, watchEffect } from 'vue'
 import { mount } from '@vue/test-utils'
-import { createSpringSystem, defineSpring, mapSpring } from '../../src/index.ts'
+import { createSpringSystem, defineSpring, mapSpring, velocityOf } from '../../src/index.ts'
 import { SpringSystemKey } from '../../src/vue/system.ts'
 import { useSpring } from '../../src/vue/spring.ts'
 import { useSpringPool, type SpringPool } from '../../src/vue/pool.ts'
@@ -142,6 +142,28 @@ describe('useSpring: object shapes', () => {
 
     system.advance(100)
     expect(spring.value.fast).toBeGreaterThan(spring.value.slow)
+  })
+
+  test('timeRemaining effects see a retarget from rest before the next frame', async () => {
+    const target = ref({ x: 0, y: 0 })
+    const seen: number[] = []
+    const { system, spring } = mountObject(() => {
+      const spring = useSpring(target)
+      watchEffect(() => {
+        seen.push(spring.timeRemaining.value)
+      })
+      return spring
+    })
+
+    target.value = { x: 100, y: 0 }
+    await nextTick()
+
+    expect(spring.timeRemaining.value).toBeGreaterThan(0)
+    expect(seen.at(-1)).toBe(spring.timeRemaining.value)
+
+    for (let i = 0; i < 500 && !spring.isResting.value; i++) system.advance(16)
+    await nextTick()
+    expect(seen.at(-1)).toBe(0)
   })
 
   test('a CompositeSpringRef target links the springs channel-wise', async () => {
@@ -304,6 +326,123 @@ describe('useSpring shape dispatch', () => {
       if (result.leader.isResting.value && result.follower.isResting.value) break
     }
     expect(result.follower.value.x).toBe(100)
+  })
+})
+
+describe('useSpring: following composite leaders', () => {
+  function settle(
+    system: { advance(ms: number): void },
+    ...springs: { isResting: Ref<boolean> }[]
+  ) {
+    for (let i = 0; i < 1000; i++) {
+      system.advance(16)
+      if (springs.every((spring) => spring.isResting.value)) return
+    }
+  }
+
+  test('a getter of CompositeSpringRefs follows the current one and switches', async () => {
+    const pick = ref(true)
+    const leftTarget = ref({ x: 0, y: 0 })
+    const { system, result } = mountWith(() => {
+      const left = useSpring(leftTarget)
+      const right = useSpring(ref({ x: 100, y: 100 }))
+      const follower = useSpring(() => (pick.value ? left : right))
+      return { left, right, follower }
+    })
+    const { left, right, follower } = result
+
+    expect(follower.value).toEqual({ x: 0, y: 0 })
+
+    leftTarget.value = { x: -50, y: 25 }
+    await nextTick()
+    settle(system, left, follower)
+    expect(follower.value).toEqual({ x: -50, y: 25 })
+
+    pick.value = false
+    await nextTick()
+    for (let i = 0; i < 5; i++) system.advance(16)
+    expect(follower.value.x).toBeGreaterThan(-50)
+    expect(follower.value.x).toBeLessThan(100)
+    settle(system, follower)
+    expect(follower.value).toEqual({ x: 100, y: 100 })
+
+    // The old leader no longer drives the follower.
+    leftTarget.value = { x: 0, y: 0 }
+    await nextTick()
+    settle(system, left, right, follower)
+    expect(follower.value).toEqual({ x: 100, y: 100 })
+  })
+
+  test('a computed of CompositeSpringRefs follows the current one', async () => {
+    const pick = ref(true)
+    const { system, result } = mountWith(() => {
+      const left = useSpring({ x: 0 })
+      const right = useSpring({ x: 100 })
+      return useSpring(computed(() => (pick.value ? left : right)))
+    })
+
+    expect(result.value).toEqual({ x: 0 })
+
+    pick.value = false
+    await nextTick()
+    settle(system, result)
+    expect(result.value).toEqual({ x: 100 })
+  })
+
+  test('a pooled CompositeSpring is a leader, directly or from a getter', async () => {
+    let pool!: SpringPool
+    const pick = ref(true)
+    const { system, result } = mountWith(() => {
+      pool = useSpringPool()
+      const left = pool.createSpring({ x: 10 })
+      const right = pool.createSpring({ x: 90 })
+      return {
+        left,
+        direct: useSpring(left),
+        switching: useSpring(() => (pick.value ? left : right)),
+      }
+    })
+
+    expect(result.direct.value).toEqual({ x: 10 })
+    expect(result.switching.value).toEqual({ x: 10 })
+
+    result.left.target = { x: 40 }
+    pick.value = false
+    await nextTick()
+    settle(system, result.direct, result.switching)
+    expect(result.direct.value).toEqual({ x: 40 })
+    expect(result.switching.value).toEqual({ x: 90 })
+  })
+
+  test('a getter can switch between a leader and a plain shape', async () => {
+    const follow = ref(true)
+    const { system, result } = mountWith(() => {
+      const leader = useSpring({ x: 100 })
+      return useSpring(() => (follow.value ? leader : { x: -100 }))
+    })
+
+    settle(system, result)
+    expect(result.value).toEqual({ x: 100 })
+
+    follow.value = false
+    await nextTick()
+    settle(system, result)
+    expect(result.value).toEqual({ x: -100 })
+  })
+
+  test('a shape-valued source that is not a composite throws a clear error', () => {
+    expect(() =>
+      mountWith(() => {
+        const leader = useSpring({ x: 0, y: 0 })
+        return useSpring(velocityOf(leader) as never)
+      }),
+    ).toThrow('useSpring follows a scalar SpringSource or a composite spring')
+    expect(() =>
+      mountWith(() => {
+        const leader = useSpring({ x: 0, y: 0 })
+        return useSpring(() => velocityOf(leader) as never)
+      }),
+    ).toThrow('useSpring follows a scalar SpringSource or a composite spring')
   })
 })
 

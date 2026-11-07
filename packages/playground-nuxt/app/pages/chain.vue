@@ -26,16 +26,15 @@ function teleport() {
   const w = window.innerWidth
   const h = window.innerHeight
 
-  // Slow sine drift gives a general direction, randomness breaks the pattern
   const stepSize = 0.15 + 1.85 * (0.5 + 0.5 * Math.sin(step * 0.31)) ** 2
   step += stepSize
 
-  // Drift: sine backbone + random wobble, amplified during leap phases
+  // The drift is a sine wave plus a random wobble that grows with the step size.
   const intensity = 0.5 + stepSize * 0.5
   driftX += Math.sin(step * 0.7) * 0.12 + (Math.random() - 0.5) * 0.25 * intensity
   driftY += Math.cos(step * 0.5) * 0.12 + (Math.random() - 0.5) * 0.25 * intensity
 
-  // Soft wrap: pull back harder as drift approaches edges
+  // Pull back harder as the drift nears an edge, so the target stays on screen.
   driftX += -driftX * Math.min(0.1 + 4 * Math.max(0, Math.abs(driftX) - 0.35), 1)
   driftY += -driftY * Math.min(0.1 + 4 * Math.max(0, Math.abs(driftY) - 0.35), 1)
 
@@ -69,11 +68,11 @@ onMounted(() => {
 
 onBeforeUnmount(() => clearTimeout(autoTimer))
 
-// Tuned when duration carried a 2x safety margin; 265 under the exact
-// derivation reproduces the same dynamics (wn ~79) so links stay tight.
-const chainConfig = defineSpring({ bounce: -1, duration: 400, precision: 3 })
+// Each link rests 300 ms after a 1 px move, to within 0.0005 px
+// (precision 3): a natural frequency of about 35 rad/s, dampingRatio 0.85.
+const chainConfig = defineSpring({ bounce: 0.15, duration: 300, precision: 3 })
 
-// Build chain: first spring follows mouse, each subsequent spring follows the previous
+// The first spring follows the mouse, each later one the spring before it.
 const springs: CompositeSpringRef<{ x: number; y: number }>[] = []
 
 for (let i = 0; i < count; i++) {

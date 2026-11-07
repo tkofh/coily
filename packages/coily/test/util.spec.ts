@@ -95,8 +95,8 @@ describe('computeTimeRemaining', () => {
         actual += 0.5
       }
 
-      // Never later than the solved time (within a step), and at most
-      // one pulse earlier — the fine stepping catches the first dip.
+      // Rest comes no later than the solved time (within a step), and at
+      // most one pulse earlier. The fine stepping catches the first dip.
       expect(actual, `${regime} rests by the solved time`).toBeLessThanOrEqual(solved + 0.5)
       expect(solved, `${regime} solved time is tight`).toBeLessThanOrEqual(actual * 1.1)
     }

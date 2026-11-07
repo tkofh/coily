@@ -3,19 +3,18 @@ import { type FollowEdge, FollowGraph } from './follow-graph.ts'
 import type { Motion } from './motion.ts'
 
 function compareMotions(a: Motion, b: Motion): number {
-  return a._rank - b._rank || a._id - b._id
+  return a.rank - b.rank || a.id - b.id
 }
 
-// Sub-steps per frame are capped: past this, one frame's solver work
-// competes with the rendering that made the frame long in the first
-// place. Validated in the s4-freshness probe (error stays flat with the
-// controller railing here only on frames that genuinely need it).
+// The cap on sub-steps per frame. Past it, solver work competes with the
+// rendering that made the frame long. The s4-freshness probe shows error
+// stays flat and the controller reaches the cap only on frames that need it.
 const MAX_SUBSTEPS = 8
 
 /**
- * A binary min-heap over (rank, creation id): the ordered pass worklist.
- * Duplicate pushes are expected — the tick's pass marker deduplicates at
- * pop.
+ * The worklist of an ordered pass: a binary min-heap over (rank,
+ * creation id). It accepts duplicate pushes, and the tick's pass marker
+ * drops the repeats at pop.
  */
 class MotionHeap {
   readonly #items: Motion[] = []
@@ -61,9 +60,10 @@ class MotionHeap {
 }
 
 /**
- * The set of motions currently moving. Motions leave the set as they
- * rest and re-enter on any write that disturbs them; `onWake` tells the
- * ticker the set became non-empty so it can stop sleeping.
+ * The set of motions the tick advances. A motion leaves when it rests and
+ * re-enters on any write that disturbs it. A ramp is in the set only
+ * while something watches it frame by frame. `onWake` fires when the set
+ * becomes non-empty, waking a sleeping ticker.
  */
 export class MotionSet {
   reduced = false
@@ -71,25 +71,44 @@ export class MotionSet {
   /**
    * The coupling error budget, in value units: the local per-frame error
    * the sub-step controller targets on each follow edge, floored by the
-   * follower's resting magnitude. `SpringSystem` exposes it as the
-   * `couplingTolerance` option and property; validation lives there.
+   * follower's resting magnitude. `SpringSystem` validates and exposes it
+   * as the `couplingTolerance` option and property.
    */
   couplingTolerance = 0.1
   readonly flushes = new FlushQueue()
   /** Follow edges registered by following springs, with the dependency rank over their motions. */
   readonly graph = new FollowGraph()
+  /**
+   * Motions a reduced-motion change must reach while out of the tick: a
+   * `'motion'` ramp that moves on the clock unwatched, or one holding
+   * still under reduced motion. Each member keeps its membership current.
+   */
+  readonly reducible = new Set<Motion>()
   readonly #motions = new Set<Motion>()
   readonly #heap = new MotionHeap()
   readonly #advanced: Motion[] = []
   /** The live pass worklist while an advance phase runs, so mid-phase wakes join it. */
   #activeHeap: MotionHeap | null = null
-  /** Whether any tick is on the stack, settle sweep included — a reentrant advance must not share the pass structures. */
+  /** Whether any tick is on the stack, settle sweep included. A reentrant advance must not share the pass structures. */
   #inTick = false
   readonly #debug: boolean
   #lastSize = 0
   #pass = 0
-  /** Ordered-frame counter: sub-steps share one id, deduplicating the settle list. */
+  /** Ordered-frame counter. Sub-steps share one id, so a motion joins the settle list once. */
   #frame = 0
+  /** Stepped time in seconds: the sum of every tick's `dt`, plus idle time the ticker credits. */
+  #clock = 0
+  /** Counts ticks, so `advancing` can name the one in its advance phase. */
+  #ticks = 0
+  #advancing = 0
+
+  /**
+   * Returns the idle wall time, in seconds, the clock has not counted yet.
+   * Null when no ticker counts idle time. The ticker installs it, and
+   * moves the total in with `credit` on its first frame after starting or
+   * waking, and when it stops.
+   */
+  idleTime: (() => number) | null = null
 
   constructor(debug = false) {
     this.#debug = debug
@@ -99,13 +118,43 @@ export class MotionSet {
     return this.#motions.size
   }
 
+  /**
+   * The system clock in seconds, which ramps read their position from. It
+   * moves only forward: by each tick's `dt` when the advance phase ends,
+   * and by idle wall time while the ticker sleeps. Wall time is read once
+   * per microtask checkpoint, so the clock holds still through
+   * synchronous code.
+   */
+  get time(): number {
+    const idle = this.idleTime
+    return idle === null ? this.#clock : this.#clock + idle()
+  }
+
+  /**
+   * The id of the tick whose advance phase is running, or 0 between
+   * phases. A ramp steps a cached value through the sub-steps of the
+   * phase and reads its anchor formula everywhere else.
+   */
+  get advancing(): number {
+    return this.#advancing
+  }
+
+  /** Adds idle wall time to the clock, in seconds. */
+  credit(seconds: number) {
+    this.#clock += seconds
+  }
+
   add(motion: Motion) {
-    const wasEmpty = this.#motions.size === 0
-    this.#motions.add(motion)
-    // A wake during an ordered pass joins the live worklist, so the
-    // motion still advances this frame — at its rank position.
+    const motions = this.#motions
+    const size = motions.size
+    motions.add(motion)
+    // An active motion is already queued: every pass seeds the worklist
+    // with the whole set, and only ranked followers re-add mid-pass.
+    if (motions.size === size) return
+    // A wake during an ordered pass joins the live worklist and still
+    // advances this frame, at its rank position.
     this.#activeHeap?.push(motion)
-    if (wasEmpty) {
+    if (size === 0) {
       this.onWake?.()
     }
   }
@@ -114,13 +163,34 @@ export class MotionSet {
     this.#motions.delete(motion)
   }
 
-  finishAll() {
+  /**
+   * Whether the motion is in the set. A motion that rests mid-pass leaves
+   * before its own `endFrame`, so motions ask here rather than track it.
+   */
+  has(motion: Motion): boolean {
+    return this.#motions.has(motion)
+  }
+
+  /**
+   * Applies a reduced-motion change to the `reducible` registry first,
+   * because a ramp's jump retargets its followers, then to every moving
+   * motion, leaders before followers. A motion reached twice changes once.
+   */
+  setReduced(reduced: boolean) {
+    this.reduced = reduced
     this.flushes.batch(() => {
-      for (const motion of this.#motions) {
-        // 'appearance' motions opt out of reduced motion and keep running.
-        if (!motion.respectsReducedMotion) continue
-        motion.finish()
-        this.#motions.delete(motion)
+      // Members leave as they rest, which Set iteration tolerates.
+      for (const motion of this.reducible) {
+        motion.applyReducedMotion(reduced)
+      }
+      // A follower reached before its leader would finish at the stale
+      // target, then jump again when the leader finishes.
+      this.graph.ensureOrder()
+      const motions = [...this.#motions]
+      if (!this.graph.isEmpty) motions.sort(compareMotions)
+      for (const motion of motions) {
+        motion.applyReducedMotion(reduced)
+        if (motion.isResting) this.#motions.delete(motion)
       }
     })
   }
@@ -148,50 +218,52 @@ export class MotionSet {
     }
   }
 
-  /** The no-edge fast path: nothing constrains order, so insertion order serves for free. */
+  /** The fast path with no follow edges. Nothing constrains the order, so insertion order serves. */
   #tickUnordered(dt: number, reentrant: boolean) {
-    this.#pass++
-    const advanced = reentrant ? [] : this.#advanced
+    const previous = this.#advancing
+    this.#advancing = ++this.#ticks
+    const advanced: Motion[] = reentrant ? [] : this.#advanced
     advanced.length = 0
-    for (const motion of this.#motions) {
-      // Advancing runs no user code, so nothing enters the set
-      // mid-loop; the marker only guards a reentrant advance.
-      if (motion._pass === this.#pass) continue
-      motion._pass = this.#pass
-
-      motion._advance(dt)
-      advanced.push(motion)
-      if (motion.isResting) {
-        this.#motions.delete(motion)
+    try {
+      // Advancing runs no user code, so nothing enters the set mid-loop
+      // and each motion advances once.
+      for (const motion of this.#motions) {
+        motion.advance(dt)
+        advanced.push(motion)
+        if (motion.isResting) {
+          this.#motions.delete(motion)
+        }
       }
+    } finally {
+      this.#advancing = previous
     }
 
+    this.#clock += dt
     this.#settle(advanced)
   }
 
-  // Advances motions in dependency order — every follower after its
-  // leaders, ranks from the follow graph — so a follower integrates
-  // against its leader's current-frame value no matter how construction
-  // order or rest/wake churn arranged the set. The frame is K sub-steps
-  // of dt/K (each its own pass) and one settle sweep; K is the plan
-  // pass's max demand over measurable edges, capped at MAX_SUBSTEPS.
+  // Advances every follower after its leaders by follow-graph rank, so it
+  // integrates against its leader's value for this frame whatever order
+  // construction and rest/wake churn left the set in. The frame is K
+  // sub-steps of dt/K, each its own pass, then one settle sweep.
   #tickOrdered(dt: number, reentrant: boolean) {
     // A reentrant advance (user code stepping the system from inside a
     // callback) gets private worklists so the outer pass's survive.
     const heap = reentrant ? new MotionHeap() : this.#heap
-    const advanced = reentrant ? [] : this.#advanced
+    const advanced: Motion[] = reentrant ? [] : this.#advanced
     const previous = this.#activeHeap
     this.#activeHeap = heap
+    const previousAdvancing = this.#advancing
+    this.#advancing = ++this.#ticks
     advanced.length = 0
     const frame = ++this.#frame
 
-    // The plan pass: refresh every measurable edge's estimator and take
-    // the frame's sub-step demand as their max — one shared subdivision,
-    // so every recouple in a sub-step reads a same-aged leader. An edge
-    // is measurable when a leader is active — nothing else moves a
-    // followed value between plans — mirroring the recouple skip below.
-    // Under reduced motion recouples jump, so there is nothing to
-    // refine and the estimators idle.
+    // The plan pass refreshes each measurable edge's estimator and takes
+    // the largest demand as K, capped at MAX_SUBSTEPS. All edges share one
+    // subdivision, so every recouple in a sub-step reads a leader of the
+    // same age. An edge is measurable when a leader is active, because
+    // nothing else moves a followed value between plans. Under reduced
+    // motion recouples jump, so the estimators idle.
     let demand = 1
     if (!this.reduced) {
       for (const edge of this.graph.edges) {
@@ -209,17 +281,21 @@ export class MotionSet {
         this.#advancePass(dt, h, step === 0, heap, advanced, frame)
       }
     } finally {
-      // Restored before the sweep: a motion woken by a settle callback
-      // advances from the next frame, not this one.
+      // Restored before the sweep, so a motion that a settle callback
+      // wakes advances from the next frame, not this one.
       this.#activeHeap = previous
+      this.#advancing = previousAdvancing
     }
 
+    // The clock moves before any event fires, so callbacks read it at
+    // the frame's end.
+    this.#clock += dt
     this.#settle(advanced)
   }
 
   // One sub-step of an ordered frame: seed from the active set, pop in
-  // (rank, id) order, recouple then advance. A motion advancing for the
-  // first time this frame joins the settle list, in first-advance order.
+  // (rank, id) order, recouple then advance. A motion's first advance this
+  // frame adds it to the settle list, in first-advance order.
   #advancePass(
     dt: number,
     h: number,
@@ -231,40 +307,37 @@ export class MotionSet {
     this.#pass++
     heap.clear()
     for (const motion of this.#motions) {
-      // Independents advance once with the whole frame — splitting dt
-      // into K parts is not float-exact, and nothing couples to them
-      // within it — so later sub-steps skip them at the seed.
-      if (!first && motion._rank === -1) continue
+      // Independents advance once, by the whole dt: nothing couples to
+      // them within the frame, and dt split K ways is not float-exact.
+      if (!first && motion.rank === -1) continue
       heap.push(motion)
     }
 
     for (let motion = heap.pop(); motion !== undefined; motion = heap.pop()) {
-      if (motion._pass === this.#pass) continue
+      if (motion.pass === this.#pass) continue
 
-      // Pull coupling — with events deferred to the settle sweep,
-      // this is what couples followers mid-pass. Skipped when every
-      // leader is resting and unadvanced: their values cannot have
-      // changed since the last retarget, which also keeps user map
-      // code uncalled on frames where its inputs are still.
-      const edge = motion._edge
+      // Pull coupling, the only mid-pass coupling, since events wait for
+      // the settle sweep. Skipped when every leader is resting and
+      // unadvanced: their values cannot have changed since the last
+      // retarget, and user map code stays uncalled while its inputs are still.
+      const edge = motion.edge
       if (edge !== null && this.#shouldRecouple(edge)) {
         edge.recouple(h)
       }
-      // The wake walk pushes followers whether or not they wake; a
-      // speculative pop that stayed at rest must skip unmarked, so a
-      // later wake this pass can still advance it.
+      // The wake walk pushes followers whether or not they wake. One still
+      // at rest skips unmarked, so a later wake this pass can advance it.
       if (!this.#motions.has(motion)) continue
 
-      motion._pass = this.#pass
-      motion._advance(motion._rank === -1 ? dt : h)
-      if (motion._frame !== frame) {
-        motion._frame = frame
+      motion.pass = this.#pass
+      motion.advance(motion.rank === -1 ? dt : h)
+      if (motion.frame !== frame) {
+        motion.frame = frame
         advanced.push(motion)
       }
       if (motion.isResting) {
         this.#motions.delete(motion)
       }
-      const followers = motion._followers
+      const followers = motion.followers
       if (followers !== null) {
         for (const out of followers) {
           heap.push(out.follower)
@@ -273,19 +346,18 @@ export class MotionSet {
     }
   }
 
-  // Phase 2: deliver the frame's events after every motion has
-  // advanced, in the order they advanced — update callbacks read
-  // frame-final values everywhere. Skipped for motions after a throwing
-  // callback, like the rest of any aborted pass.
+  // Phase 2 delivers events in advance order, after every motion has
+  // advanced, so update callbacks read the frame's final values. A
+  // throwing callback skips the motions after it, like any aborted pass.
   #settle(advanced: readonly Motion[]) {
     for (const motion of advanced) {
-      motion._settleFrame()
+      motion.endFrame()
     }
   }
 
   #shouldRecouple(edge: FollowEdge): boolean {
     for (const leader of edge.leaders) {
-      if (leader._pass === this.#pass || this.#motions.has(leader)) {
+      if (leader.pass === this.#pass || this.#motions.has(leader)) {
         return true
       }
     }

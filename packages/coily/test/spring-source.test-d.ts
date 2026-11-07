@@ -2,14 +2,15 @@
  * Type-level tests for `mapSpring` source shapes and the `SpringSource`
  * contract surface.
  *
- * This file is compiled by `tsc` but never executed (vitest only picks up
- * `*.spec.ts`, `*.browser.ts`, and `*.bench.ts`). Each `@ts-expect-error`
- * is self-validating: tsc fails if the line stops erroring.
+ * Typechecked by `tsc`, never executed (vitest runs only `*.spec.ts`,
+ * `*.browser.ts`, and `*.bench.ts`). tsc fails if an `@ts-expect-error`
+ * line stops erroring.
  */
 import {
   mapSpring,
   velocityOf,
   accelerationOf,
+  targetOf,
   type Spring,
   type SpringDefinition,
   type SpringSystem,
@@ -17,6 +18,7 @@ import {
   type SpringSource,
   SpringSourceSymbol,
   type KinematicSource,
+  type TargetedSource,
 } from '../src/index.ts'
 
 declare const a: Spring
@@ -69,7 +71,7 @@ mapSpring({ pos: composite, t: a }, ({ pos, t }) => pos.x * t)
 
 declare const p1: CompositeSpring<{ x: number; y: number }>
 declare const p2: CompositeSpring<{ x: number; y: number }>
-// `const T` infers bare array literals as tuples — no `as const` needed
+// `const T` infers bare array literals as tuples, so no `as const` is needed
 mapSpring([p1, p2], ([from, to]) => (to.y - from.y) / (to.x - from.x))
 
 // @ts-expect-error a composite is not a scalar source, so it cannot be followed
@@ -129,6 +131,26 @@ velocityOf(mapSpring(a, (value) => value * 2))
 // @ts-expect-error the derived velocity source has no motion of its own
 accelerationOf(velocityOf(a))
 
+// ── targetOf derives a source from a spring's target
+
+// Springs and composites carry their target in the api
+a satisfies TargetedSource
+composite satisfies TargetedSource<{ readonly x: number; readonly y: number }>
+
+targetOf(a) satisfies SpringSource<number>
+follower.target = targetOf(a)
+mapSpring({ value: a, target: targetOf(a) }, ({ value, target }) => target - value)
+targetOf(composite) satisfies SpringSource<{ readonly x: number; readonly y: number }>
+mapSpring(targetOf(composite), ({ x, y }) => Math.hypot(x, y))
+// @ts-expect-error a target shape is not a scalar source, so it cannot be followed
+follower.target = targetOf(composite)
+// @ts-expect-error a mapped source has no target
+targetOf(mapSpring(a, (value) => value * 2))
+// @ts-expect-error a bridged source in motion still has no target
+targetOf(bridgedKinematic)
+// @ts-expect-error a derived target has no target of its own
+targetOf(targetOf(a))
+
 // Followers read through the slot, and its value is read-only
 const api = custom[SpringSourceSymbol]
 const current: number = api.value
@@ -136,13 +158,13 @@ void current
 // @ts-expect-error the api's value is read-only
 api.value = 5
 
-// The source's public face carries nothing
+// Outside the slot, a source exposes nothing
 // @ts-expect-error reads go through the SpringSourceSymbol slot
 void custom.value
 // @ts-expect-error subscriptions go through the SpringSourceSymbol slot
 void custom.onUpdate
 
-// ── The contract carries values only — no config surface ────────────
+// ── The contract carries values only, with no config ────────────────
 
 // @ts-expect-error sources offer no config
 void custom.config
@@ -155,7 +177,7 @@ system.createSpring(a) satisfies Spring
 system.createSpring(a, cfg)
 system.createSpring(mapSpring(a, (value) => value * 2))
 system.createSpring(mapSpring(composite, ({ x, y }) => Math.hypot(x, y)))
-// @ts-expect-error a composite cannot be followed at creation; map it first
+// @ts-expect-error a composite cannot be followed at creation, so map it first
 system.createSpring(composite, cfg)
 
 // ── Invalid leaves are rejected where they are declared ─────────────

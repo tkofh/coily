@@ -1,54 +1,50 @@
 import { SpringDefinition } from './config.ts'
 import type { MotionSet } from './motion-set.ts'
-import { Motion } from './motion.ts'
+import { SpringMotion } from './spring-motion.ts'
 import { type SpringSource, SpringSourceSymbol, isSpringSource } from './spring-source.ts'
-import type { KinematicSource, KinematicSourceApi } from './kinematic-source.ts'
+import type { TargetedSource, TargetedSourceApi } from './kinematic-source.ts'
 import {
   type FollowEdge,
   MANIFOLD_GATE,
+  TargetTrail,
   registerBacking,
   resolveLeaderMotions,
 } from './follow-graph.ts'
 import { invariant, RESOLVED } from './util.ts'
 
 /**
- * What a spring can animate toward: a fixed number, or a `SpringSource`
- * — another spring, or a value derived from one with `mapSpring` —
- * whose live value the spring follows.
+ * What a spring can animate toward. A number is a fixed target. A
+ * `SpringSource` (another spring, or a value derived from one with
+ * `mapSpring`) is a live value that the spring follows.
  */
 export type SpringTarget = number | SpringSource
 
 /**
- * What a spring animates, which decides whether reduced motion applies to
- * it. `'motion'` moves something on screen — position, scale, rotation —
- * and snaps to its target under reduced motion. `'appearance'` changes
- * how something looks without moving it — a cross-fade, a color, a blur —
- * and keeps animating under reduced motion, since it carries no motion to
- * reduce. Fixed when the spring is created; read it back from
- * `Spring.purpose`.
+ * What a spring animates, which decides whether reduced motion applies.
+ * `'motion'` moves something on screen, such as position, scale, or
+ * rotation, and snaps to its target under reduced motion. `'nonmotion'`
+ * moves nothing, such as a cross-fade, a color, a blur, or a number that
+ * never reaches the screen, and keeps animating under reduced motion.
+ * Fixed at creation. Read it back from `Spring.purpose`.
  */
-export type Purpose = 'motion' | 'appearance'
+export type Purpose = 'motion' | 'nonmotion'
 
 /**
  * One animated number, driven toward its target with damped spring
- * motion. Create springs with `SpringSystem.createSpring`; the owning
- * system advances them, so a spring only moves while its system runs.
+ * motion. Create springs with `SpringSystem.createSpring`. A spring moves
+ * only when its system advances it.
  *
- * Reads return the exact simulated state; nothing is rounded. Numeric
- * writes — `target`, `value`, `velocity`, `jumpTo` — require finite
- * numbers: `NaN` or an infinity throws rather than poisoning the
- * simulation. See
- * https://github.com/tkofh/coily/blob/main/PRECISION.md for the
- * numerical contract.
+ * Reads return the exact, unrounded simulated state. Numeric writes
+ * (`target`, `value`, `velocity`, `jumpTo`) throw on `NaN` or an
+ * infinity. See https://github.com/tkofh/coily/blob/main/PRECISION.md
+ * for the numerical contract.
  */
-export class Spring implements KinematicSource {
-  /** Brands the spring as a `KinematicSource` whose api is the spring itself. */
-  get [SpringSourceSymbol](): KinematicSourceApi<number> {
-    // Backing registers on first use as a source, not at construction:
-    // a per-creation entry kept every spring in the weak registry, and
-    // major GCs walking that ephemeron set cost 8x on creation. Every
-    // follow path reads this api before resolving leaders, so
-    // resolution always finds the entry.
+export class Spring implements TargetedSource {
+  /** Brands the spring as a `TargetedSource` whose api is the spring itself. */
+  get [SpringSourceSymbol](): TargetedSourceApi<number> {
+    // Registered lazily: an entry per creation made major GCs walk every
+    // spring and slowed creation 8x. Every follow path reads this api
+    // before resolving leaders, so resolution always finds the entry.
     registerBacking(this, this.#motion)
     return this
   }
@@ -56,7 +52,7 @@ export class Spring implements KinematicSource {
   #target: number
   #config: SpringDefinition
   readonly #purpose: Purpose
-  readonly #motion: Motion
+  readonly #motion: SpringMotion
   readonly #motions: MotionSet
 
   #leader: SpringSource | null = null
@@ -74,17 +70,16 @@ export class Spring implements KinematicSource {
   ) {
     invariant(Number.isFinite(value), 'Spring value must be a finite number')
     invariant(
-      purpose === 'motion' || purpose === 'appearance',
-      "Spring purpose must be 'motion' or 'appearance'",
+      purpose === 'motion' || purpose === 'nonmotion',
+      "Spring purpose must be 'motion' or 'nonmotion'",
     )
     this.#motions = motions
     this.#config = config ?? SpringDefinition.default
     this.#target = value
     this.#purpose = purpose
-    this.#motion = new Motion(this.#config, 0, 0)
-    // An 'appearance' spring opts out of reduced motion: its own writes
-    // stay animated (below), and MotionSet.finishAll leaves it running.
-    this.#motion.respectsReducedMotion = purpose === 'motion'
+    // The motion's purpose keeps a 'nonmotion' spring running when reduced
+    // motion turns on. The setters keep its own writes animated.
+    this.#motion = new SpringMotion(this.#config, 0, 0, purpose)
   }
 
   /**
@@ -92,29 +87,34 @@ export class Spring implements KinematicSource {
    * reads return the source's value as of its last update.
    *
    * Assignment accepts any `SpringTarget`:
-   * - A number retargets the spring. The current value and momentum carry
-   *   over, so mid-flight retargets stay smooth. Assigning a number while
-   *   following also stops the following.
-   * - A `SpringSource` — a `Spring`, or a value derived with `mapSpring` —
+   * - A number retargets smoothly, keeping the current value and velocity.
+   *   It also ends any following.
+   * - A `SpringSource` (a `Spring`, or a value derived with `mapSpring`)
    *   makes this spring follow the source's live value.
    *
-   * Under reduced motion, retargets apply instantly — unless `purpose` is
-   * `'appearance'`, in which case they animate as normal.
+   * Under reduced motion, retargets apply instantly unless `purpose` is
+   * `'nonmotion'`.
    */
   get target(): number {
     return this.#target
   }
 
   set target(value: SpringTarget) {
+    this.#assertLive()
     if (typeof value === 'number') {
+      // Checked before unfollowing, so a rejected write keeps the follow.
+      invariant(Number.isFinite(value), 'Spring target must be a finite number')
       this.#unfollow()
       this.#setTarget(value)
     } else {
       invariant(isSpringSource(value), 'Spring target must be a number or a SpringSource')
+      const current = value[SpringSourceSymbol].value
       invariant(
-        typeof value[SpringSourceSymbol].value === 'number',
+        typeof current === 'number',
         'A spring can only follow a scalar SpringSource; derive one from a composite with mapSpring',
       )
+      // Checked before following, so a rejected source keeps the old follow.
+      invariant(Number.isFinite(current), 'Spring target must be a finite number')
       this.#follow(value as SpringSource)
     }
   }
@@ -123,17 +123,17 @@ export class Spring implements KinematicSource {
    * The current animated value: the target plus the remaining
    * displacement.
    *
-   * Writing displaces the spring: it keeps its target and springs back
-   * from the written value, notifying update listeners synchronously.
-   * Writing the current value is a no-op. Under reduced motion a write
-   * jumps the spring — target included — to the written value, unless
-   * `purpose` is `'appearance'`, in which case it displaces as normal.
+   * Writing displaces the spring. It keeps its target, springs back from
+   * the written value, and notifies update listeners synchronously.
+   * Writing the current value is a no-op. Under reduced motion, a write
+   * jumps value and target together unless `purpose` is `'nonmotion'`.
    */
   get value() {
     return this.#target + this.#motion.position
   }
 
   set value(value: number) {
+    this.#assertLive()
     invariant(Number.isFinite(value), 'Spring value must be a finite number')
     if (this.#motions.reduced && this.#purpose === 'motion') {
       if (value !== this.value) {
@@ -153,16 +153,16 @@ export class Spring implements KinematicSource {
   /**
    * The current velocity, in value units per second.
    *
-   * Writing flings the spring: motion continues from the current value
-   * with the written velocity, then settles back to the target. Under
-   * reduced motion writes are ignored, unless `purpose` is `'appearance'`,
-   * in which case the fling applies as normal.
+   * Writing flings the spring from its current value, and it settles back
+   * to the target. Under reduced motion, the write is ignored unless
+   * `purpose` is `'nonmotion'`.
    */
   get velocity() {
     return this.#motion.velocity
   }
 
   set velocity(value: number) {
+    this.#assertLive()
     invariant(Number.isFinite(value), 'Spring velocity must be a finite number')
     if (this.#motions.reduced && this.#purpose === 'motion') return
 
@@ -171,25 +171,18 @@ export class Spring implements KinematicSource {
   }
 
   /**
-   * The current acceleration, in value units per second squared — how
-   * fast the velocity is changing. Read-only: acceleration is the
-   * spring's stiffness and friction acting on its current displacement
-   * and velocity, so it follows from the motion rather than being set.
-   * To fling the spring, write `velocity` instead.
+   * The current acceleration, in value units per second squared.
+   * Read-only, because stiffness and friction derive it from the current
+   * displacement and velocity. To fling the spring, write `velocity`.
    */
   get acceleration() {
-    // Newton's second law for the damped spring, a = -(k*x + c*v) / m,
-    // with x the displacement from the target. Exact from state and
-    // config, like value and velocity.
-    const { tension, damping, mass } = this.#config
-    return -(tension * this.#motion.position + damping * this.#motion.velocity) / mass
+    return this.#motion.acceleration
   }
 
   /**
-   * What the spring animates — `'motion'` or `'appearance'` — fixed when
-   * it was created. An `'appearance'` spring opts out of reduced motion:
-   * it keeps animating where a `'motion'` spring snaps to its target. See
-   * `Purpose`.
+   * What the spring animates, fixed at creation. Under reduced motion, a
+   * `'motion'` spring snaps to its target and a `'nonmotion'` spring keeps
+   * animating. See `Purpose`.
    */
   get purpose(): Purpose {
     return this.#purpose
@@ -198,12 +191,11 @@ export class Spring implements KinematicSource {
   /**
    * The spring's `SpringDefinition`: the one it was created with or last
    * assigned, otherwise `SpringDefinition.default`. Following a source
-   * never changes it — how a spring chases its target is the spring's
-   * own setting.
+   * never changes it.
    *
-   * Assigning a config reconfigures the spring in place — value and
-   * velocity are preserved, so mid-flight reconfigures stay smooth.
-   * Assigning `null` reverts to the default.
+   * Assigning reconfigures the spring in place, keeping value and
+   * velocity, so mid-flight changes stay smooth. `null` reverts to the
+   * default.
    */
   get config(): SpringDefinition {
     return this.#config
@@ -229,17 +221,18 @@ export class Spring implements KinematicSource {
     return this.#config.dampingRatio
   }
 
-  /** The config's resting precision. */
+  /** The config's precision: decimal places of the resting threshold. */
   get precision() {
     return this.#config.precision
   }
 
-  /** The config's arrival multiplier. */
+  /** The config's arrival multiplier, applied to the velocity at each target crossing. */
   get arrival() {
     return this.#config.arrival
   }
 
   set config(value: SpringDefinition | null) {
+    this.#assertLive()
     const next = value ?? SpringDefinition.default
     if (this.#config === next) return
 
@@ -251,12 +244,12 @@ export class Spring implements KinematicSource {
   }
 
   /**
-   * Milliseconds until the spring rests: 0 while resting, Infinity when
-   * the motion never settles. The time is solved from the motion, not
-   * estimated — the spring is resting at the first tick at or after it,
-   * and a bouncy spring can rest up to one oscillation earlier when a
-   * frame samples a low pulse. When the config's `arrival` is 0, it is
-   * capped at the exact ms of the first target crossing.
+   * The time until the spring rests, in ms, solved from the motion: 0
+   * while resting, `Infinity` when it never settles. The spring rests at
+   * the first tick at or after this time. A bouncy spring can rest up to
+   * one oscillation earlier, when a frame samples a low point of the
+   * bounce. With `arrival: 0`, the time is capped at the first target
+   * crossing, exact to the ms.
    */
   get timeRemaining() {
     return this.#motion.timeRemaining
@@ -273,9 +266,9 @@ export class Spring implements KinematicSource {
   }
 
   /**
-   * A promise that resolves when the spring next comes to rest — already
-   * resolved while resting or after dispose. Retargeting mid-flight
-   * extends the wait; disposing resolves it.
+   * A promise that resolves when the spring next rests or is disposed.
+   * It is already resolved while the spring rests and after dispose.
+   * Retargeting mid-flight extends the wait.
    *
    * @example
    * ```ts
@@ -301,22 +294,23 @@ export class Spring implements KinematicSource {
   }
 
   /**
-   * Snaps the spring to `value` with no animation: target and value both
-   * become `value` and velocity clears. Listeners are notified
-   * synchronously — `update`, plus `stop` if the spring was moving.
+   * Snaps target and value to `value` and zeroes the velocity, with no
+   * animation. Listeners fire synchronously: `update`, plus `stop` if the
+   * spring was moving.
    */
   jumpTo(value: number) {
+    this.#assertLive()
     invariant(Number.isFinite(value), 'Spring value must be a finite number')
     this.#target = value
     this.#motion.finish()
   }
 
   /**
-   * Releases the spring permanently: stops following, detaches followers
-   * (each keeps its current target), resolves `settled`, and notifies
-   * dispose listeners. Calling it again is a no-op.
+   * Releases the spring permanently. It stops following, detaches
+   * followers (each keeps its current target), resolves `settled`, and
+   * notifies dispose listeners. Calling it again is a no-op.
    *
-   * A disposed spring keeps its final value readable; writes throw.
+   * A disposed spring keeps its final value readable. Writes throw.
    */
   dispose() {
     if (this.#disposed) return
@@ -350,7 +344,7 @@ export class Spring implements KinematicSource {
 
   /**
    * Subscribes to the spring leaving rest. `start` and `stop` always
-   * alternate; retargeting mid-flight fires neither. Returns an
+   * alternate, and retargeting mid-flight fires neither. Returns an
    * unsubscribe function.
    */
   onStart(callback: () => void) {
@@ -371,9 +365,12 @@ export class Spring implements KinematicSource {
     return this.#motion.onDispose(callback)
   }
 
+  #assertLive() {
+    invariant(!this.#disposed, 'Cannot write to a disposed spring')
+  }
+
   #setTarget(value: number) {
-    // Guards followed sources too: a map that produces NaN mid-flight
-    // throws here, at the moment of the poisoned retarget.
+    // Also guards followed sources: a map yielding NaN throws here.
     invariant(Number.isFinite(value), 'Spring target must be a finite number')
     if (value !== this.#target) {
       if (this.#motions.reduced && this.#purpose === 'motion') {
@@ -385,8 +382,7 @@ export class Spring implements KinematicSource {
       const current = this.value
       this.#target = value
       this.#motion.position = current - this.#target
-      // Re-anchor the solver at the rebased displacement without emitting
-      // an update: the spring's value hasn't changed.
+      // Re-anchor the solver silently, because the value did not change.
       this.#motion.tick(0, false)
     }
   }
@@ -402,82 +398,76 @@ export class Spring implements KinematicSource {
     const unsubDispose = api.onDispose(() => {
       this.#unfollow()
     })
-    // The edge mirrors the update subscription for the system: it names
-    // the leader motions ordering needs, and `recouple` performs the
-    // same retarget as the handler above. A foreign source resolves to
-    // no motions and registers nothing — it couples through the emitter
-    // alone.
+    // The edge mirrors the update subscription for the system's ordering,
+    // and `recouple` repeats the handler's retarget. A foreign source
+    // resolves to no leaders and couples through the emitter alone.
     const leaders = resolveLeaderMotions(source)
     if (leaders.length > 0) {
       const edge: FollowEdge = {
         follower: this.#motion,
         leaders,
-        _cyclic: false,
-        _prevValue: 0,
-        _d1: 0,
-        _d2: 0,
+        cyclic: false,
+        trail: new TargetTrail(0),
         recouple: (h) => {
-          // A ramp may arm only where it is safe: never inside a cycle
-          // (delayed velocity feedback around a loop is negative damping
-          // — FOH destabilizes cycles that are stable held), never on an
-          // arrival spring (its crossings are closed-form only against a
-          // held target), and never where the retarget must jump or
-          // rebase exactly — reduced motion, a zero-length step. Those
-          // keep the exact step path.
-          if (
-            edge._cyclic ||
-            h === 0 ||
-            this.#config.arrival !== 1 ||
-            (this.#motions.reduced && this.#purpose === 'motion')
-          ) {
+          if (this.#motions.reduced && this.#purpose === 'motion') {
+            const value = api.value
+            invariant(Number.isFinite(value), 'Spring target must be a finite number')
+            if (value === this.#target) return
+            // `#setTarget`'s jump without its events. Listeners must not
+            // run mid-advance, so `endFrame` emits in the settle sweep.
+            this.#target = value
+            this.#motions.add(this.#motion)
+            this.#motion.rest()
+            return
+          }
+          // No slope in a cycle, where delayed feedback acts as negative
+          // damping and a first-order hold destabilizes it. None on an
+          // arrival spring, whose crossings are closed-form only against a
+          // held target. None in a zero-length step, which must rebase
+          // exactly.
+          if (edge.cyclic || h === 0 || this.#config.arrival !== 1) {
             this.#setTarget(api.value)
             return
           }
           const value = api.value
           invariant(Number.isFinite(value), 'Spring target must be a finite number')
-          if (value === this.#target) return
+          const previous = this.#target
+          if (value === previous) return
           this.#motions.add(this.#motion)
-          // The delta is tick-path by construction: sync writes already
-          // landed as steps through the emitter before this pass. The
-          // position stays measured from the old target — the ramp's
-          // start — and the ramped advance ends it measured from the
-          // new one.
-          this.#motion._ramp = (value - this.#target) / h
+          // Only tick-path changes reach this delta, since synchronous
+          // writes already stepped through the emitter. The position stays
+          // measured from the old target until the sloped advance rebases it.
           this.#target = value
+          this.#motion.armSlope((value - previous) / h)
         },
         plan: (dt) => {
-          const target = this.#target
-          const d = target - edge._prevValue
-          edge._d2 = edge._d1
-          edge._d1 = d
-          edge._prevValue = target
+          const trail = edge.trail
+          const d = trail.observe(this.#target)
 
-          // History covers smooth motion; a leader knocked off its
-          // tracking manifold — teleported, flung — escalates with its
-          // own kinematic bound before history can see the move. Bound
-          // and gate are in the leader's units: exact for an identity
-          // passthrough (the common case), a slope ~1 heuristic through
-          // map code.
+          // History covers smooth motion. A leader knocked off its manifold
+          // (teleported or flung) escalates with its own kinematic bound
+          // first. The bound and gate are in leader units: exact for a
+          // direct follow, assuming a slope near 1 through map code.
           let dHat = Math.abs(d)
-          let error = Math.abs(d - edge._d2) / 8
+          let error = Math.abs(trail.curvature) / 8
           for (const leader of leaders) {
-            if (leader._manifoldDeviation() > MANIFOLD_GATE * Math.abs(d)) {
-              const accel = Math.abs(leader._acceleration())
+            // History misses a scheduled kink (a ramp arriving mid-frame),
+            // which a slope would smear over the frame. Take the cap.
+            if (leader.kinksWithin(dt)) return Number.POSITIVE_INFINITY
+            if (leader.manifoldDeviation() > MANIFOLD_GATE * Math.abs(d)) {
+              const accel = Math.abs(leader.acceleration)
               const speed = Math.abs(leader.velocity)
               dHat = Math.max(dHat, speed * dt + 0.5 * accel * dt * dt)
               error = Math.max(error, (accel * dt * dt) / 8)
             }
           }
 
-          // The budget floors at the follower's resting quantum: coupling
-          // finer than rest can resolve buys nothing.
+          // Coupling finer than the follower's resting quantum buys nothing.
           const tol = Math.max(this.#config.restingMagnitude, this.#motions.couplingTolerance)
-          // Where recouple holds the target (cycles, arrival), half a
-          // sub-step of leader travel remains as tracking error: demand
-          // is linear in the frame's move. Where it ramps, only the
-          // curvature residual remains — the second difference — and it
-          // shrinks with the square of the sub-step.
-          return edge._cyclic || this.#config.arrival !== 1
+          // A held target (cycles, arrival) leaves half a sub-step of leader
+          // travel as error, linear in the move. A slope leaves only the
+          // curvature residual, which shrinks with the sub-step squared.
+          return edge.cyclic || this.#config.arrival !== 1
             ? Math.ceil(dHat / (2 * tol))
             : Math.ceil(Math.sqrt(error / tol))
         },
@@ -489,9 +479,9 @@ export class Spring implements KinematicSource {
         this.#motions.graph.removeEdge(this.#motion)
       }
       this.#setTarget(api.value)
-      // Anchor the estimator on the target the follow just synced;
-      // plan's first delta then measures leader movement, not wiring.
-      edge._prevValue = this.#target
+      // Anchor the estimator on the target the follow just synced, so
+      // the first delta in plan measures leader movement, not wiring.
+      edge.trail.anchor(this.#target)
       return
     }
     this.#unsubLeader = () => {

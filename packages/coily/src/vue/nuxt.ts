@@ -12,37 +12,36 @@ export interface CoilyModuleOptions {
    */
   debug?: boolean
   /**
-   * Frame-rate cap. 0 means uncapped: one tick per displayed frame.
-   * Capped ticks land on whole display frames and receive the true
-   * elapsed time.
+   * Frame-rate cap. 0 means uncapped: one tick per displayed frame. A
+   * capped tick lands on a whole display frame and receives the true
+   * elapsed time in ms.
    * @default 0
    */
   fps?: number
   /**
-   * Frame gap in milliseconds above which the gap is treated as lag and
-   * replaced with `adjustedLag`, so springs don't teleport when frames
-   * resume. 0 disables lag clamping.
+   * The frame gap in ms above which the system treats the gap as lag and
+   * replaces it with `adjustedLag`, so springs do not jump when frames
+   * resume. 0 turns off lag clamping.
    * @default 500
    */
   lagThreshold?: number
   /**
-   * The elapsed milliseconds a lagging frame is replaced with. Clamped
-   * to at most `lagThreshold`.
+   * The elapsed time in ms that replaces a lagging frame. A frame uses
+   * at most `lagThreshold` ms of it.
    * @default 33
    */
   adjustedLag?: number
   /**
-   * How far a spring may trail a source it follows within one frame, in
-   * the value's own units. Frames whose motion would exceed it split
-   * into internal sub-steps; smaller is tighter and costs more solver
-   * work.
+   * How far a spring can trail a source it follows within one frame, in
+   * the value's own units. Frames whose motion would exceed it run as
+   * sub-steps, so a smaller value follows more closely at more cost.
    * @default 0.1
    */
   couplingTolerance?: number
   /**
-   * When springs snap to their targets instead of animating: `'user'`
+   * When springs snap to their targets instead of animating. `'user'`
    * follows the OS prefers-reduced-motion setting, including live
-   * changes; `'always'` and `'never'` force one behavior.
+   * changes. `'always'` and `'never'` force one behavior.
    * @default 'user'
    */
   reducedMotion?: 'user' | 'always' | 'never'
@@ -76,11 +75,13 @@ export default defineNuxtPlugin((nuxtApp) => {
 }
 
 /**
- * The Nuxt module: creates an app-wide spring system (started on the
- * client), auto-imports the composables and helpers `useSpring`,
- * `useSpringSystem`, `useSpringPool`, `defineSpring`, `mapSpring`,
- * `velocityOf`, and `accelerationOf`, and registers the `SpringValue`
- * component. Types are left out — they would be noise in most apps.
+ * The Nuxt module. It creates one spring system for the app and starts
+ * it on the client only, so server rendering shows springs at their
+ * initial values. The module auto-imports
+ * `useSpring`, `useRamp`, `useSpringSystem`, `useSpringPool`,
+ * `defineSpring`, `mapSpring`, `velocityOf`, `accelerationOf`, and
+ * `targetOf`, and registers the `SpringValue` component. It does not
+ * auto-import types.
  */
 const coilyModule: NuxtModule = defineNuxtModule<CoilyModuleOptions>({
   meta: {
@@ -98,16 +99,18 @@ const coilyModule: NuxtModule = defineNuxtModule<CoilyModuleOptions>({
       getContents: () => getPluginTemplate(_options),
     })
 
-    // Values only: the types are noise in most apps, and editors already
-    // pull them in on demand.
+    // Values only. Most apps never name the types, and editors import them
+    // on demand.
     addImports([
       { from: 'coily/vue', name: 'useSpring' },
+      { from: 'coily/vue', name: 'useRamp' },
       { from: 'coily/vue', name: 'useSpringSystem' },
       { from: 'coily/vue', name: 'useSpringPool' },
       { from: 'coily', name: 'defineSpring' },
       { from: 'coily', name: 'mapSpring' },
       { from: 'coily', name: 'velocityOf' },
       { from: 'coily', name: 'accelerationOf' },
+      { from: 'coily', name: 'targetOf' },
     ])
 
     addComponent({

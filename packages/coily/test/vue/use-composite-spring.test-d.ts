@@ -2,12 +2,20 @@
  * Type-level tests for the composite spring Vue bridge: `useSpring` shape
  * overload dispatch and pool creation.
  *
- * This file is compiled by `tsc` but never executed (vitest only picks up
- * `*.spec.ts`, `*.browser.ts`, and `*.bench.ts`). Each `@ts-expect-error`
- * is self-validating: tsc fails if the line stops erroring.
+ * Typechecked by `tsc`, never executed (vitest runs only `*.spec.ts`,
+ * `*.browser.ts`, and `*.bench.ts`). tsc fails if an `@ts-expect-error`
+ * line stops erroring.
  */
-import { type Ref, ref } from 'vue'
-import type { SpringDefinition } from '../../src/index.ts'
+import { type Ref, computed, ref } from 'vue'
+import {
+  type CompositeSpring,
+  type SpringDefinition,
+  type SpringSource,
+  type TargetedSource,
+  accelerationOf,
+  targetOf,
+  velocityOf,
+} from '../../src/index.ts'
 import { type SpringRef, useSpring } from '../../src/vue/spring.ts'
 import type { CompositeSpringRef } from '../../src/vue/composite-spring.ts'
 import { useSpringPool } from '../../src/vue/pool.ts'
@@ -36,10 +44,28 @@ obj.value = { z: 1 }
 useSpring(ref({ x: 0, y: 0 }))
 useSpring(() => ({ x: 0, y: 0 }))
 
-// ── Array shapes create object springs too — in every wrapping ──────
+// ── Refs derive sources like the springs they wrap ──────────────────
+
+declare const scalarRef: SpringRef
+scalarRef satisfies TargetedSource
+velocityOf(scalarRef) satisfies SpringSource<number>
+accelerationOf(scalarRef) satisfies SpringSource<number>
+targetOf(scalarRef) satisfies SpringSource<number>
+useSpring(targetOf(scalarRef))
+
+obj satisfies TargetedSource<{
+  readonly position: { readonly x: number; readonly y: number }
+  readonly opacity: number
+}>
+targetOf(obj) satisfies SpringSource<{
+  readonly position: { readonly x: number; readonly y: number }
+  readonly opacity: number
+}>
+
+// ── Array shapes create object springs too, in every wrapping ───────
 
 const tuple = useSpring([0, 0])
-// Array literals infer as tuples — the arity is part of the shape
+// Array literals infer as tuples, so the arity is part of the shape
 const tupleTyped: CompositeSpringRef<[number, number]> = tuple
 void tupleTyped
 useSpring(ref([0, 0]))
@@ -53,7 +79,7 @@ fixed.value = [1, 2, 3]
 // ── Options accept anything ConfigShape does, reactively ────────────
 
 useSpring({ x: 0, y: 0 }, cfg)
-// @ts-expect-error bare options are not a config — wrap in defineSpring
+// @ts-expect-error bare options are not a config, so wrap them in defineSpring
 useSpring({ x: 0, y: 0 }, { tension: 170, damping: 26 })
 useSpring({ x: 0, y: 0 }, { x: cfg })
 useSpring({ x: 0, y: 0 }, ref({ x: cfg }))
@@ -72,7 +98,7 @@ useSpring(() => 10)
 // ── Linked object refs ──────────────────────────────────────────────
 
 // Chain-building unions (ref-or-leader, as in a follower loop) collapse
-// into the shape overload's ref member; runtime dispatch still links via
+// into the shape overload's ref member. Runtime dispatch still links via
 // the instance.
 declare const chainTarget:
   | Ref<{ x: number; y: number }>
@@ -83,6 +109,25 @@ const follower = useSpring(obj)
 const followerTyped: CompositeSpringRef<{ position: { x: number; y: number }; opacity: number }> =
   follower
 void followerTyped
+
+// Getters, computeds, and pooled composites lead too, and a getter can
+// switch leaders.
+declare const pick: Ref<boolean>
+declare const left: CompositeSpringRef<{ x: number; y: number }>
+declare const right: CompositeSpringRef<{ x: number; y: number }>
+declare const pooled: CompositeSpring<{ x: number; y: number }>
+type Point = CompositeSpringRef<{ x: number; y: number }>
+useSpring(() => (pick.value ? left : right)) satisfies Point
+useSpring(() => (pick.value ? left : pooled)) satisfies Point
+useSpring(computed(() => (pick.value ? left : right))) satisfies Point
+useSpring(pooled) satisfies Point
+useSpring(() => (pick.value ? left : { x: 0, y: 0 })) satisfies Point
+// @ts-expect-error every leader must have the follower's shape
+useSpring(() => (pick.value ? left : { x: 0 }))
+useSpring(pooled, { x: cfg }) satisfies Point
+
+// @ts-expect-error a shape-valued source that is not a composite cannot be followed
+useSpring(velocityOf(obj))
 
 // ── Invalid shapes are rejected ─────────────────────────────────────
 

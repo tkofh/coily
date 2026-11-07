@@ -109,7 +109,6 @@ describe('advance to rest', () => {
     while (springs.some((s) => !s.isResting)) {
       system.advance(FRAME)
     }
-    // read final values after settling
     for (const spring of springs) {
       void spring.value
     }
@@ -162,6 +161,22 @@ describe('linked spring chains', () => {
     return springs
   }
 
+  // Runs first in the group, so the chains below tick with the ramp class
+  // already seen at the call sites in the tick.
+  bench('64-spring chain led by an endless ramp: 60 frames', () => {
+    const system = createSpringSystem()
+    const ramp = system.createRamp(0, { rate: 270, target: Infinity })
+    let prev = system.createSpring(ramp)
+    for (let i = 1; i < 64; i++) {
+      const next = system.createSpring(prev.value)
+      next.target = prev
+      prev = next
+    }
+    for (let i = 0; i < 60; i++) {
+      system.advance(FRAME)
+    }
+  })
+
   bench('64-spring chain: 60 frames of continuous motion', () => {
     const system = createSpringSystem()
     const springs = createChain(system, 64)
@@ -171,9 +186,8 @@ describe('linked spring chains', () => {
     }
   })
 
-  // The same run with sub-stepping pinned off isolates the coupling
-  // controller's standing overhead (plan pass + ramp arming) from the
-  // sub-steps it chooses to spend.
+  // Sub-stepping pinned off, isolating the coupling controller's fixed
+  // overhead (plan pass, slope arming) from the sub-steps it spends.
   bench('64-spring chain: 60 frames, coupling pinned to one step per frame', () => {
     const system = createSpringSystem({ couplingTolerance: 1e9 })
     const springs = createChain(system, 64)
@@ -209,7 +223,7 @@ describe('linked spring chains', () => {
 })
 
 describe('composite springs', () => {
-  // Four channels per object — comparable to four scalar springs.
+  // Four channels per object, comparable to four scalar springs.
   const shape = { position: { x: 0, y: 0 }, scale: 1, opacity: 1 }
   const fullTarget = { position: { x: 100, y: 100 }, scale: 2, opacity: 0 }
 

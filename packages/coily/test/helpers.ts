@@ -39,7 +39,7 @@ export function flush(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve))
 }
 
-/** A hand-rolled `SpringSource` a test drives by hand: the bare contract, nothing more. */
+/** A hand-rolled `SpringSource` a test drives by hand: the bare contract. */
 export interface ManualSource {
   readonly source: SpringSource
   /** Sets the value and notifies subscribers, as a real source would on update. */

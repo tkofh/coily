@@ -94,7 +94,7 @@ describe('Emitter', () => {
     emitter.on('update', second)
     emitter.emit('update')
 
-    // The slice() in emit should protect the iteration
+    // emit iterates a snapshot, so the removal takes effect on the next emit.
     expect(second).toHaveBeenCalledOnce()
   })
 })

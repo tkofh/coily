@@ -218,7 +218,7 @@ export function chainSubsteps(
 }
 
 // ---------- core-mirror chain (validation against the real library) ----------
-// Mirrors Motion/solver semantics: anchored constants, accumulated absolute
+// Mirrors SpringMotion/solver semantics: anchored constants, accumulated absolute
 // time, lazy re-anchor after writes, rest snap, retarget guard. Overdamped
 // and underdamped regimes (the validation configs).
 
@@ -288,7 +288,7 @@ function mirrorEvaluate(p: Phys, l: MirrorLink): void {
   }
 }
 
-// Motion.tick(dt, emit?) mirror: lazy re-anchor, advance absolute t, rest snap.
+// SpringMotion.tick(dt, emit?) mirror: lazy re-anchor, advance absolute t, rest snap.
 function mirrorTick(p: Phys, l: MirrorLink, dt: number): void {
   if (l.needsReset) {
     mirrorAnchor(p, l)

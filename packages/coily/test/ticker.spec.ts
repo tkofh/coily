@@ -1,13 +1,12 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { SpringDefinition } from '../src/config.ts'
 import { MotionSet } from '../src/motion-set.ts'
-import { Motion } from '../src/motion.ts'
+import { SpringMotion } from '../src/spring-motion.ts'
 import { Ticker } from '../src/ticker.ts'
 
 /**
- * Deterministic stand-in for the browser's frame scheduler: `frame(elapsed)`
- * advances the clock and fires whatever callbacks are pending, mirroring how
- * rAF delivers one timestamp per displayed frame.
+ * Deterministic stand-in for rAF: `frame(elapsed)` advances the clock and
+ * fires the pending callbacks with one shared timestamp.
  */
 class FrameSource {
   now = 0
@@ -46,7 +45,7 @@ class FrameSource {
 
 /** A motion displaced far enough to stay active for the whole test. */
 function activeMotion() {
-  return new Motion(SpringDefinition.default, 1e6, 0)
+  return new SpringMotion(SpringDefinition.default, 1e6, 0)
 }
 
 afterEach(() => {
@@ -125,7 +124,7 @@ describe('Ticker', () => {
     test('deltaRatio reflects fps gap', () => {
       const ticker = new Ticker(new MotionSet(), { fps: 60 })
       ticker.tick()
-      // manual tick advances by exactly gap, so ratio should be 1
+      // A manual tick advances by exactly the gap, so the ratio is 1.
       expect(ticker.deltaRatio).toBeCloseTo(1)
     })
 
@@ -147,21 +146,28 @@ describe('Ticker', () => {
       expect(ticker.adjustedLag).toBe(33)
     })
 
-    test('setting lagThreshold to 0 sets it to a very large value', () => {
+    test('lagThreshold reads 0 after it is set to 0', () => {
       const ticker = new Ticker(new MotionSet())
       ticker.lagThreshold = 0
-      expect(ticker.lagThreshold).toBe(1e8)
+      expect(ticker.lagThreshold).toBe(0)
     })
 
-    test('adjustedLag is clamped to lagThreshold', () => {
+    test('lagThreshold: 0 in the constructor reads 0', () => {
+      const ticker = new Ticker(new MotionSet(), { lagThreshold: 0 })
+      expect(ticker.lagThreshold).toBe(0)
+    })
+
+    test('a lower lagThreshold leaves adjustedLag as set', () => {
       const ticker = new Ticker(new MotionSet())
       ticker.lagThreshold = 20
-      expect(ticker.adjustedLag).toBeLessThanOrEqual(20)
+      expect(ticker.adjustedLag).toBe(33)
     })
 
-    test('lagThreshold: 0 in constructor sets it to a very large value', () => {
-      const ticker = new Ticker(new MotionSet(), { lagThreshold: 0 })
-      expect(ticker.lagThreshold).toBe(1e8)
+    test('adjustedLag reads back a value above lagThreshold', () => {
+      const ticker = new Ticker(new MotionSet(), { lagThreshold: 20, adjustedLag: 50 })
+      expect(ticker.adjustedLag).toBe(50)
+      ticker.adjustedLag = 40
+      expect(ticker.adjustedLag).toBe(40)
     })
   })
 
@@ -189,7 +195,7 @@ describe('Ticker', () => {
       motions.add(activeMotion())
       const ticker = new Ticker(motions)
 
-      source.now = 1000 // rAF timestamps don't start at zero
+      source.now = 1000 // rAF timestamps do not start at zero
       ticker.start()
       source.frame(8.33)
 
@@ -227,10 +233,9 @@ describe('Ticker', () => {
       ticker.start()
       source.frame(8.33) // priming frame
 
-      // The regression this guards: a 16.67ms accumulator grid lands exactly
-      // on 2-frame boundaries at 120Hz, so timestamp jitter used to flip the
-      // crossing between the 2nd and 3rd frame, interleaving 16.7ms and 25ms
-      // steps. Frame pacing must absorb the jitter.
+      // Regression: a 16.67ms accumulator grid lands exactly on 2-frame
+      // boundaries at 120Hz, so jitter flipped the crossing between the 2nd
+      // and 3rd frame, alternating 16.7ms and 25ms steps.
       const jitter = [0.4, -0.2, -0.4, 0.1]
       let sinceTick = 0
       for (let i = 0; i < 96; i++) {
@@ -311,8 +316,9 @@ describe('Ticker', () => {
         }
       }
 
-      // Every tick spans at least a frame-tolerant gap, and nothing is lost:
-      // whatever hasn't ticked yet is at most one gap of residual time.
+      // Every tick spans at least the cap gap less half the longest frame,
+      // and nothing is lost. The time that has not ticked yet is at most
+      // one gap.
       for (const delta of deltas) {
         expect(delta).toBeGreaterThan(1000 / 60 - 16.7 / 2)
       }
@@ -335,6 +341,48 @@ describe('Ticker', () => {
       expect(ticker.delta).toBe(33)
     })
 
+    test('lagThreshold 0 passes every gap in full', () => {
+      const source = new FrameSource().install()
+      const motions = new MotionSet()
+      motions.add(activeMotion())
+      const ticker = new Ticker(motions, { lagThreshold: 0 })
+
+      ticker.start()
+      source.frame(8.33) // priming frame
+      source.frame(600)
+      expect(ticker.delta).toBe(600)
+      source.frame(2e8)
+      expect(ticker.delta).toBe(2e8)
+    })
+
+    test('a lagging frame steps at most lagThreshold', () => {
+      const source = new FrameSource().install()
+      const motions = new MotionSet()
+      motions.add(activeMotion())
+      const ticker = new Ticker(motions, { lagThreshold: 20 })
+
+      ticker.start()
+      source.frame(8.33) // priming frame
+      source.frame(600)
+      expect(ticker.delta).toBe(20)
+    })
+
+    test('raising lagThreshold again restores the full adjustedLag', () => {
+      const source = new FrameSource().install()
+      const motions = new MotionSet()
+      motions.add(activeMotion())
+      const ticker = new Ticker(motions)
+
+      ticker.lagThreshold = 10
+      ticker.lagThreshold = 500
+      expect(ticker.adjustedLag).toBe(33)
+
+      ticker.start()
+      source.frame(8.33) // priming frame
+      source.frame(600)
+      expect(ticker.delta).toBe(33)
+    })
+
     test('removing the cap at runtime takes effect on the next frame', () => {
       const source = new FrameSource().install()
       const motions = new MotionSet()
@@ -350,7 +398,7 @@ describe('Ticker', () => {
       ticker.fps = 0
       source.frame(8.33)
       expect(ticker.frame).toBe(1)
-      // Paced-out time is delivered, not dropped
+      // The tick delivers the paced-out time instead of dropping it.
       expect(ticker.delta).toBeCloseTo(16.66)
     })
   })
@@ -359,7 +407,7 @@ describe('Ticker', () => {
     test('stops requesting frames once every motion rests', () => {
       const source = new FrameSource().install()
       const motions = new MotionSet()
-      motions.add(new Motion(SpringDefinition.default, 1, 0))
+      motions.add(new SpringMotion(SpringDefinition.default, 1, 0))
       const ticker = new Ticker(motions)
 
       ticker.start()
@@ -399,7 +447,7 @@ describe('Ticker', () => {
       motions.add(activeMotion())
       expect(source.pending).toBe(1)
 
-      source.frame(8.33) // priming frame — idle time must not become a step
+      source.frame(8.33) // priming frame: idle time must not become a step
       expect(ticker.time).toBe(0)
 
       source.frame(8.33)
@@ -457,7 +505,7 @@ describe('Ticker', () => {
       expect(() => source.frame(16)).toThrow('boom')
 
       // The throw escaped the frame callback, but the next frame was
-      // already scheduled — the loop survives and keeps stepping.
+      // already scheduled, so the loop keeps stepping.
       expect(source.pending).toBe(1)
       const before = ticker.frame
       source.frame(16)
@@ -477,10 +525,39 @@ describe('Ticker', () => {
       ticker.start()
 
       source.frame(16)
-      source.frame(16) // steps once; the listener stops the ticker
+      source.frame(16) // steps once, and the listener stops the ticker
 
       expect(ticker.stopped).toBe(true)
       expect(source.pending).toBe(0)
+    })
+
+    test('a listener restarting the ticker mid-step keeps a single frame loop', () => {
+      const source = new FrameSource().install()
+      const motions = new MotionSet()
+      const ticker = new Ticker(motions)
+      const motion = activeMotion()
+
+      let restarted = false
+      motion.onUpdate(() => {
+        if (restarted) return
+        restarted = true
+        ticker.stop()
+        ticker.start()
+      })
+      motions.add(motion)
+      ticker.start()
+
+      source.frame(16)
+      source.frame(16) // steps once, and the listener restarts the ticker
+      expect(ticker.stopped).toBe(false)
+      expect(source.pending).toBe(1)
+
+      // The restart primes again, then steps once per frame.
+      source.frame(16)
+      const before = ticker.frame
+      for (let i = 0; i < 3; i++) source.frame(16)
+      expect(ticker.frame).toBe(before + 3)
+      expect(source.pending).toBe(1)
     })
   })
 })

@@ -20,8 +20,8 @@ export class Emitter {
   off(type: EventType, handler?: Handler) {
     const list = this.#list(type)
     if (handler) {
-      // An indexOf miss becomes 2^32 - 1 via >>> 0, so splice removes
-      // nothing for handlers that were never subscribed.
+      // `>>> 0` turns an indexOf miss into 2^32 - 1, so splice removes
+      // nothing for a handler that was never subscribed.
       list.splice(list.indexOf(handler) >>> 0, 1)
     } else {
       list.length = 0
@@ -37,9 +37,8 @@ export class Emitter {
 
   emit(type: EventType) {
     const list = this.#list(type)
-    // The multi-handler path iterates a snapshot so handlers that
-    // un/subscribe mid-emit can't shift the iteration; the common
-    // single-handler path skips the per-tick allocation.
+    // A snapshot keeps mid-emit (un)subscribes from shifting the iteration.
+    // The common single-handler path skips that per-tick allocation.
     if (list.length === 1) {
       list[0]!()
     } else if (list.length > 1) {

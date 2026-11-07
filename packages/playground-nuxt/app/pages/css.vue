@@ -14,9 +14,8 @@ function playSettle() {
   settleBox.value?.animate(settleWaapi.keyframes, settleWaapi.options)
 }
 
-// Hover · a CSS transition. Springs on hover — and if you mouse out
-// mid-flight it stalls at the turn, because a transition can't carry
-// velocity. That is the tradeoff versus a live spring, made visible.
+// Hover · a CSS transition. Mousing out mid-flight stalls it at the turn,
+// because a transition cannot carry velocity.
 const hoverConfig = defineSpring({ bounce: 0.4, duration: 650, displacement: 240 })
 const hoverTransition = springToTransition(hoverConfig, {
   property: 'translate',
@@ -24,10 +23,9 @@ const hoverTransition = springToTransition(hoverConfig, {
   to: 240,
 })
 
-// Hover · WAAPI with momentum. On every mouse event we read the spring's
-// live velocity — springStateAt at the running animation's currentTime —
-// and regenerate from that state, so reversing mid-flight carries momentum
-// instead of stalling like the plain transition above.
+// Hover · WAAPI with momentum. On each enter and leave, springStateAt
+// reads the live state at the running animation's currentTime, and the
+// animation regenerates from it, so a mid-flight reversal keeps momentum.
 const momentumConfig = defineSpring({ bounce: 0.5, duration: 700, displacement: 240 })
 const momentumBox = ref<HTMLElement>()
 let momentumAnim: Animation | null = null
@@ -61,8 +59,8 @@ function retarget(to: number) {
   momentumTarget = to
 }
 
-// Loop · a pure undamped spring never rests, so coily/css emits a seamless
-// infinite alternating animation. Shown as CSS @keyframes and WAAPI at once.
+// Loop · an undamped spring never rests, so coily/css emits a seamless
+// infinite alternating animation, run here as CSS @keyframes and WAAPI.
 const loopConfig = defineSpring({ tension: 150, damping: 0 })
 const loopSpec = { property: 'translate', from: 0, to: 280, unit: 'px' } as const
 const loopCss = springToCss(loopConfig, loopSpec, { name: 'coily-loop' })
@@ -106,8 +104,8 @@ function short(css: string): string {
       <NuxtLink to="/" class="nav-link">&larr; Spring Demo</NuxtLink>
       <h1>coily → CSS <code>linear()</code> &amp; Web Animations API</h1>
       <p class="sub">
-        Every card is generated from a <code>defineSpring</code> config by <code>coily/css</code> —
-        no per-frame ticking, just a static easing.
+        <code>coily/css</code> generates every card from a <code>defineSpring</code> config. Each
+        card uses a static easing, with no per-frame ticking.
       </p>
     </header>
 
@@ -136,8 +134,8 @@ function short(css: string): string {
         <div ref="momentumBox" class="box momentum-box" />
       </div>
       <p class="hint">
-        Same gesture — but each event reads the live velocity and regenerates the easing from that
-        state, so reversing mid-flight carries momentum. Flick in and out rapidly.
+        Same gesture, but each event reads the live velocity and regenerates the easing from that
+        state. A reversal mid-flight keeps its momentum. Flick in and out quickly.
       </p>
     </section>
 
@@ -145,7 +143,9 @@ function short(css: string): string {
       <h2>Loop · undamped, CSS <code>@keyframes</code> vs WAAPI</h2>
       <div class="track"><div class="box" :style="{ animation: loopCss.animation }" /></div>
       <div class="track"><div ref="loopWaBox" class="box waapi" /></div>
-      <p class="hint">Top lane is CSS, bottom is WAAPI — same easing, both looping forever.</p>
+      <p class="hint">
+        The top lane is CSS and the bottom lane is WAAPI. Both use the same easing and loop forever.
+      </p>
       <pre>animation: {{ short(loopCss.animation) }}</pre>
     </section>
 

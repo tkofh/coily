@@ -1,9 +1,9 @@
-import { describe, expect, vi } from 'vitest'
+import { afterEach, describe, expect, vi } from 'vitest'
 import { createSpringSystem, defineSpring } from '../src/index.ts'
 import { test } from './helpers.ts'
 
 describe('SpringSystem', () => {
-  test('single tick() updates all active springs', ({ system }) => {
+  test('a single advance() updates all active springs', ({ system }) => {
     const config = defineSpring({ mass: 1, tension: 170, damping: 10 })
 
     const a = system.createSpring(0, config)
@@ -13,7 +13,6 @@ describe('SpringSystem', () => {
 
     system.advance(1000 / 60)
 
-    // Both should have moved from their initial values
     expect(a.value).not.toBe(0)
     expect(b.value).not.toBe(0)
   })
@@ -43,7 +42,6 @@ describe('SpringSystem', () => {
     const onStop = vi.fn()
     spring.onStop(onStop)
 
-    // Simulate until rest
     for (let i = 0; i < 600; i++) {
       system.advance(1000 / 60)
       if (spring.isResting) break
@@ -51,7 +49,6 @@ describe('SpringSystem', () => {
 
     expect(onStop).toHaveBeenCalled()
 
-    // Subsequent ticks should not fire update
     const onUpdate = vi.fn()
     spring.onUpdate(onUpdate)
     system.advance(1000 / 60)
@@ -66,11 +63,9 @@ describe('SpringSystem', () => {
     const onUpdate = vi.fn()
     spring.onUpdate(onUpdate)
 
-    // Not being ticked
     system.advance(1000 / 60)
     expect(onUpdate).not.toHaveBeenCalled()
 
-    // Set new target — should re-enter scheduler
     spring.target = 100
     system.advance(1000 / 60)
     expect(onUpdate).toHaveBeenCalled()
@@ -97,27 +92,40 @@ describe('SpringSystem', () => {
 })
 
 describe('SpringSystem: advance', () => {
+  const message = 'dt must be a finite, non-negative number of milliseconds'
+
   test('rejects a non-finite dt', ({ system }) => {
-    expect(() => system.advance(Number.NaN)).toThrow('dt must be a finite number of milliseconds')
-    expect(() => system.advance(Number.POSITIVE_INFINITY)).toThrow(
-      'dt must be a finite number of milliseconds',
-    )
+    expect(() => system.advance(Number.NaN)).toThrow(message)
+    expect(() => system.advance(Number.POSITIVE_INFINITY)).toThrow(message)
   })
 
-  test('a negative dt steps the simulation backward and reversibly', ({ system }) => {
+  test('rejects a negative dt and changes nothing', ({ system }) => {
     const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 10 }))
     spring.target = 100
+    const ramp = system.createRamp(0, { rate: 1000, target: Infinity })
 
     system.advance(1000 / 60)
-    const forward = spring.value
-    expect(forward).toBeGreaterThan(0)
+    const value = spring.value
+    const velocity = spring.velocity
+    const position = ramp.value
+    expect(value).toBeGreaterThan(0)
+    expect(position).toBeGreaterThan(0)
 
-    // The closed-form solver evaluates at absolute time, so reversing the exact
-    // step lands back on the same trajectory point — no drift, no NaN.
-    system.advance(-1000 / 60)
-    expect(spring.value).toBeCloseTo(0, 6)
-    expect(spring.value).toBeLessThan(forward)
-    expect(Number.isFinite(spring.velocity)).toBe(true)
+    expect(() => system.advance(-1000 / 60)).toThrow(message)
+    expect(() => system.advance(-Number.MIN_VALUE)).toThrow(message)
+    expect(spring.value).toBe(value)
+    expect(spring.velocity).toBe(velocity)
+    expect(ramp.value).toBe(position)
+  })
+
+  test('accepts a dt of 0', ({ system }) => {
+    const spring = system.createSpring(0)
+    spring.target = 100
+    system.advance(1000 / 60)
+    const value = spring.value
+
+    expect(() => system.advance(0)).not.toThrow()
+    expect(spring.value).toBe(value)
   })
 })
 
@@ -152,9 +160,8 @@ describe('SpringSystem: transport controls', () => {
 })
 
 describe('SpringSystem: ticker options', () => {
-  // The Ticker's own behavior (capping, lag clamping, validation) is covered
-  // exhaustively in ticker.spec.ts; here we only confirm the system exposes
-  // and forwards the options.
+  // ticker.spec.ts covers capping, lag clamping, and validation. These
+  // tests confirm only that the system exposes and forwards the options.
   test('defaults match the ticker defaults', ({ system }) => {
     expect(system.fps).toBe(0)
     expect(system.lagThreshold).toBe(500)
@@ -173,5 +180,79 @@ describe('SpringSystem: ticker options', () => {
     expect(system.fps).toBe(120)
     expect(system.lagThreshold).toBe(250)
     expect(system.adjustedLag).toBe(16)
+  })
+
+  test('reads the lag settings back as written', () => {
+    const system = createSpringSystem({ lagThreshold: 0, adjustedLag: 50 })
+    expect(system.lagThreshold).toBe(0)
+    expect(system.adjustedLag).toBe(50)
+
+    system.lagThreshold = 10
+    expect(system.adjustedLag).toBe(50)
+    system.lagThreshold = 500
+    expect(system.lagThreshold).toBe(500)
+    expect(system.adjustedLag).toBe(50)
+  })
+})
+
+describe('SpringSystem: dispose', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  // Counts live listeners per target, so a leak shows up as a nonzero count.
+  function stubPage() {
+    const live = { document: 0, media: 0 }
+    const target = (key: keyof typeof live) => {
+      const listeners = new Set<unknown>()
+      return {
+        addEventListener: (_type: string, listener: unknown) => {
+          listeners.add(listener)
+          live[key] = listeners.size
+        },
+        removeEventListener: (_type: string, listener: unknown) => {
+          listeners.delete(listener)
+          live[key] = listeners.size
+        },
+      }
+    }
+    const query = { matches: false, ...target('media') }
+    vi.stubGlobal('window', {
+      matchMedia: () => query,
+      requestAnimationFrame: () => 0,
+      cancelAnimationFrame: () => {},
+    })
+    vi.stubGlobal('document', { visibilityState: 'visible', ...target('document') })
+    return live
+  }
+
+  test('removes the page listeners every system adds', () => {
+    const live = stubPage()
+    const systems = Array.from({ length: 3 }, () => createSpringSystem())
+    expect(live).toEqual({ document: 3, media: 3 })
+
+    for (const system of systems) {
+      system.start()
+      system.dispose()
+    }
+    expect(live).toEqual({ document: 0, media: 0 })
+  })
+
+  test('stops the system for good, and a second dispose is a no-op', () => {
+    stubPage()
+    const system = createSpringSystem()
+    const spring = system.createSpring(0, defineSpring({ mass: 1, tension: 170, damping: 26 }))
+    spring.target = 100
+    system.start()
+
+    system.dispose()
+    expect(system.running).toBe(false)
+    expect(() => system.dispose()).not.toThrow()
+    expect(() => system.start()).toThrow('Cannot start a disposed spring system')
+
+    // Manual stepping needs no page listeners and still works.
+    const before = spring.value
+    system.advance(16)
+    expect(spring.value).toBeGreaterThan(before)
   })
 })

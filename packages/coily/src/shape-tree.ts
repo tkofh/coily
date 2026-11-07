@@ -24,12 +24,11 @@ export function acceptNumber(input: unknown, path: string): number {
 }
 
 /**
- * What a shape's leaves are, for `ShapeTree`: `match` recognizes a leaf
- * value and constructs the leaf object — returning `undefined` declines,
- * and the node is parsed as a nested shape instead. `match` may
- * throw for a value it recognizes but rejects (a non-finite number). The
- * message builders name the leaf kind in structural errors, keeping the
- * tree machinery ignorant of what it holds.
+ * What a shape's leaves are, for `ShapeTree`. `match` builds the leaf
+ * object for a value it recognizes, returns `undefined` to parse the node
+ * as a nested shape, and may throw for a recognized value it rejects (a
+ * non-finite number). The message builders name the leaf kind in
+ * structural errors, so the tree never needs to know what it holds.
  */
 export interface LeafParser<L> {
   match(value: unknown, path: string): L | undefined
@@ -41,8 +40,7 @@ export interface LeafParser<L> {
 
 /**
  * The canonical numeric `LeafParser`: finite-number leaves built through
- * `factory`, named "channels" in structural errors. The default for value
- * shapes, whose leaves are all numbers.
+ * `factory`, named "channels" in structural errors.
  */
 export function channelParser<L>(factory: (value: number, path: string) => L): LeafParser<L> {
   return {
@@ -63,6 +61,13 @@ export function channelParser<L>(factory: (value: number, path: string) => L): L
 
 type Read<L> = (leaf: L) => unknown
 
+/**
+ * What a write traversal does at each leaf it reaches. `null` makes the
+ * traversal a dry run: it runs every check and throws the same errors,
+ * but touches no leaf.
+ */
+export type Apply<L, V> = ((leaf: L, value: V) => void) | null
+
 /** One mirror position a view rewrites on refresh: `carrier[key] = read(leaf)`. */
 interface ViewSlot<L> {
   readonly leaf: L
@@ -71,12 +76,11 @@ interface ViewSlot<L> {
 }
 
 /**
- * One node of a shape's tree: a `LeafNode` wraps a single leaf object,
- * `ListNode` and `RecordNode` carry the nesting. What a leaf is comes from
- * the `LeafParser` given to `ShapeTree` — a channel spring, a source
- * reader. Every traversal is an ordinary method each kind implements for
- * itself, so call sites dispatch without inspecting nodes; errors keep
- * their dot paths because each node stores the `path` it was built at.
+ * One node of a shape's tree. A `LeafNode` wraps a single leaf object, and
+ * `ListNode` and `RecordNode` carry the nesting. The `LeafParser` given to
+ * `ShapeTree` decides what a leaf is, such as a channel spring or a source
+ * reader. Each node kind implements every traversal as a method, so call
+ * sites dispatch without inspecting nodes.
  */
 export interface ShapeTreeNode<L> {
   /** This node's dot path from the root (`position.x`), fixed at construction. */
@@ -91,27 +95,30 @@ export interface ShapeTreeNode<L> {
   ): void
 
   /**
-   * Scatters a partial shape into the leaves the input mentions; `accept`
-   * validates (and narrows) the value named at each leaf.
+   * Scatters a partial shape into the leaves that the input names.
+   * `accept` validates and narrows the value at each named leaf. A leaf
+   * is applied as soon as it is reached, so a later error leaves the
+   * earlier leaves written. Run a `null` apply first for an
+   * all-or-nothing write.
    */
-  scatter<V>(
-    input: unknown,
-    accept: (input: unknown, path: string) => V,
-    apply: (leaf: L, value: V) => void,
-  ): void
-
-  /** Pairs this subtree's leaves with a structurally identical one's. */
-  zip(theirs: ShapeTreeNode<L>, fn: (mine: L, theirs: L) => void): void
+  scatter<V>(input: unknown, accept: (input: unknown, path: string) => V, apply: Apply<L, V>): void
 
   /**
-   * Broadcasts a covering shape: `resolve` decides value-for-subtree vs
-   * descend, `apply` runs per covered leaf, and `label` names the input shape
-   * (`config`, …) in error messages.
+   * Pairs this subtree's leaves with a structurally identical one's. A
+   * `null` fn only checks that the structures match.
+   */
+  zip(theirs: ShapeTreeNode<L>, fn: Apply<L, L>): void
+
+  /**
+   * Broadcasts a covering shape. At each node, `resolve` returns a value
+   * that covers the subtree, or `BRANCH` to descend. `apply` runs once per
+   * covered leaf, and `label` names the input shape (such as `config`) in
+   * error messages. Like `scatter`, it applies as it goes.
    */
   broadcast<V>(
     input: unknown,
     resolve: (input: unknown, path: string) => Coverage<V>,
-    apply: (leaf: L, value: V) => void,
+    apply: Apply<L, V>,
     label: string,
   ): void
 
@@ -141,25 +148,26 @@ export class LeafNode<L> implements ShapeTreeNode<L> {
   scatter<V>(
     input: unknown,
     accept: (input: unknown, path: string) => V,
-    apply: (leaf: L, value: V) => void,
+    apply: Apply<L, V>,
   ): void {
-    apply(this.leaf, accept(input, this.path))
+    const value = accept(input, this.path)
+    if (apply !== null) apply(this.leaf, value)
   }
 
-  zip(theirs: ShapeTreeNode<L>, fn: (mine: L, theirs: L) => void): void {
+  zip(theirs: ShapeTreeNode<L>, fn: Apply<L, L>): void {
     invariant(theirs instanceof LeafNode, () => `Shape mismatch at ${describePath(this.path)}`)
-    fn(this.leaf, theirs.leaf)
+    if (fn !== null) fn(this.leaf, theirs.leaf)
   }
 
   broadcast<V>(
     input: unknown,
     resolve: (input: unknown, path: string) => Coverage<V>,
-    apply: (leaf: L, value: V) => void,
+    apply: Apply<L, V>,
     _label: string,
   ): void {
     const resolved = resolve(input, this.path)
     invariant(resolved !== BRANCH, `Cannot descend into channel '${this.path}'`)
-    apply(this.leaf, resolved)
+    if (apply !== null) apply(this.leaf, resolved)
   }
 
   cover<V>(value: V, apply: (leaf: L, value: V) => void): void {
@@ -184,8 +192,7 @@ export class ListNode<L> implements ShapeTreeNode<L> {
   ): void {
     const mine: unknown[] = []
     carrier[key] = mine
-    // Arrays index soundly with numbers alone, which the slot's carrier type
-    // cannot express — every key written through this carrier is a number.
+    // Sound because every key written through this carrier is a number.
     const slotcarrier = mine as unknown as Record<string | number, unknown>
     for (let i = 0; i < this.children.length; i++) {
       this.children[i]!.mirror(read, slots, slotcarrier, i)
@@ -195,7 +202,7 @@ export class ListNode<L> implements ShapeTreeNode<L> {
   scatter<V>(
     input: unknown,
     accept: (input: unknown, path: string) => V,
-    apply: (leaf: L, value: V) => void,
+    apply: Apply<L, V>,
   ): void {
     invariant(isArray(input), () => `Expected an array at ${describePath(this.path)}`)
     invariant(
@@ -208,7 +215,7 @@ export class ListNode<L> implements ShapeTreeNode<L> {
     }
   }
 
-  zip(theirs: ShapeTreeNode<L>, fn: (mine: L, theirs: L) => void): void {
+  zip(theirs: ShapeTreeNode<L>, fn: Apply<L, L>): void {
     invariant(
       theirs instanceof ListNode && theirs.children.length === this.children.length,
       () => `Shape mismatch at ${describePath(this.path)}`,
@@ -221,12 +228,12 @@ export class ListNode<L> implements ShapeTreeNode<L> {
   broadcast<V>(
     input: unknown,
     resolve: (input: unknown, path: string) => Coverage<V>,
-    apply: (leaf: L, value: V) => void,
+    apply: Apply<L, V>,
     label: string,
   ): void {
     const resolved = resolve(input, this.path)
     if (resolved !== BRANCH) {
-      this.cover(resolved, apply)
+      if (apply !== null) this.cover(resolved, apply)
       return
     }
     invariant(isArray(input), () => `Expected an array at ${describePath(this.path)} in ${label}`)
@@ -270,7 +277,7 @@ export class RecordNode<L> implements ShapeTreeNode<L> {
   scatter<V>(
     input: unknown,
     accept: (input: unknown, path: string) => V,
-    apply: (leaf: L, value: V) => void,
+    apply: Apply<L, V>,
   ): void {
     invariant(isRecord(input), () => `Expected an object at ${describePath(this.path)}`)
     for (const key of Object.keys(input)) {
@@ -282,7 +289,7 @@ export class RecordNode<L> implements ShapeTreeNode<L> {
     }
   }
 
-  zip(theirs: ShapeTreeNode<L>, fn: (mine: L, theirs: L) => void): void {
+  zip(theirs: ShapeTreeNode<L>, fn: Apply<L, L>): void {
     invariant(
       theirs instanceof RecordNode && theirs.children.size === this.children.size,
       () => `Shape mismatch at ${describePath(this.path)}`,
@@ -297,12 +304,12 @@ export class RecordNode<L> implements ShapeTreeNode<L> {
   broadcast<V>(
     input: unknown,
     resolve: (input: unknown, path: string) => Coverage<V>,
-    apply: (leaf: L, value: V) => void,
+    apply: Apply<L, V>,
     label: string,
   ): void {
     const resolved = resolve(input, this.path)
     if (resolved !== BRANCH) {
-      this.cover(resolved, apply)
+      if (apply !== null) this.cover(resolved, apply)
       return
     }
     invariant(isRecord(input), () => `Expected an object at ${describePath(this.path)} in ${label}`)
@@ -325,13 +332,13 @@ export class RecordNode<L> implements ShapeTreeNode<L> {
 
 /**
  * A shape parsed into a node tree, paired with its leaves flattened in
- * depth-first shape order. `parser.match` decides leaf vs branch at every
- * position; the root must already be a container — callers validate that
- * (with their own message) before building. Nested non-containers and
- * empty nodes throw through `parser.mismatch`/`parser.empty`.
+ * depth-first shape order. `parser.match` decides leaf or branch at every
+ * position below the root. The root must already be a container, which
+ * callers validate with their own message. Nested non-containers and
+ * empty nodes throw through `parser.mismatch` and `parser.empty`.
  *
- * Holds no behavior of its own: traversals run through `root`, and a live
- * view comes from `new ShapeView(root, read)`.
+ * Traversals run through `root`, and `new ShapeView(root, read)` makes a
+ * live view.
  */
 export class ShapeTree<L> {
   readonly root: ShapeTreeNode<L>
@@ -383,7 +390,7 @@ function buildChild<L>(
 
 /**
  * A live view of a shape: `read(leaf)` at every leaf, mirrored into a stable
- * object — `refresh` rewrites the values in place through slots recorded at
+ * object. `refresh` rewrites the values in place through slots recorded at
  * construction, so per-frame reads do no traversal or allocation.
  */
 export class ShapeView<L> {
@@ -393,7 +400,7 @@ export class ShapeView<L> {
 
   constructor(root: ShapeTreeNode<L>, read: Read<L>) {
     this.#read = read
-    // The root is always a container (callers validate it before build),
+    // The root is always a container (callers validate it before building),
     // so mirroring through a scratch carrier always lands an object here.
     const scratch: Record<string, unknown> = {}
     root.mirror(read, this.#slots, scratch, 'root')

@@ -10,9 +10,8 @@ export function invariant(
 }
 
 /**
- * True for plain objects only. Class instances are excluded so shape
- * walks reject values like a `Spring` instead of descending into their
- * fields as if they were nested shapes.
+ * True for plain objects only. Excluding class instances makes shape walks
+ * reject a `Spring` instead of descending into it as a nested shape.
  */
 export function isRecord(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null) return false
@@ -32,5 +31,5 @@ export function isNumber(value: unknown): value is number {
   return typeof value === 'number'
 }
 
-// Shared so resting and disposed springs don't allocate a promise per read.
+// Shared so resting and disposed springs do not allocate a promise per read.
 export const RESOLVED = Promise.resolve()

@@ -1,228 +1,107 @@
 # Precision
 
-How coily handles floating-point arithmetic: what it computes exactly,
-what it compares tolerantly, and what `precision` actually controls. This
-is the reference for the library's numerical contract. If a behavior
-contradicts this document, one of the two is a bug.
+This document explains how coily handles floating-point arithmetic. It covers what coily computes exactly, what it compares with a tolerance, and what `precision` controls. It is the reference for the library's numerical contract. If a behavior contradicts this document, one of the two is a bug.
 
 ## The model
 
 Two rules apply everywhere:
 
-1. **State and reads are exact IEEE 754.** Solvers evaluate their
-   closed-form solutions from exact anchors, retargeting rebases the exact
-   displacement, followers chase the exact leader value, and `value` and
-   `velocity` return exactly what the arithmetic produced. No operation
-   rounds, snaps, or otherwise post-processes its result.
-2. **The one discrete decision — rest — is tolerance-aware.** A spring
-   rests when its remaining motion falls inside a threshold set by
-   `precision`, and resting state is snapped exactly to the target.
+1. State and reads are exact IEEE 754 arithmetic. Each solver evaluates the exact formula for its spring's motion from an exact starting state, which this document calls an _anchor_. A retarget recomputes the exact displacement from the new target. A follower chases the exact leader value. `value` and `velocity` return exactly what the arithmetic produced. No operation rounds, snaps, or otherwise changes its result after the fact.
+2. Rest is the one yes-or-no decision, and it uses a tolerance. A spring rests when its remaining motion falls inside a threshold that `precision` sets. At rest, coily sets the state exactly to the target.
 
-Rule 1 holds because every operation is exactly rounded: a chain of
-arithmetic returns the exact trajectory of a spring displaced a few ulps
-away, and no consumer can distinguish that from microscopically different
-motion. Rounding reads would add nothing — a browser paints
-`96.86000000000001px` and `96.86px` identically — while feeding rounded
-values back into state (rebasing a retarget, anchoring a solver) injects
-up to half the rounding quantum per write and drifts the value under
-per-pointermove retargeting.
+Rule 1 holds because every floating-point operation rounds correctly. A chain of arithmetic returns the exact trajectory of a spring that starts a few ulps away, where an ulp is one unit in the last place of a float. No consumer can tell that apart from motion that differs by that much. Rounding reads would add nothing, because a browser paints `96.86000000000001px` and `96.86px` the same. Rounded values fed back into state would do harm. Each such write, such as a retarget or a new anchor, adds up to half the rounding step. Under a retarget on every pointer move, the value then drifts.
 
-Rule 2 exists because "has this spring stopped?" is a discrete question
-about a value that exponential decay drives toward zero but never lands
-on. Without a threshold, springs would tick forever; with a raw
-comparison, the answer would flap on sub-perceptual residue. The
-threshold is the single place coily is deliberately approximate.
+Rule 2 exists because "has this spring stopped?" is a yes-or-no question. Friction drives the motion toward zero, but the motion never reaches zero exactly. Without a threshold, springs would tick forever. With an exact comparison against zero, the answer would flip back and forth on motion too small to see. The threshold is the one place where coily is approximate on purpose.
 
 ## The rest predicate
 
-A spring rests when the decay envelope's effective amplitude is inside
-the resting threshold:
+A spring rests when its _rest amplitude_ is inside the resting threshold:
 
 ```
-|x| + |v| / ωₙ  ≤  0.5 × 10⁻ᵖ
+abs(x) + abs(v) / wn <= 0.5 * 10^-precision
 ```
 
-where `x` is displacement from the target, `v` is velocity, `ωₙ` is the
-natural frequency, and `p` is the configured `precision` (default 2, so
-the default threshold is 0.005).
+Here `x` is the displacement from the target and `v` is the velocity. `wn` is the natural frequency, `sqrt(tension / mass)`: how fast the spring would swing with no friction, in radians per second. `precision` defaults to 2, so the default threshold is 0.005.
 
-The two terms are both measured in position units. Velocity is worth
-`v / ωₙ` of future travel — kinetic energy converts to displacement at
-the scale the spring's own stiffness sets — so one threshold decides rest
-for the whole state. Comparing raw velocity against a position threshold
-would misjudge rest in both directions: stiff springs would tick long
-after their motion stopped being resolvable, and soft springs would be
-declared resting while still carrying enough velocity to move visibly.
+Both terms are in position units. A velocity `v` is worth `v / wn` of further travel, at the scale that the spring's own stiffness sets. One threshold therefore decides rest for the whole state. A comparison of raw velocity against a position threshold would misjudge rest in both directions. Stiff springs would tick long after their motion stopped being visible. Soft springs would rest while they still had enough velocity to move visibly.
 
-The same threshold drives `timeRemaining` and duration-based
-configuration, so all three agree about when motion ends: `timeRemaining`
-reports 0 exactly when the spring is resting, and a duration-tuned config
-rests on the schedule it advertised (see "Rest time is solved").
+The same threshold drives `timeRemaining` and the duration-based configs, so all three agree about when motion ends. `timeRemaining` reports 0 exactly when the spring is resting. A duration-tuned config is tuned against its own threshold, so it rests on the schedule it advertised at any `precision` (see "Rest time is solved").
 
-The envelope is an estimate of the amplitude the trajectory can still
-reach, not a strict bound. For underdamped springs the true peak can
-exceed it by a bounded factor (about 1.4× at worst, near ζ ≈ 0.7), which
-stays at sub-threshold scale. An undamped spring (ζ = 0) never rests
-unless created inside the threshold, which is what zero damping means —
-unless an `arrival` multiplier stops or slows it at the target.
+The rest amplitude bounds how far the spring can still travel. Friction only takes energy out of the motion, so no later displacement `abs(x)` exceeds the current rest amplitude, at any `dampingRatio`. A spring that rests never cuts off motion that would have left the threshold. The rest amplitude itself does not shrink steadily. Before it decays, it can rise above its current value by a factor of up to `sqrt(2)`, which it approaches as `dampingRatio` nears 0. The worst case is about 1.38 at a `dampingRatio` of 0.1, 1.25 at 0.7, and 1.21 at 1. That rise is why a spring can rest a little before its solved rest time (see "Rest time is solved"). A spring with no friction (`dampingRatio` 0) never rests unless it starts inside the threshold, because no friction means the motion never decays. The exception is an `arrival` multiplier that stops or slows the spring at the target.
 
 ## Rest time is solved
 
-`timeRemaining` and the duration-based config shapes share the rest
-predicate's threshold, and both are solved from the motion's decay bound
-rather than estimated. Each regime has a closed-form bound on the rest
-amplitude `|x| + |v| / wn`: an underdamped trajectory is
-`exp(-sigma*t) * R * f(t)` with `R` the exact oscillation amplitude and
-`f` pulsing periodically up to `sqrt(2 + 2*zeta)` — a strict maximum,
-unlike the rest predicate's envelope — while the non-oscillating regimes
-decay under the sum of their two modes. The time that bound enters the
-threshold is solved algebraically where the inverse is elementary and by
-bisection to machine precision where it is not (critical damping's
-`t * exp(-t)` term).
+`timeRemaining` and the duration-based config shapes share the rest predicate's threshold. Coily solves both from the way the motion decays and does not estimate them. Each kind of spring has an exact formula that bounds its rest amplitude, `abs(x) + abs(v) / wn`, over time:
 
-Two slacks remain, both one-sided and both bounded:
+- A bouncy (underdamped) trajectory is `exp(-sigma*t) * R * f(t)`. Here `sigma` is the decay rate, `dampingRatio * wn`, and `R` is the exact oscillation amplitude. `f` pulses periodically between `sqrt(1 - zeta^2)` and `sqrt(2 + 2*zeta)`, where `zeta` is the `dampingRatio`. Both are exact, so the bound touches the rest amplitude at the peak of each pulse.
+- A spring that does not bounce (critically damped or overdamped) moves as the sum of two decaying parts, and the bound sums them.
 
-- Rest is sampled per tick, so it lands at the first tick at or after
-  the solved time — within one frame, never later.
-- An underdamped spring's rest amplitude pulses under its envelope, so a
-  frame that samples a dip inside the threshold rests early — up to
-  `ln(max(f) / min(f)) / sigma` before the solved time, a few percent of
-  the total for ordinary configs.
+Coily solves for the time at which that bound enters the threshold. Where the inverse has a simple formula, it solves algebraically. Where it does not, it uses bisection to machine precision. This is the case for the `t * exp(-t)` term of critical damping.
 
-The contract reads: never later (within a frame), possibly earlier
-(within a pulse). A duration-tuned config inverts the same bound, so
-`duration: 750` rests at 750ms on the tick grid rather than comfortably
-inside it. `arrival` folds in exactly: 0 caps the time at the first
-target crossing (see "Arrival is exact"), and a rebound or slowdown adds
-its per-crossing velocity loss, `ln(1 / |arrival|) * wd / pi`, to the
-effective decay rate — which is also why an undamped spring with such a
-multiplier reports a finite time and honors it.
+Two kinds of slack remain. Both are one-sided, and both are bounded:
+
+- Coily checks rest once per tick, so rest lands at the first tick at or after the solved time. It lands within one frame, and never later.
+- A bouncy spring's rest amplitude pulses below its bound. A frame that lands on a low point of the pulse inside the threshold rests early. It can rest up to `ln(max(f) / min(f)) / sigma` before the solved time, which is `ln(2 / (1 - zeta)) / (2 * sigma)`. That is under one oscillation for a `zeta` above about 0.06, and it grows to several oscillations as `zeta` nears 0. On a 1 ms grid at the default precision, `duration: 500` from displacement 1 rests at 403 ms with `bounce` 0.1 (19% early), 429 ms with 0.3 (14%), and 448 ms with 0.5 (10%). With `displacement: 300` it rests between 465 ms and 499 ms for the same bounces. The motion that an early rest cuts off still never leaves the threshold.
+
+The contract is: never later, within a frame, and possibly earlier, by at most the slack above. A duration-tuned config inverts the same bound with its own threshold, so `duration: 750` rests at 750 ms on the tick grid at any `precision`, not comfortably before it. `arrival` fits into the solution exactly. A multiplier of 0 caps the time at the first target crossing (see "Arrival is exact"). A rebound or a slowdown loses velocity at each crossing, and coily adds that loss to the effective decay rate as `ln(1 / abs(arrival)) * wd / pi`. Here `wd` is the frequency at which the spring actually oscillates. This is also why a spring with no friction and such a multiplier reports a finite time and rests on it.
 
 ## Rest is a fixpoint
 
-When a tick lands inside the resting threshold, the state is zeroed —
-exactly — before the final `update` is emitted. Anything reading the
-spring during or after that update sees the target itself, not
-sub-threshold residue. This is what makes rule 1 safe end to end:
+When a tick lands inside the resting threshold, coily sets the displacement and velocity to exactly zero before it emits the final `update`. Anything that reads the spring during or after that update sees the target itself, not a tiny leftover. This makes rule 1 safe end to end:
 
-- `value === target` at rest, bit-for-bit, even for targets like
-  `77.7731` that no float arithmetic would land on by itself.
-- A follower's final rebase sees its leader's target precisely, so chains
-  of springs settle on exact values instead of inheriting residue.
-- Retargeting away and back restores the value exactly: rest is the
-  anchor that keeps repeated rebasing drift-free.
+- At rest, `value === target` holds bit for bit, even for targets like `77.7731` that float arithmetic would not land on by itself.
+- A follower's final retarget sees its leader's target exactly, so chains of springs settle on exact values and do not inherit leftovers.
+- A retarget away and back restores the value exactly. Rest is the anchor that keeps repeated retargets free of drift.
 
 ## Arrival is exact
 
-An `arrival` multiplier other than 1 (`'passthrough'`) makes target
-crossings events, and they follow rule 1: solved, not sampled. Each
-solver knows its closed form, so whenever it anchors it also solves
-`x(t) = 0` for the first strictly future crossing:
+An `arrival` multiplier other than 1 (`'passthrough'`) turns each target crossing into an event. Crossings follow rule 1: coily solves them and does not sample them. Each solver knows the exact formula for its motion. Whenever it anchors, it also solves `x(t) = 0` for the first crossing strictly in the future:
 
-- underdamped: the first `t > 0` with `wd*t = atan2(-c1, c2) (mod pi)`,
-  which always exists
-- critically damped: `t = -c1/c2`, when positive — momentum strong
-  enough to punch through
-- overdamped: `wd*t = atanh(-c2/c1)`, when positive
+- Underdamped: the first `t > 0` with `wd*t = atan2(-c1, c2) (mod pi)`. This crossing always exists.
+- Critically damped: `t = -c1/c2`, when it is positive. That happens when the momentum is strong enough to carry the spring through the target.
+- Overdamped: `wd*t = atanh(-c2/c1)`, when it is positive.
 
-A tick that reaches the crossing splits there. The solver evaluates at
-the crossing time, writes the position as an exact 0 — the crossing is
-defined by `x = 0`, so the evaluation residue is discarded — scales the
-velocity by the multiplier, re-anchors, and spends the remainder of the
-step from the new anchor. Because the crossing time is a root rather
-than a sampled sign change, no step size can miss it: a lag spike that
-jumps a whole bounce sequence still lands every crossing in it, in
-order.
+`c1` and `c2` are the constants that the solver computes from the anchor. A tick that reaches the crossing splits there. The solver evaluates the motion at the crossing time and writes the position as an exact 0. The crossing is defined by `x = 0`, so the solver discards the small error of the evaluation. It then multiplies the velocity by the multiplier, anchors again, and spends the rest of the step from the new anchor. The crossing time is a solved root, not a sampled change of sign, so no step size can miss it. A lag spike that jumps over a whole sequence of bounces still lands every crossing in it, in order.
 
-For `arrival: 'stop'` (multiplier 0) this makes arrival a second exact
-fixpoint alongside rest. The spring's final update reads
-`value === target` bit-for-bit, at the first crossing, with no rendered
-overshoot at any step size — including for an undamped spring, which a
-stop is the only way to rest. `timeRemaining` reports the exact time of
-that crossing whenever it is nearer than the solved rest time.
+For `arrival: 'stop'` (multiplier 0), this makes arrival a second exact fixpoint, next to rest. The spring's final update reads `value === target` bit for bit, at the first crossing. No step size renders an overshoot. This includes a spring with no friction, for which a stop is the only way to rest. `timeRemaining` reports the exact time of that crossing whenever it comes before the solved rest time.
 
-Rebounds (negative multipliers) re-anchor at every crossing, so a long
-bounce sequence stays piecewise closed-form: error never accumulates
-across crossings any more than it does across frames. A rebounding
-spring never visits the far side of its target, and it rests — snapped,
-per rule 2 — exactly on the target itself.
+A rebound (a negative multiplier) anchors again at every crossing. A long sequence of bounces therefore stays exact piece by piece: error does not build up across crossings, just as it does not build up across frames. A rebounding spring never goes past its target. It rests exactly on the target itself, set there per rule 2.
 
 ## Followed targets
 
-Everything above concerns a spring and its own target. Following adds
-an approximation an isolated spring never has: a follower's target
-moves continuously with its leader, but the follower can only sample
-it at discrete points. That sampling is where frame timing could leak
-into trajectories, and two mechanisms keep it out.
+Everything above concerns a spring and its own target. Following adds an approximation that an isolated spring never has. A follower's target moves continuously with its leader, but the follower can only read it at discrete points. That sampling is where frame timing could leak into trajectories. Two mechanisms keep it out.
 
-**First-order hold.** On a passthrough edge — a follower outside any
-follow cycle, with the default `arrival` — each step integrates
-against a linear ramp through the leader's actual motion for that
-step, not a value held from the step boundary. The ramp keeps the
-closed forms closed: a target moving at constant slope `g` shifts the
-equilibrium by the constant `-(damping/tension) * g`, so the solver
-ticks the shifted state exactly and shifts back. A linearly moving
-leader is followed exactly at any step size; a curving one leaves an
-error that shrinks with the square of the step.
+### First-order hold
 
-**Error-controlled sub-steps.** Before each frame, the system
-estimates every follow edge's impending coupling error from its recent
-frame deltas and its leader's current state, and splits the frame into
-up to 8 equal sub-steps when one step would exceed the edge's
-tolerance: `max(0.5 * 10^-precision, couplingTolerance)`, the
-follower's own resting resolution floored by the system-wide knob.
-Quiet frames take one step and cost nothing extra; teleports, flings,
-and dropped frames sub-step. The estimate is a calibrated heuristic,
-not a proven bound, and the tolerance targets local per-frame error —
-accumulated error over a long trajectory runs a small multiple of it.
+A _passthrough edge_ is a follower outside any follow cycle, with the default `arrival`. On a passthrough edge, each step does not hold the leader's value from the start of the step. It follows a straight line through the leader's actual motion over the step, which is called a first-order hold. The exact formulas still apply. A target that moves at a constant slope `g` shifts the spring's resting point by the constant `-(damping/tension) * g`. The solver ticks the shifted state exactly and then shifts back. A follower tracks a leader that moves in a straight line exactly, at any step size. A leader that curves leaves an error that shrinks with the square of the step.
 
-Ramps never arm inside a cycle — a ramp's velocity coupling is
-necessarily one step stale around a loop, which can destabilize cycles
-that are unconditionally stable under held targets — and never for an
-`arrival` spring, whose crossings are closed-form only against a held
-target. Those edges couple through a target held per sub-step instead.
+### Error-controlled sub-steps
 
-What following preserves bit-for-bit:
+Before each frame, the system estimates the error that each follow edge is about to pick up. The estimate uses the edge's recent frame deltas and its leader's current state. When one step would exceed the edge's tolerance, the system splits the frame into up to 8 equal sub-steps. The tolerance is `max(0.5 * 10^-precision, couplingTolerance)`: the follower's own resting threshold, with the system-wide `couplingTolerance` as a floor. A quiet frame takes one step and costs nothing extra. Teleports, flings, and dropped frames get sub-steps. The estimate is a calibrated heuristic, not a proven bound. The tolerance targets the error within one frame, and the error over a long trajectory adds up to a small multiple of it.
 
-- An isolated spring never sub-steps. K steps of `dt/K` are not
-  float-identical to one step of `dt`, so a motion outside the follow
-  graph always advances in one exact step per frame.
-- Synchronous writes stay events. A retarget, value write, or `jumpTo`
-  on a leader lands on its followers as an exact step at write time,
-  never smeared across the following frame.
-- Rest is a fixpoint through any depth of following, and arrival
-  crossings stay solved, never sampled.
+A slope never applies inside a cycle. Around a loop, the velocity part of a slope is always one step out of date, and that can make a cycle unstable that is always stable with held targets. A slope also never applies to a spring with an `arrival`, whose crossings have exact solutions only against a held target. Those edges hold the target constant for each sub-step instead.
 
-The visible contract: a chain's shape is a property of its springs,
-not of the frame rate it happens to render at.
+### Following a ramp
+
+A ramp (`createRamp`) moves at an exactly constant speed. Its change over any sub-step is `rate * h`, where `h` is the sub-step length, so the first-order hold follows it exactly. A spring with the default `arrival` that follows a ramp matches the continuous motion to rounding, at any frame rate. Two cases leave error, and the sub-step controller budgets for it. A curved map of a ramp, such as `mapSpring(clock, (ms) => Math.sin(ms / 100))`, leaves the same curvature error as any curving leader. A bounded ramp's arrival is a sharp corner inside a frame, which the recent history cannot predict. The ramp knows its arrival time, so that frame takes the full 8 sub-steps. The error that remains comes from an arrival between sub-step boundaries.
+
+### What following preserves bit for bit
+
+- An isolated spring never takes sub-steps. K steps of `dt/K` do not give the same float result as one step of `dt`. A motion outside the follow graph therefore always advances in one exact step per frame.
+- Synchronous writes stay events. A retarget, a value write, or a `jumpTo` on a leader reaches its followers as an exact step at the time of the write. It is never spread across the next frame.
+- Rest is a fixpoint through any depth of following, and coily still solves arrival crossings and never samples them.
+
+The visible contract is that a chain's shape depends on its springs, not on the frame rate it renders at.
 
 ## What stays exact
 
-Two comparisons look like they want a tolerance but deliberately use raw
-equality:
+Two comparisons look like they need a tolerance, but they use exact equality on purpose:
 
-- **Retarget no-op guards** (`value !== target`) compare exactly. A
-  target is a user-provided identity, not a computed quantity — asking
-  for a value an ulp away is honored, not absorbed.
-- **Solver dispatch** on `dampingRatio === 1` routes between closed
-  forms and makes no semantic claim. Both neighboring solvers evaluate
-  stably as ζ approaches 1, so a near-critical ratio takes whichever
-  branch it lands in and produces the near-critical trajectory either
-  way.
+- The no-op check on a retarget (`value !== target`) compares exactly. A target is a value that the user supplies, not a computed one. Coily honors a request for a value one ulp away and does not absorb it.
+- The choice of solver on `dampingRatio === 1` picks between exact formulas and makes no claim about the motion. Both neighboring solvers stay stable as the damping ratio approaches 1. A ratio near 1 takes whichever branch it lands in and produces the near-critical trajectory either way.
 
 ## Working with the model
 
-`precision` is an absolute resolution, and the default assumes values of
-ordinary UI magnitude — pixels, percentages, degrees. When your domain is
-smaller, raise it: animating a scale factor from 1 to 1.005 sits entirely
-inside the default threshold and will rest (and snap) immediately, which
-reads as a teleport. When your domain is huge, lowering it ends motion
-sooner. Displacements below the threshold resting instantly is the
-contract working as designed — differences smaller than the configured
-resolution are not meaningful motion.
+`precision` is an absolute resolution. The default assumes values of ordinary UI size, such as pixels, percentages, or degrees. If your values are smaller, raise it. An animation of a scale factor from 1 to 1.005 sits entirely inside the default threshold. It rests and snaps at once, which looks like a teleport. If your values are huge, a lower `precision` ends motion sooner. A duration-tuned config is the exception. It retunes its stiffness against its own threshold, so it rests at its `duration` at any `precision`. A higher precision makes it stiffer, so it covers the extra decimal places in the same time. A displacement below the threshold rests at once by design. Differences smaller than the configured resolution do not count as motion.
 
-For numerical tests: dyadic values (integers, halves, quarters) never
-round and are ideal for exactness assertions; non-dyadic values (`0.1`,
-`77.7731`) exercise real rounding behavior. The regression guards worth
-keeping are exact-equality assertions — a settled spring lands `toBe` its
-target, and a retarget round trip restores `toBe` the prior value.
+For numerical tests, dyadic values such as integers, halves, and quarters never round, so they suit exactness assertions. Non-dyadic values such as `0.1` and `77.7731` exercise real rounding. Exact-equality assertions make the best regression guards. A settled spring lands `toBe` its target, and a retarget round trip restores `toBe` the prior value.

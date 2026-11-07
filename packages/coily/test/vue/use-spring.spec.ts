@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
-import { defineComponent, h, nextTick, ref, watchSyncEffect } from 'vue'
+import { defineComponent, h, nextTick, ref, watchEffect, watchSyncEffect } from 'vue'
 import { mount } from '@vue/test-utils'
-import { createSpringSystem, mapSpring } from '../../src/index.ts'
+import { createSpringSystem, mapSpring, targetOf, velocityOf } from '../../src/index.ts'
 import { SpringSystemKey } from '../../src/vue/system.ts'
 import { useSpring, type SpringRef } from '../../src/vue/spring.ts'
 import type { MaybeRefOrGetter } from 'vue'
@@ -79,18 +79,15 @@ describe('useSpring', () => {
     const options = ref({ mass: 1, tension: 100, damping: 10 })
     const { spring, system } = mountSpring(target, options)
 
-    // Move with default tension
     target.value = 100
     await nextTick()
     system.advance(16)
     const valueDefault = spring.value
 
-    // Reset
     target.value = 0
     await nextTick()
     for (let i = 0; i < 500; i++) system.advance(16)
 
-    // Move with very stiff spring
     options.value = { mass: 1, tension: 1000, damping: 10 }
     target.value = 100
     await nextTick()
@@ -228,6 +225,42 @@ describe('useSpring', () => {
     expect(follower.value).toBe(110)
   })
 
+  test('spring refs derive target and velocity sources like their springs', async () => {
+    const system = createSpringSystem({ reducedMotion: 'never' })
+    const target = ref(0)
+    let body!: SpringRef
+    let remaining!: SpringRef
+    let speed!: SpringRef
+    mount(
+      defineComponent({
+        setup() {
+          body = useSpring(target)
+          remaining = useSpring(
+            mapSpring({ value: body, target: targetOf(body) }, (v) => v.target - v.value),
+          )
+          speed = useSpring(velocityOf(body))
+          return {}
+        },
+        render: () => h('div'),
+      }),
+      { global: { provide: { [SpringSystemKey as symbol]: system } } },
+    )
+
+    target.value = 100
+    await nextTick()
+    system.advance(16)
+    expect(body.value).toBeGreaterThan(0)
+    expect(remaining.velocity.value).not.toBe(0)
+    expect(speed.velocity.value).not.toBe(0)
+
+    for (let i = 0; i < 1000; i++) {
+      system.advance(16)
+      if (body.isResting.value && remaining.isResting.value && speed.isResting.value) break
+    }
+    expect(remaining.value).toBe(0)
+    expect(speed.value).toBe(0)
+  })
+
   test('spring refs compose as mapSpring leaves', async () => {
     const system = createSpringSystem()
     const xTarget = ref(0)
@@ -314,8 +347,8 @@ describe('useSpring', () => {
       defineComponent({
         setup() {
           leader = useSpring(0)
-          // The follower subscribes through the leader ref's source slot;
-          // its retargets read the backing spring, not the tracked getter.
+          // The follower subscribes through the leader ref's source slot.
+          // Its retargets read the backing spring, not the tracked getter.
           useSpring(mapSpring(leader, (value) => value))
           watchSyncEffect(() => {
             runs++
@@ -333,8 +366,9 @@ describe('useSpring', () => {
 
     expect(runs).toBe(1)
 
-    // The leader springs back, updating every frame; a phantom dependency
-    // would re-run the effect (and re-displace the leader) each tick.
+    // The leader springs back and updates every frame. A phantom
+    // dependency would re-run the effect, and displace the leader again,
+    // on each frame.
     for (let i = 0; i < 60; i++) system.advance(16)
     expect(runs).toBe(1)
 
@@ -362,6 +396,36 @@ describe('useSpring', () => {
     expect(spring.value).toBe(100)
   })
 
+  test('timeRemaining effects see a retarget from rest before the next frame', async () => {
+    const system = createSpringSystem()
+    const target = ref(0)
+    const seen: number[] = []
+    let spring!: SpringRef
+    mount(
+      defineComponent({
+        setup() {
+          spring = useSpring(target)
+          watchEffect(() => {
+            seen.push(spring.timeRemaining.value)
+          })
+          return {}
+        },
+        render: () => h('div'),
+      }),
+      { global: { provide: { [SpringSystemKey as symbol]: system } } },
+    )
+
+    target.value = 100
+    await nextTick()
+
+    expect(spring.timeRemaining.value).toBeGreaterThan(0)
+    expect(seen.at(-1)).toBe(spring.timeRemaining.value)
+
+    for (let i = 0; i < 500 && !spring.isResting.value; i++) system.advance(16)
+    await nextTick()
+    expect(seen.at(-1)).toBe(0)
+  })
+
   test('disposing the component disposes the spring', async () => {
     const target = ref(0)
     const { wrapper, spring, system } = mountSpring(target)
@@ -372,7 +436,7 @@ describe('useSpring', () => {
 
     wrapper.unmount()
 
-    // A disposed spring's motion is removed — advancing must not move it
+    // The unmount disposed the spring, so advancing must not move it.
     const valueAtUnmount = spring.value
     system.advance(16)
     expect(spring.value).toBe(valueAtUnmount)

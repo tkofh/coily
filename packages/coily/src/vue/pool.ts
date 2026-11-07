@@ -7,17 +7,17 @@ import type { SpringSource } from '../spring-source.ts'
 import { injectSpringSystem } from './reactive-spring.ts'
 
 /**
- * Imperative spring factories bound to the provided system, for dynamic
- * sets of springs — particles, per-item effects — created and disposed
- * at arbitrary times. Any pooled spring still alive when the creating
- * scope tears down is disposed automatically; disposing one manually
- * before that is fine.
+ * Imperative spring factories bound to the provided system, for springs
+ * you create and dispose at any time, such as particles or per-item
+ * effects. When the creating scope stops, the pool disposes every pooled
+ * spring still alive. You can dispose one yourself before then.
  */
 export interface SpringPool {
   /**
    * Creates a pooled spring at rest at `value`. Without `config`, the
-   * default applies. `options.purpose` sets reduced-motion behavior —
-   * `'appearance'` keeps animating, `'motion'` (default) snaps.
+   * spring uses the default config. `options.purpose` sets reduced-motion
+   * behavior: a `'nonmotion'` spring keeps animating, and a `'motion'`
+   * spring, the default, snaps.
    */
   createSpring(value: number, config?: SpringDefinition, options?: SpringOptions): Spring
   /**
@@ -26,10 +26,10 @@ export interface SpringPool {
    */
   createSpring(source: SpringSource, config?: SpringDefinition, options?: SpringOptions): Spring
   /**
-   * Creates a pooled composite spring over a numeric shape whose leaves
-   * are all numbers. `config` applies per channel: one `SpringDefinition`
-   * for all, or a shape with configs at any level. `options.purpose` sets
-   * reduced-motion behavior per channel the same way.
+   * Creates a pooled composite spring over a shape whose leaves are all
+   * numbers. `config` applies per channel: one `SpringDefinition` for all
+   * channels, or a shape with configs at any level. `options.purpose` sets
+   * reduced-motion behavior per channel in the same way.
    */
   createSpring<T extends object>(
     value: T & Shape<T>,
@@ -44,14 +44,13 @@ interface PoolSpring {
 }
 
 /**
- * Returns spring factories bound to the provided spring system, with
- * lifetimes tied to the current effect scope: every pooled spring still
- * alive at scope teardown is disposed, so leaked motions are
- * structurally impossible.
+ * Returns spring factories bound to the provided spring system. When
+ * the current effect scope stops, the pool disposes every pooled spring
+ * still alive.
  *
- * Call it during `setup()` — or inside an effect scope — below a
- * provided spring system. Outside a scope, pooled springs are only
- * disposed manually.
+ * Call it during `setup()` or inside an effect scope, below a provided
+ * spring system. It throws without one. Outside a scope, you must
+ * dispose each pooled spring yourself.
  */
 export function useSpringPool(): SpringPool {
   const system = injectSpringSystem()
@@ -71,12 +70,9 @@ export function useSpringPool(): SpringPool {
     }
   }, true)
 
-  // The pool mirrors the system's `createSpring` overloads but only wires
-  // the result to the scope's disposer, so every overload would forward
-  // the same args to the same call. `system.createSpring` already
-  // dispatches on the value at runtime, so call it through one widened
-  // signature (bound, since it reads `this`) and let the outer cast
-  // restore the overloads for callers.
+  // `system.createSpring` dispatches on the value at runtime, so every
+  // overload forwards through one widened signature. It is bound because
+  // it reads `this`, and the outer cast restores the overloads.
   const create = (
     system.createSpring as (
       value: number | SpringSource | Record<string, number>,

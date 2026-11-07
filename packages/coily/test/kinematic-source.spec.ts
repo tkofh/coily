@@ -1,8 +1,14 @@
 import { describe, expect, vi } from 'vitest'
 import { defineSpring } from '../src/config.ts'
 import { SpringSourceSymbol, mapSpring } from '../src/spring-source.ts'
-import { type KinematicSource, accelerationOf, velocityOf } from '../src/kinematic-source.ts'
-import { advanceUntilResting, test } from './helpers.ts'
+import {
+  type KinematicSource,
+  accelerationOf,
+  targetOf,
+  velocityOf,
+} from '../src/kinematic-source.ts'
+import { createSpringSystem } from '../src/system.ts'
+import { FRAME, advanceUntilResting, test } from './helpers.ts'
 
 const config = defineSpring({ mass: 1, tension: 170, damping: 26 })
 
@@ -32,9 +38,9 @@ describe('velocityOf', () => {
       if (motion.isResting && follower.isResting) break
     }
 
-    // The follower rode the leader's velocity up...
+    // The follower tracked the leader's velocity up, then settled as the
+    // leader came to rest and its velocity fell to 0.
     expect(peak).toBeGreaterThan(0)
-    // ...then settled as the leader came to rest and its velocity fell to 0.
     expect(follower.value).toBeCloseTo(0, 1)
     expect(follower.isResting).toBe(true)
   })
@@ -141,6 +147,99 @@ describe('accelerationOf', () => {
   })
 })
 
+describe('targetOf', () => {
+  test('reads the spring target live, before the spring moves', ({ system }) => {
+    const motion = system.createSpring(0, config)
+    const source = targetOf(motion)
+
+    motion.target = 100
+    expect(source[SpringSourceSymbol].value).toBe(100)
+
+    system.advance(FRAME)
+    expect(source[SpringSourceSymbol].value).toBe(100)
+  })
+
+  test('followers pick up a retarget from rest on the next frame', ({ system }) => {
+    const body = system.createSpring(0, config)
+    const remaining = mapSpring(
+      { value: body, target: targetOf(body) },
+      ({ value, target }) => target - value,
+    )
+    const follower = system.createSpring(remaining)
+
+    body.target = 100
+    // The retarget emits nothing until the frame where the body moves.
+    expect(follower.target).toBe(0)
+
+    system.advance(FRAME)
+    expect(follower.target).toBe(body.target - body.value)
+    expect(follower.target).toBeGreaterThan(0)
+
+    advanceUntilResting(system, follower)
+    expect(follower.target).toBe(0)
+    expect(follower.isResting).toBe(true)
+  })
+
+  test('the documented lead example', () => {
+    const system = createSpringSystem({ reducedMotion: 'never' })
+    const body = system.createSpring(0)
+    const lead = mapSpring({ value: body, target: targetOf(body) }, ({ value, target }) =>
+      Math.max(-20, Math.min(20, target - value)),
+    )
+    const eyes = system.createSpring(lead)
+
+    body.target = 100
+    system.advance(100)
+
+    expect(body.target - body.value).toBeGreaterThan(20)
+    expect(eyes.target).toBe(20)
+  })
+
+  test('tracks a spring that is itself following', ({ system }) => {
+    const leader = system.createSpring(0, config)
+    const motion = system.createSpring(leader, config)
+    const follower = system.createSpring(targetOf(motion))
+
+    leader.target = 50
+    system.advance(FRAME)
+
+    expect(motion.target).toBe(leader.value)
+    expect(follower.target).toBe(motion.target)
+  })
+
+  test('a composite yields a target of the same shape, mappable to a scalar', ({ system }) => {
+    const point = system.createSpring({ x: 0, y: 0 }, config)
+    const follower = system.createSpring(mapSpring(targetOf(point), ({ x, y }) => Math.hypot(x, y)))
+
+    point.target = { x: 30, y: 40 }
+    system.advance(FRAME)
+
+    expect(follower.target).toBe(50)
+  })
+
+  test('releases with the spring, detaching followers', ({ system }) => {
+    const motion = system.createSpring(0, config)
+    const follower = system.createSpring(targetOf(motion))
+
+    motion.target = 100
+    system.advance(FRAME)
+    expect(follower.target).toBe(100)
+
+    motion.dispose()
+    advanceUntilResting(system, follower)
+
+    expect(follower.target).toBe(100)
+  })
+
+  test('throws on a mapped source, which has no target', ({ system }) => {
+    const motion = system.createSpring(0, config)
+    const mapped = mapSpring(motion, (v) => v * 2)
+
+    expect(() => targetOf(mapped as never)).toThrow(/no target/)
+    expect(() => targetOf(velocityOf(motion) as never)).toThrow(/no target/)
+  })
+})
+
 describe('kinematic sources: composites', () => {
   test('velocityOf yields a velocity of the same shape, mappable to a scalar', ({ system }) => {
     const point = system.createSpring({ x: 0, y: 0 }, config)
@@ -240,5 +339,15 @@ describe('kinematic sources: rejection', () => {
 
     expect(() => velocityOf(source as never)).toThrow(/in motion/)
     expect(() => accelerationOf(source as never)).toThrow(/in motion/)
+  })
+
+  test('the rejections name every source that qualifies, ramps included', ({ system }) => {
+    const motion = system.createSpring(0, config)
+    const mapped = mapSpring(motion, (v) => v * 2)
+    const qualifying = '(a Spring, CompositeSpring, or Ramp)'
+
+    expect(() => velocityOf(mapped as never)).toThrow(qualifying)
+    expect(() => accelerationOf(mapped as never)).toThrow(qualifying)
+    expect(() => targetOf(mapped as never)).toThrow(qualifying)
   })
 })

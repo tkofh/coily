@@ -9,7 +9,7 @@ import {
   springToWaapi,
 } from '../src/css.ts'
 
-/** Parse a `linear()` string into its `{ output, input }` stops for assertions. */
+/** Parses a `linear()` string into its `{ output, input }` stops for assertions. */
 function stops(easing: string): Array<{ output: number; input: number | null }> {
   expect(easing.startsWith('linear(')).toBe(true)
   expect(easing.endsWith(')')).toBe(true)
@@ -74,6 +74,17 @@ describe('springToLinear', () => {
     expect(large.duration).toBeGreaterThan(small.duration)
     expect(stops(small.easing).at(-1)!.output).toBe(1)
     expect(stops(large.easing).at(-1)!.output).toBe(1)
+  })
+
+  test('displacement changes the stops, not only the duration', () => {
+    // A larger move takes longer to come within the fixed rest threshold,
+    // so the same motion spreads over a longer easing.
+    const lively = defineSpring({ tension: 170, damping: 10 })
+    const small = springToLinear(lively, { displacement: 1 })
+    const large = springToLinear(lively, { displacement: 100 })
+    expect(large.duration).toBeGreaterThan(small.duration)
+    expect(large.easing).not.toBe(small.easing)
+    expect(large.stops).not.toBe(small.stops)
   })
 
   test('reported error stays within the requested budget', () => {
@@ -148,7 +159,7 @@ describe('springFromState', () => {
 })
 
 describe('springStateAt', () => {
-  // Critically damped, ωₙ = 1: x(t) = (1 + t)·e^-t, v(t) = -t·e^-t.
+  // Critically damped with wn = 1: x(t) = (1 + t) * exp(-t), v(t) = -t * exp(-t).
   const critical = defineSpring({ tension: 1, damping: 2 })
 
   test('is the identity at zero elapsed', () => {
@@ -190,7 +201,8 @@ describe('springToWaapi', () => {
       to: 150,
       unit: 'px',
     })
-    // Undamped swings between `from` and 2·to − from, target at the midpoint.
+    // Undamped motion swings between `from` and `2 * to - from`, with the
+    // target at the midpoint.
     expect(keyframes).toEqual([{ translate: '0px' }, { translate: '300px' }])
     expect(options.iterations).toBe(Number.POSITIVE_INFINITY)
     expect(options.direction).toBe('alternate')
@@ -284,5 +296,19 @@ describe('springToTransition', () => {
 
   test('throws on an undamped (looping) config', () => {
     expect(() => springToTransition(undamped, { property: 'left', from: 0, to: 100 })).toThrow()
+  })
+
+  test('a velocity hands off momentum, reshaping the curve and the duration', () => {
+    const rest = springToTransition(settling, { property: 'translate', from: 0, to: 300 })
+    const moving = springToTransition(settling, {
+      property: 'translate',
+      from: 0,
+      to: 300,
+      velocity: 2000,
+    })
+    const handoff = springFromState(settling, { position: -300, velocity: 2000 })
+
+    expect(moving).not.toBe(rest)
+    expect(moving).toBe(`translate ${Number(handoff.duration.toFixed(1))}ms ${handoff.easing}`)
   })
 })
