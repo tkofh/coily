@@ -13,6 +13,14 @@ import { Ticker, type TickerOptions } from './ticker.ts'
 import { invariant } from './util.ts'
 
 /**
+ * When reduced motion applies, making `'motion'` springs and ramps jump
+ * to their targets instead of animating. `'user'` follows the OS
+ * prefers-reduced-motion setting live, and a switch to reduced finishes
+ * in-flight motion at once. `'always'` and `'never'` force one behavior.
+ */
+export type ReducedMotionMode = 'user' | 'always' | 'never'
+
+/**
  * Per-spring options for `SpringSystem.createSpring`, separate from the
  * physical `config`.
  */
@@ -61,13 +69,11 @@ export interface SpringSystemOptions extends TickerOptions {
    */
   debug?: boolean | undefined
   /**
-   * When reduced motion applies, making `'motion'` springs and ramps jump
-   * to their targets instead of animating. `'user'` follows the OS
-   * prefers-reduced-motion setting live, and a switch to reduced finishes
-   * in-flight motion at once. `'always'` and `'never'` force one behavior.
+   * When reduced motion applies. See `ReducedMotionMode`. Change it later
+   * by assigning `SpringSystem.reducedMotion`.
    * @default 'user'
    */
-  reducedMotion?: 'user' | 'always' | 'never' | undefined
+  reducedMotion?: ReducedMotionMode | undefined
 }
 
 class SpringSystemImpl implements SpringSystem {
@@ -85,14 +91,20 @@ class SpringSystemImpl implements SpringSystem {
       this.couplingTolerance = options.couplingTolerance
     }
 
-    const mode = options?.reducedMotion ?? 'user'
-    if (mode === 'always') {
-      this.#motions.reduced = true
-    } else if (
-      mode === 'user' &&
-      typeof window !== 'undefined' &&
-      typeof window.matchMedia === 'function'
-    ) {
+    this.#setReducedMotionMode(options?.reducedMotion ?? 'user')
+  }
+
+  #setReducedMotionMode(mode: ReducedMotionMode) {
+    invariant(
+      mode === 'user' || mode === 'always' || mode === 'never',
+      "reducedMotion must be 'user', 'always', or 'never'",
+    )
+    this.#unwatchReducedMotion?.()
+    this.#unwatchReducedMotion = null
+
+    if (mode !== 'user') {
+      this.#applyReducedMotion(mode === 'always')
+    } else if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
       const query = window.matchMedia('(prefers-reduced-motion: reduce)')
       this.#applyReducedMotion(query.matches)
       const onChange = (event: MediaQueryListEvent) => {
@@ -100,15 +112,24 @@ class SpringSystemImpl implements SpringSystem {
       }
       query.addEventListener('change', onChange)
       this.#unwatchReducedMotion = () => query.removeEventListener('change', onChange)
+    } else {
+      // No preference to read, as during server rendering.
+      this.#applyReducedMotion(false)
     }
   }
 
+  // Applying the current setting again would walk every motion for nothing.
   #applyReducedMotion(reduced: boolean) {
-    this.#motions.setReduced(reduced)
+    if (reduced !== this.#motions.reduced) this.#motions.setReduced(reduced)
   }
 
-  get reducedMotion() {
+  get reducedMotion(): boolean {
     return this.#motions.reduced
+  }
+
+  set reducedMotion(mode: ReducedMotionMode) {
+    invariant(!this.#disposed, 'Cannot change reducedMotion on a disposed spring system')
+    this.#setReducedMotionMode(mode)
   }
 
   get couplingTolerance() {
@@ -321,12 +342,30 @@ export interface SpringSystem {
    */
   dispose(): void
   /**
-   * Whether reduced motion is on, per the `reducedMotion` option and, in
-   * `'user'` mode, the live OS setting. While on, `'motion'` springs and
-   * ramps jump instead of animating, and `'nonmotion'` ones still animate.
-   * Read it to gate decorative effects of your own.
+   * Whether reduced motion is on, per the current `ReducedMotionMode` and,
+   * in `'user'` mode, the live OS setting. While on, `'motion'` springs
+   * and ramps jump instead of animating, and `'nonmotion'` ones still
+   * animate. Read it to gate decorative effects of your own.
+   *
+   * Assignment takes a `ReducedMotionMode` and applies it at once: turning
+   * reduced motion on finishes in-flight motion, and `'user'` starts
+   * following the OS setting. Throws after `dispose`.
+   *
+   * A server-rendered app reads no preference on the server, so its first
+   * client render must not either, or the two disagree on any value that
+   * reduced motion would move. Hydrate with `'never'`, then hand over:
+   *
+   * @example
+   * ```ts
+   * const system = createSpringSystem({ reducedMotion: 'never' })
+   * const app = createSSRApp(App)
+   * provideSpringSystem(system, app)
+   * app.mount('#app')
+   * system.reducedMotion = 'user'
+   * ```
    */
-  readonly reducedMotion: boolean
+  get reducedMotion(): boolean
+  set reducedMotion(mode: ReducedMotionMode)
   /**
    * How far a spring can trail a source it follows within one frame, in
    * the value's own units. See the `couplingTolerance` option.

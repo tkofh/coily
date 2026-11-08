@@ -1,6 +1,7 @@
 import { FlushQueue } from './flush-queue.ts'
 import { type FollowEdge, FollowGraph } from './follow-graph.ts'
 import type { Motion } from './motion.ts'
+import { NO_ERROR, invariant, joinErrors } from './util.ts'
 
 function compareMotions(a: Motion, b: Motion): number {
   return a.rank - b.rank || a.id - b.id
@@ -10,6 +11,19 @@ function compareMotions(a: Motion, b: Motion): number {
 // rendering that made the frame long. The s4-freshness probe shows error
 // stays flat and the controller reaches the cap only on frames that need it.
 const MAX_SUBSTEPS = 8
+
+// Finishes the lifecycle half of an `endFrame` that threw partway. Out
+// of line, with the try block, because recovery code in the settle loop
+// costs every frame through V8's inlining budget.
+function recover(motion: Motion, error: unknown, caught: unknown): unknown {
+  error = joinErrors(error, caught)
+  try {
+    motion.reconcile()
+  } catch (again) {
+    error = joinErrors(error, again)
+  }
+  return error
+}
 
 /**
  * The worklist of an ordered pass: a binary min-heap over (rank,
@@ -196,6 +210,13 @@ export class MotionSet {
   }
 
   tick(dt: number) {
+    // The only user code an advance phase runs is source reads (map code,
+    // a custom source's getter). Stepping from there would interleave two
+    // phases over one set of pass markers.
+    invariant(
+      this.#advancing === 0,
+      'Cannot advance a SpringSystem while it is advancing; mapSpring callbacks and SpringSource getters must not call advance',
+    )
     const reentrant = this.#inTick
     this.#inTick = true
     this.flushes.enter()
@@ -224,6 +245,7 @@ export class MotionSet {
     this.#advancing = ++this.#ticks
     const advanced: Motion[] = reentrant ? [] : this.#advanced
     advanced.length = 0
+    let error: unknown = NO_ERROR
     try {
       // Advancing runs no user code, so nothing enters the set mid-loop
       // and each motion advances once.
@@ -234,12 +256,14 @@ export class MotionSet {
           this.#motions.delete(motion)
         }
       }
+    } catch (caught) {
+      error = caught
     } finally {
       this.#advancing = previous
     }
 
-    this.#clock += dt
-    this.#settle(advanced)
+    if (error === NO_ERROR) this.#clock += dt
+    this.#settle(advanced, error)
   }
 
   // Advances every follower after its leaders by follow-graph rank, so it
@@ -276,10 +300,15 @@ export class MotionSet {
     const K = Math.min(demand, MAX_SUBSTEPS)
     const h = dt / K
 
+    // A throw from map code aborts the passes, but the motions that
+    // advanced still settle, so one that rested leaves no `stop` undelivered.
+    let error: unknown = NO_ERROR
     try {
       for (let step = 0; step < K; step++) {
         this.#advancePass(dt, h, step === 0, heap, advanced, frame)
       }
+    } catch (caught) {
+      error = caught
     } finally {
       // Restored before the sweep, so a motion that a settle callback
       // wakes advances from the next frame, not this one.
@@ -288,9 +317,9 @@ export class MotionSet {
     }
 
     // The clock moves before any event fires, so callbacks read it at
-    // the frame's end.
-    this.#clock += dt
-    this.#settle(advanced)
+    // the frame's end. An aborted frame keeps the old time.
+    if (error === NO_ERROR) this.#clock += dt
+    this.#settle(advanced, error)
   }
 
   // One sub-step of an ordered frame: seed from the active set, pop in
@@ -304,7 +333,9 @@ export class MotionSet {
     advanced: Motion[],
     frame: number,
   ) {
-    this.#pass++
+    // Captured, not reread: the pass's identity must not depend on what
+    // ran since it began.
+    const pass = ++this.#pass
     heap.clear()
     for (const motion of this.#motions) {
       // Independents advance once, by the whole dt: nothing couples to
@@ -314,21 +345,21 @@ export class MotionSet {
     }
 
     for (let motion = heap.pop(); motion !== undefined; motion = heap.pop()) {
-      if (motion.pass === this.#pass) continue
+      if (motion.pass === pass) continue
 
       // Pull coupling, the only mid-pass coupling, since events wait for
       // the settle sweep. Skipped when every leader is resting and
       // unadvanced: their values cannot have changed since the last
       // retarget, and user map code stays uncalled while its inputs are still.
       const edge = motion.edge
-      if (edge !== null && this.#shouldRecouple(edge)) {
+      if (edge !== null && this.#shouldRecouple(edge, pass)) {
         edge.recouple(h)
       }
       // The wake walk pushes followers whether or not they wake. One still
       // at rest skips unmarked, so a later wake this pass can advance it.
       if (!this.#motions.has(motion)) continue
 
-      motion.pass = this.#pass
+      motion.pass = pass
       motion.advance(motion.rank === -1 ? dt : h)
       if (motion.frame !== frame) {
         motion.frame = frame
@@ -347,17 +378,24 @@ export class MotionSet {
   }
 
   // Phase 2 delivers events in advance order, after every motion has
-  // advanced, so update callbacks read the frame's final values. A
-  // throwing callback skips the motions after it, like any aborted pass.
-  #settle(advanced: readonly Motion[]) {
+  // advanced, so update callbacks read the frame's final values. Every
+  // motion settles even after a callback throws, because one that rested
+  // has already left the set and no later tick would reach it. The errors
+  // rethrow at the end, after any from the advance phase.
+  #settle(advanced: readonly Motion[], error: unknown) {
     for (const motion of advanced) {
-      motion.endFrame()
+      try {
+        motion.endFrame()
+      } catch (caught) {
+        error = recover(motion, error, caught)
+      }
     }
+    if (error !== NO_ERROR) throw error
   }
 
-  #shouldRecouple(edge: FollowEdge): boolean {
+  #shouldRecouple(edge: FollowEdge, pass: number): boolean {
     for (const leader of edge.leaders) {
-      if (leader.pass === this.#pass || this.#motions.has(leader)) {
+      if (leader.pass === pass || this.#motions.has(leader)) {
         return true
       }
     }

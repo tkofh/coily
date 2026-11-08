@@ -11,6 +11,13 @@ import { injectSpringSystem } from './reactive-spring.ts'
  * you create and dispose at any time, such as particles or per-item
  * effects. When the creating scope stops, the pool disposes every pooled
  * spring still alive. You can dispose one yourself before then.
+ *
+ * Pooled springs are plain class instances that keep their state in
+ * private fields, which a deep reactive proxy cannot reach. Hold them in
+ * a `shallowRef` or `shallowReactive`, or wrap each in `markRaw`, before
+ * putting them in a `ref`, `reactive`, or store state. A spring read
+ * through a deep proxy throws on any method or property access, though
+ * `useSpring` can still follow one.
  */
 export interface SpringPool {
   /**

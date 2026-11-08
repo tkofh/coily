@@ -805,3 +805,29 @@ describe('Spring: retargeting preserves value', () => {
     expect(movedAfterward).toBe(true)
   })
 })
+
+describe('a config write that lands at rest', () => {
+  test('snaps to the target before anything reports rest', async () => {
+    const system = createSpringSystem({ reducedMotion: 'never' })
+    const spring = system.createSpring(0)
+    spring.target = 1
+    system.advance(0)
+    system.advance(250)
+    const settled = spring.settled
+    let resolved = false
+    void settled.then(() => (resolved = true))
+    const events: string[] = []
+    spring.onUpdate(() => events.push(`update ${spring.value}`))
+    spring.onStop(() => events.push('stop'))
+
+    spring.config = defineSpring({ tension: 170, damping: 26, precision: 0 })
+
+    expect(spring.isResting).toBe(true)
+    expect(spring.value).toBe(1)
+    expect(spring.velocity).toBe(0)
+    expect(spring.timeRemaining).toBe(0)
+    expect(events).toEqual(['update 1', 'stop'])
+    await settled
+    expect(resolved).toBe(true)
+  })
+})

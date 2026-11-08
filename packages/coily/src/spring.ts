@@ -79,7 +79,7 @@ export class Spring implements TargetedSource {
     this.#purpose = purpose
     // The motion's purpose keeps a 'nonmotion' spring running when reduced
     // motion turns on. The setters keep its own writes animated.
-    this.#motion = new SpringMotion(this.#config, 0, 0, purpose)
+    this.#motion = new SpringMotion(motions, this.#config, 0, 0, purpose)
   }
 
   /**
@@ -194,8 +194,10 @@ export class Spring implements TargetedSource {
    * never changes it.
    *
    * Assigning reconfigures the spring in place, keeping value and
-   * velocity, so mid-flight changes stay smooth. `null` reverts to the
-   * default.
+   * velocity, so mid-flight changes stay smooth. A config whose resting
+   * threshold already contains the remaining motion ends it instead, as
+   * `jumpTo` does: the value snaps to the target, and `update` and `stop`
+   * fire synchronously. `null` reverts to the default.
    */
   get config(): SpringDefinition {
     return this.#config
@@ -240,6 +242,11 @@ export class Spring implements TargetedSource {
     this.#motion.configure(next)
     if (!this.#motion.isResting) {
       this.#motions.add(this.#motion)
+    } else if (this.#motion.position !== 0 || this.#motion.velocity !== 0) {
+      // A coarser threshold can put the spring at rest short of its
+      // target. Snap now, as a tick would, so `isResting` and `settled`
+      // never report rest while the value still differs from the target.
+      this.#motion.finish()
     }
   }
 
@@ -401,7 +408,9 @@ export class Spring implements TargetedSource {
     // The edge mirrors the update subscription for the system's ordering,
     // and `recouple` repeats the handler's retarget. A foreign source
     // resolves to no leaders and couples through the emitter alone.
-    const leaders = resolveLeaderMotions(source)
+    // Motions of another system advance on that system's clock, so they
+    // join this graph's ordering only as emitters, like a foreign source.
+    const leaders = resolveLeaderMotions(source).filter((leader) => leader.owner === this.#motions)
     if (leaders.length > 0) {
       const edge: FollowEdge = {
         follower: this.#motion,
@@ -409,14 +418,16 @@ export class Spring implements TargetedSource {
         cyclic: false,
         trail: new TargetTrail(0),
         recouple: (h) => {
+          const value = api.value
+          invariant(Number.isFinite(value), 'Spring target must be a finite number')
+          const previous = this.#target
+          if (value === previous) return
+          // Every branch is `#setTarget` without its events: listeners must
+          // not run mid-advance, so `endFrame` delivers them in the settle
+          // sweep. The advance that follows consumes the re-anchor.
+          this.#motions.add(this.#motion)
           if (this.#motions.reduced && this.#purpose === 'motion') {
-            const value = api.value
-            invariant(Number.isFinite(value), 'Spring target must be a finite number')
-            if (value === this.#target) return
-            // `#setTarget`'s jump without its events. Listeners must not
-            // run mid-advance, so `endFrame` emits in the settle sweep.
             this.#target = value
-            this.#motions.add(this.#motion)
             this.#motion.rest()
             return
           }
@@ -426,14 +437,11 @@ export class Spring implements TargetedSource {
           // held target. None in a zero-length step, which must rebase
           // exactly.
           if (edge.cyclic || h === 0 || this.#config.arrival !== 1) {
-            this.#setTarget(api.value)
+            const current = previous + this.#motion.position
+            this.#target = value
+            this.#motion.rebase(current - value)
             return
           }
-          const value = api.value
-          invariant(Number.isFinite(value), 'Spring target must be a finite number')
-          const previous = this.#target
-          if (value === previous) return
-          this.#motions.add(this.#motion)
           // Only tick-path changes reach this delta, since synchronous
           // writes already stepped through the emitter. The position stays
           // measured from the old target until the sloped advance rebases it.

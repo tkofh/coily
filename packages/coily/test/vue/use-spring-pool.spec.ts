@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from 'vitest'
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, markRaw, reactive, ref, shallowRef } from 'vue'
 import { mount } from '@vue/test-utils'
-import { createSpringSystem, defineSpring } from '../../src/index.ts'
+import { type Spring, createSpringSystem, defineSpring } from '../../src/index.ts'
 import { SpringSystemKey } from '../../src/vue/system.ts'
 import { useSpringPool, type SpringPool } from '../../src/vue/pool.ts'
 
@@ -91,5 +91,33 @@ describe('useSpringPool', () => {
         }),
       )
     }).toThrow('No SpringSystem found')
+  })
+})
+
+describe('pooled springs in reactive state', () => {
+  test('a shallowRef list holds working springs (the README example)', () => {
+    const { pool, system } = mountPool()
+    const particles = shallowRef<Spring[]>([])
+    particles.value = [...particles.value, pool.createSpring(0)]
+
+    particles.value[0]!.target = 10
+    system.advance(16)
+    expect(particles.value[0]!.value).toBeGreaterThan(0)
+  })
+
+  test('markRaw keeps a spring usable inside deep reactive state', () => {
+    const { pool } = mountPool()
+    const state = reactive({ spring: markRaw(pool.createSpring(5)) })
+    state.spring.target = 10
+    expect(state.spring.target).toBe(10)
+  })
+
+  test('a deep proxy cannot reach the spring', () => {
+    const { pool } = mountPool()
+    const held = ref(pool.createSpring(5))
+    expect(() => held.value.value).toThrow(TypeError)
+    expect(() => {
+      held.value.target = 10
+    }).toThrow(TypeError)
   })
 })

@@ -15,6 +15,7 @@ import {
   type ReactiveSpringRef,
   createReactiveSpringRef,
   injectSpringSystem,
+  toSourceValue,
 } from './reactive-spring.ts'
 
 /**
@@ -95,7 +96,7 @@ export function createCompositeSpringRef<T extends object>(
   const system = injectSpringSystem()
   const resolvedConfig = resolveConfigShape(config)
   const resolve = (): CompositeSpringTarget<T> => {
-    const next = toValue(target)
+    const next = toSourceValue(target)
     const leader = compositeLeaderOf(next) as CompositeSpring<T> | undefined
     if (leader !== undefined) return leader
     invariant(!isSpringSource(next), SHAPED_SOURCE)

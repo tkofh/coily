@@ -1,4 +1,5 @@
 import type { FollowEdge } from './follow-graph.ts'
+import type { MotionSet } from './motion-set.ts'
 
 let nextId = 0
 
@@ -13,6 +14,15 @@ let nextId = 0
  * that advanced delivers its events in `endFrame`.
  */
 export abstract class Motion {
+  /**
+   * The system's set that advances this motion, fixed at creation. The
+   * scheduling fields below belong to it alone: a follower in another
+   * system reads this motion through its emitter, never through the
+   * follow graph. Distinct from membership, since a resting motion leaves
+   * the set but keeps its owner.
+   */
+  readonly owner: MotionSet
+
   /**
    * Creation order across every kind of motion. The lower id goes first
    * wherever motions need a deterministic order and nothing else decides.
@@ -52,6 +62,10 @@ export abstract class Motion {
    */
   followers: FollowEdge[] | null = null
 
+  constructor(owner: MotionSet) {
+    this.owner = owner
+  }
+
   /** Whether the motion has stopped moving. `MotionSet` drops it once true. */
   abstract get isResting(): boolean
 
@@ -66,6 +80,14 @@ export abstract class Motion {
 
   /** Delivers the frame's events, after every motion has advanced. */
   abstract endFrame(): void
+
+  /**
+   * Finishes the lifecycle half of `endFrame` (running state, `start` or
+   * `stop`, tick membership) after a listener threw partway through it.
+   * Idempotent: the running flag flips before its event fires, so a
+   * repeat call after a throwing `stop` listener emits nothing.
+   */
+  abstract reconcile(): void
 
   /**
    * Applies a change of the system's reduced-motion setting, which

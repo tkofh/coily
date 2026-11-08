@@ -1,6 +1,7 @@
 import { SpringDefinition } from './config.ts'
 import { Emitter } from './emitter.ts'
 import { Motion } from './motion.ts'
+import type { MotionSet } from './motion-set.ts'
 import { State } from './state.ts'
 import { CriticallyDampedSolver, OverdampedSolver, UnderdampedSolver } from './solver.ts'
 import type { Purpose } from './spring.ts'
@@ -42,12 +43,13 @@ export class SpringMotion extends Motion {
   readonly #emitter: Emitter
 
   constructor(
+    owner: MotionSet,
     config: SpringDefinition,
     position: number,
     velocity: number,
     purpose: Purpose = 'motion',
   ) {
-    super()
+    super(owner)
     this.#reduces = purpose === 'motion'
     this.#config = config
     this.#state = new State(config, position, velocity)
@@ -62,9 +64,18 @@ export class SpringMotion extends Motion {
   }
 
   set position(value: number) {
-    this.#state.position = value
-    this.#needsReset = true
+    this.rebase(value)
     this.#syncStart()
+  }
+
+  /**
+   * Sets the position like the setter, but defers `start` to the next
+   * `endFrame`. A follower rebases through this mid-tick, where listeners
+   * must not run.
+   */
+  rebase(position: number) {
+    this.#state.position = position
+    this.#needsReset = true
   }
 
   get velocity() {
@@ -192,6 +203,10 @@ export class SpringMotion extends Motion {
    */
   endFrame() {
     this.#emitter.emit('update')
+    this.#reconcileRunning()
+  }
+
+  reconcile() {
     this.#reconcileRunning()
   }
 

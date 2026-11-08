@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { defineSpring } from '../src/config.ts'
+import { type SpringDefinition, defineSpring } from '../src/config.ts'
 import {
   springFromState,
   springStateAt,
@@ -310,5 +310,95 @@ describe('springToTransition', () => {
 
     expect(moving).not.toBe(rest)
     expect(moving).toBe(`translate ${Number(handoff.duration.toFixed(1))}ms ${handoff.easing}`)
+  })
+})
+
+describe('the emitted easing, evaluated on its own', () => {
+  // `linear()` as a browser evaluates it, over ascending inputs: stops
+  // without a position sit at 0% and 100%, and of two stops at one
+  // position the later wins.
+  function evaluator(easing: string): (x: number) => number {
+    const parsed = stops(easing).map((stop, i, all) => ({
+      y: stop.output,
+      x: stop.input ?? (i === 0 ? 0 : i === all.length - 1 ? 1 : Number.NaN),
+    }))
+    let j = 0
+    return (x) => {
+      while (j < parsed.length - 2 && parsed[j + 1]!.x <= x) j++
+      const a = parsed[j]!
+      const b = parsed[j + 1]!
+      const dx = b.x - a.x
+      return dx === 0 ? b.y : a.y + Math.min(1, Math.max(0, (x - a.x) / dx)) * (b.y - a.y)
+    }
+  }
+
+  // The spring's exact curve from its closed form, read directly at each
+  // input rather than through the sampler, landing on the target at 100%.
+  function worstError(
+    config: SpringDefinition,
+    result: { easing: string; duration: number },
+    state: { position: number; velocity: number },
+    scale: number,
+  ): number {
+    const N = 20_000
+    const evaluate = evaluator(result.easing)
+    let worst = 0
+    for (let i = 0; i <= N; i++) {
+      const x = i / N
+      const exact =
+        i === N && scale === 1
+          ? 1
+          : (1 - springStateAt(config, state, x * result.duration).position / state.position) *
+            scale
+      worst = Math.max(worst, Math.abs(evaluate(x) - exact))
+    }
+    return worst
+  }
+
+  interface Case {
+    config: SpringDefinition
+    state?: { position: number; velocity: number }
+    maxError?: number
+    loop?: boolean
+  }
+  const critical = defineSpring({ duration: 0.1, dampingRatio: 1 })
+  const cases: Record<string, Case> = {
+    'a tight budget on an undamped loop': { config: undamped, maxError: 1e-7, loop: true },
+    'a 0.1 ms critically damped config': { config: critical },
+    'the default budget on a bouncy config': { config: bouncy },
+    'a tight budget on a bouncy config': { config: bouncy, maxError: 1e-5 },
+    'a mid-flight state with velocity': {
+      config: bouncy,
+      state: { position: 1, velocity: 40 },
+      maxError: 1e-4,
+    },
+  }
+
+  for (const [label, { config, state, maxError = 0.0025, loop = false }] of Object.entries(cases)) {
+    test(`${label} stays within its budget and reports what it emits`, () => {
+      const result = state
+        ? springFromState(config, state, { maxError })
+        : springToLinear(config, { maxError })
+      expect(result.mode).toBe(loop ? 'loop' : 'settle')
+      const measured = worstError(
+        config,
+        result,
+        state ?? { position: 1, velocity: 0 },
+        loop ? 0.5 : 1,
+      )
+      expect(result.maxError).toBeLessThanOrEqual(maxError)
+      expect(measured).toBeLessThanOrEqual(maxError)
+      // The diagnostic is the measured error, up to what lies between its
+      // own samples.
+      expect(measured).toBeLessThanOrEqual(result.maxError * 1.05)
+    })
+  }
+
+  test('rejects budgets and inputs that cannot be met', () => {
+    expect(() => springToLinear(settling, { maxError: 0 })).toThrow('maxError')
+    expect(() => springToLinear(settling, { maxError: Number.NaN })).toThrow('maxError')
+    expect(() => springToLinear(settling, { maxDuration: Infinity })).toThrow('maxDuration')
+    expect(() => springToLinear(settling, { displacement: 0 })).toThrow('displacement')
+    expect(() => springToLinear(settling, { displacement: Infinity })).toThrow('displacement')
   })
 })

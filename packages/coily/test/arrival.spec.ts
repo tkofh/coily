@@ -413,3 +413,63 @@ describe('arrival: property-based laws', () => {
     )
   })
 })
+
+describe('arrival: a crossing one representable value away', () => {
+  // The target sits one ulp past the value, with the spring moving toward
+  // it hard, so the first crossing is about 1e-14 ms out. Rounding must not
+  // push it a whole half period later.
+  const cases = [
+    { from: 100, toward: -1, target: 100 - 2 ** -46 },
+    { from: 100, toward: 1, target: 100 + 2 ** -46 },
+    { from: -100, toward: 1, target: -100 + 2 ** -46 },
+    { from: 0.25, toward: -1, target: 0.25 - 2 ** -54 },
+  ]
+  for (const { from, toward, target } of cases) {
+    for (const step of [1e-9, 1, FRAME]) {
+      test(`'stop' lands on ${target} from ${from} in a ${step} ms step`, () => {
+        const system = createSpringSystem({ reducedMotion: 'never' })
+        const spring = system.createSpring(
+          from,
+          defineSpring({ tension: 100, dampingRatio: 0.1, arrival: 'stop' }),
+        )
+        spring.velocity = toward * 1000
+        spring.target = target
+
+        expect(spring.timeRemaining).toBeLessThan(1e-6)
+        system.advance(step)
+        expect(spring.value).toBe(target)
+        expect(spring.isResting).toBe(true)
+      })
+    }
+
+    test(`a rebound from ${from} toward ${target} turns back without crossing`, () => {
+      const system = createSpringSystem({ reducedMotion: 'never' })
+      const spring = system.createSpring(
+        from,
+        defineSpring({ tension: 100, dampingRatio: 0.1, arrival: -0.5 }),
+      )
+      spring.velocity = toward * 1000
+      spring.target = target
+
+      // Measured from the target, the motion approaches from -toward and
+      // must stay on that side through every bounce.
+      for (let i = 0; i < 600 && !spring.isResting; i++) {
+        system.advance(FRAME)
+        expect(Math.sign(spring.value - target) * toward).toBeLessThanOrEqual(0)
+      }
+    })
+  }
+
+  test('a spring flung from exactly its target still departs before arrival applies', () => {
+    const system = createSpringSystem({ reducedMotion: 'never' })
+    const spring = system.createSpring(
+      0,
+      defineSpring({ tension: 100, dampingRatio: 0.1, arrival: 'stop' }),
+    )
+    spring.velocity = 1000
+    system.advance(FRAME)
+    expect(spring.value).toBeGreaterThan(0)
+    advanceUntilResting(system, spring)
+    expect(spring.value).toBe(0)
+  })
+})

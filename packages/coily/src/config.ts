@@ -1,3 +1,9 @@
+import {
+  TAIL,
+  criticalCrossing,
+  overdampedCrossingAngle,
+  underdampedCrossingAngle,
+} from './solver.ts'
 import { invariant } from './util.ts'
 
 /**
@@ -77,7 +83,8 @@ interface WithDamping {
   /**
    * Friction strength. Higher damping removes velocity faster and
    * reduces bounce. At 0 the spring oscillates forever. Must be greater
-   * than or equal to 0.
+   * than or equal to 0, and greater than 0 in a config that derives
+   * tension or mass from it.
    */
   readonly damping: number
 }
@@ -305,6 +312,7 @@ export class SpringDefinition {
       this.damping = 2 * dampingRatio * Math.sqrt(this.mass * tension)
     } else if (hasC && hasZ && !hasK && !hasT) {
       invariant(dampingRatio > 0, 'dampingRatio must be > 0 to derive tension')
+      invariant(damping > 0, 'damping must be > 0 to derive tension')
       // bounce 1 clamps to a near-zero ratio, and tension grows with
       // 1 / ratio^2 from there.
       invariant(bounce === undefined || bounce < 1, 'bounce must be < 1 to derive tension')
@@ -314,6 +322,7 @@ export class SpringDefinition {
     } else if (hasK && hasC && hasZ && !hasT) {
       invariant(!hasM, 'mass is derived when tension, damping, and dampingRatio are all provided')
       invariant(dampingRatio > 0, 'dampingRatio must be > 0 to derive mass')
+      invariant(damping > 0, 'damping must be > 0 to derive mass')
       invariant(bounce === undefined || bounce < 1, 'bounce must be < 1 to derive mass')
       this.mass = damping ** 2 / (4 * dampingRatio ** 2 * tension)
       this.tension = tension
@@ -345,6 +354,7 @@ export class SpringDefinition {
         this.damping = 2 * dampingRatio * this.mass * wn
       } else if (hasC && !hasK) {
         invariant(!hasM, 'mass is derived in duration-based configs with damping')
+        invariant(damping > 0, 'damping must be > 0 to derive mass')
         this.mass = damping / (2 * dampingRatio * wn)
         this.tension = wn ** 2 * this.mass
         this.damping = damping
@@ -358,6 +368,25 @@ export class SpringDefinition {
     this.naturalFrequency = Math.sqrt(this.tension / this.mass)
     this.criticalDamping = 2 * this.mass * this.naturalFrequency
     this.dampingRatio = this.damping / this.criticalDamping
+
+    // Finite inputs can still derive unusable parameters through overflow
+    // or underflow (tension 1e300 over mass 1e-300), and every solver
+    // divides by mass, tension, or frequency.
+    for (const [name, value, positive] of [
+      ['mass', this.mass, true],
+      ['tension', this.tension, true],
+      ['damping', this.damping, false],
+      ['naturalFrequency', this.naturalFrequency, true],
+      ['criticalDamping', this.criticalDamping, true],
+      ['dampingRatio', this.dampingRatio, false],
+      ['restingMagnitude', this.restingMagnitude, true],
+    ] as const) {
+      invariant(
+        Number.isFinite(value) && (positive ? value > 0 : value >= 0),
+        () =>
+          `Invalid spring config: these inputs resolve to ${name} ${value}, outside the range the solvers support`,
+      )
+    }
 
     Object.freeze(this)
   }
@@ -415,117 +444,133 @@ function solveEntry(f: (t: number) => number, threshold: number, peak: number): 
   return high
 }
 
-// Seconds until the tightest closed-form bound on the rest amplitude
-// |x| + |v| / wn enters the threshold, or Infinity when it never decays.
-// Callers test for rest first, so the bound starts above the threshold.
+// The rest amplitude bound shared by tuning and `restTime`, in every
+// regime: |x(t)| + |v(t)| / wn <= exp(-sigma*t) * (a*g(t) + b*h(t)), with
+//
+//   a = |x0| + |v0| / wn
+//   b = |v0 + sigma*x0| + |zeta*v0 + wn*x0|
+//
+// and g = cosh(wd*t), h = sinh(wd*t) / wd above critical damping, g = 1,
+// h = t at it, and g = 1, h = min(t, 1/wd) below it (bounding |cos| and
+// |sin(wd*t)| / wd). It follows from the closed forms term by term, is
+// exact from rest at and above critical damping, and is continuous through
+// dampingRatio 1. A per-mode amplitude sum grows like 1/wd there, which
+// made near-critical tuning several times too stiff.
+//
+// Rises at most once, then decays, as `solveEntry` requires. Below
+// critical damping the bound is only tight before the knee 1/wd, so
+// `restTime` and `restUnits` also take the oscillation envelope's.
+function amplitudeBound(
+  a: number,
+  b: number,
+  dampingRatio: number,
+  wn: number,
+): (t: number) => number {
+  const sigma = dampingRatio * wn
+  if (dampingRatio < 1) {
+    const knee = 1 / (wn * Math.sqrt((1 - dampingRatio) * (1 + dampingRatio)))
+    return (t) => Math.exp(-sigma * t) * (a + b * Math.min(t, knee))
+  }
+  if (dampingRatio === 1) {
+    return (t) => Math.exp(-sigma * t) * (a + b * t)
+  }
+  const wd = wn * Math.sqrt((dampingRatio - 1) * (dampingRatio + 1))
+  // sigma - wd without the cancellation that zeroes it at large ratios,
+  // since sigma^2 - wd^2 = wn^2.
+  const slow = wn * (wn / (sigma + wd))
+  return (t) => {
+    const u = wd * t
+    // Past TAIL, cosh and sinh are exp(u) / 2 to the last ulp. The slow
+    // mode alone also keeps them from overflowing.
+    if (u > TAIL) return 0.5 * Math.exp(-slow * t) * (a + b / wd)
+    return Math.exp(-sigma * t) * (a * Math.cosh(u) + (b * Math.sinh(u)) / wd)
+  }
+}
+
+// The time `amplitudeBound` peaks at critical damping, and a starting
+// bracket for `solveEntry` elsewhere.
+function boundPeak(a: number, b: number, wn: number): number {
+  return b > 0 ? Math.max(0, 1 / wn - a / b) : 0
+}
+
+// Seconds until the amplitude bound enters the threshold, or Infinity
+// when it never decays. Callers test for rest first, so the bound starts
+// above the threshold.
 function restTime(config: SpringDefinition, position: number, velocity: number): number {
   const { naturalFrequency, dampingRatio, restingMagnitude, arrival } = config
+  const sigma = dampingRatio * naturalFrequency
+  const a = Math.abs(position) + Math.abs(velocity) / naturalFrequency
+  const b =
+    Math.abs(velocity + sigma * position) +
+    Math.abs(dampingRatio * velocity + naturalFrequency * position)
+  const bound = amplitudeBound(a, b, dampingRatio, naturalFrequency)
 
-  if (dampingRatio < 1) {
-    const sigma = dampingRatio * naturalFrequency
-    const wd = naturalFrequency * Math.sqrt(1 - dampingRatio ** 2)
-    // The rest amplitude is exactly exp(-sigma*t) * R * f(wd*t - phi), with
-    // R the oscillation amplitude and f periodic. max(f) = sqrt(2 + 2*zeta)
-    // is each pulse's true peak, not a safety margin.
-    const R = Math.hypot(position, (velocity + sigma * position) / wd)
-    const drop = Math.log((R * Math.sqrt(2 + 2 * dampingRatio)) / restingMagnitude)
-    const plain = sigma > 0 ? drop / sigma : Infinity
+  if (dampingRatio >= 1) {
+    return solveEntry(bound, restingMagnitude, boundPeak(a, b, naturalFrequency))
+  }
 
-    const strength = Math.abs(arrival)
-    if (strength === 0 || strength === 1) return plain
+  const wd = naturalFrequency * Math.sqrt((1 - dampingRatio) * (1 + dampingRatio))
+  // The oscillation envelope: the rest amplitude is exactly
+  // exp(-sigma*t) * R * f(wd*t - phi), with R the oscillation amplitude
+  // and f periodic. max(f) = sqrt(2 + 2*zeta) is each pulse's true peak,
+  // not a safety margin.
+  const R = Math.hypot(position, (velocity + sigma * position) / wd)
+  const drop = Math.log((R * Math.sqrt(2 + 2 * dampingRatio)) / restingMagnitude)
+  let envelope = sigma > 0 ? drop / sigma : Infinity
 
+  const strength = Math.abs(arrival)
+  if (strength !== 0 && strength !== 1) {
     // Each crossing (every half period after the first) scales the rest of
     // the trajectory by |arrival|, adding ln(1/|arrival|) * wd/pi to the
     // effective decay rate.
     const first = firstCrossing(config, position, velocity)
-    if (plain <= first) return plain
-    const loss = (-Math.log(strength) * wd) / Math.PI
-    return (drop + loss * first) / (sigma + loss)
+    if (envelope > first) {
+      const loss = (-Math.log(strength) * wd) / Math.PI
+      envelope = (drop + loss * first) / (sigma + loss)
+    }
   }
 
-  if (dampingRatio === 1) {
-    const a0 = Math.abs(position) + Math.abs(velocity) / naturalFrequency
-    // |c1 + c2*t| + |c2 - wn*(c1 + c2*t)| / wn <= a0 + 2*|c2|*t, exact from
-    // rest and asymptotically tight otherwise. `peak` zeroes its derivative.
-    const beta = 2 * Math.abs(velocity + naturalFrequency * position)
-    const peak = beta > 0 ? Math.max(0, 1 / naturalFrequency - a0 / beta) : 0
-    return solveEntry(
-      (t) => Math.exp(-naturalFrequency * t) * (a0 + beta * t),
-      restingMagnitude,
-      peak,
-    )
-  }
-
-  const wd = naturalFrequency * Math.sqrt(dampingRatio ** 2 - 1)
-  const slow = dampingRatio * naturalFrequency - wd
-  const fast = dampingRatio * naturalFrequency + wd
-  // Split into the two decaying modes. The bound sums their amplitudes,
-  // and it is exact once the fast mode dies out.
-  const slowAmplitude =
-    (Math.abs(velocity + fast * position) / (2 * wd)) * (1 + slow / naturalFrequency)
-  const fastAmplitude =
-    (Math.abs(velocity + slow * position) / (2 * wd)) * (1 + fast / naturalFrequency)
-  return solveEntry(
-    (t) => slowAmplitude * Math.exp(-slow * t) + fastAmplitude * Math.exp(-fast * t),
-    restingMagnitude,
-    0,
-  )
+  // A crossing only scales the motion after it by |arrival| <= 1, so the
+  // amplitude bound holds through crossings too. It wins near critical
+  // damping, where the envelope's R grows like 1/wd. The bound decays once
+  // past its peak, so one sample at the envelope's time settles which
+  // enters first.
+  if (!(envelope < Infinity) || bound(envelope) > restingMagnitude) return envelope
+  return Math.min(envelope, solveEntry(bound, restingMagnitude, boundPeak(a, b, naturalFrequency)))
 }
 
-// The wn * t at which the from-rest decay bound enters the threshold, for a
-// displacement `ratio` thresholds away. Duration shapes set
-// wn = restUnits(zeta, x0 / threshold) / T. Mirrors restTime's bounds.
+// The wn * t at which the from-rest rest amplitude bound enters the
+// threshold, for a displacement `ratio` thresholds away: `restTime` in
+// units of 1 / wn for x0 = 1, v0 = 0. Duration shapes set
+// wn = restUnits(zeta, x0 / threshold) / T.
 function restUnits(dampingRatio: number, ratio: number): number {
-  if (dampingRatio < 1) {
-    // From rest, R = x0 / sqrt(1 - zeta^2) and M = sqrt(2 + 2*zeta)
-    // reduce to R * M / x0 = sqrt(2 / (1 - zeta)).
-    return Math.log(ratio * Math.sqrt(2 / (1 - dampingRatio))) / dampingRatio
-  }
-  if (dampingRatio === 1) {
-    return solveEntry((u) => Math.exp(-u) * (1 + 2 * u), 1 / ratio, 0.5)
-  }
-  const wd = Math.sqrt(dampingRatio ** 2 - 1)
-  const slow = dampingRatio - wd
-  const fast = dampingRatio + wd
-  const slowAmplitude = (fast / (2 * wd)) * (1 + slow)
-  const fastAmplitude = (slow / (2 * wd)) * (1 + fast)
-  return solveEntry(
-    (u) => slowAmplitude * Math.exp(-slow * u) + fastAmplitude * Math.exp(-fast * u),
-    1 / ratio,
-    0,
-  )
+  const threshold = 1 / ratio
+  const b = 1 + dampingRatio
+  const bound = amplitudeBound(1, b, dampingRatio, 1)
+  if (dampingRatio >= 1) return solveEntry(bound, threshold, boundPeak(1, b, 1))
+
+  // From rest, R = x0 / sqrt(1 - zeta^2) and M = sqrt(2 + 2*zeta)
+  // reduce to R * M / x0 = sqrt(2 / (1 - zeta)).
+  const envelope = Math.log(ratio * Math.sqrt(2 / (1 - dampingRatio))) / dampingRatio
+  if (bound(envelope) > threshold) return envelope
+  return Math.min(envelope, solveEntry(bound, threshold, boundPeak(1, b, 1)))
 }
 
 // Seconds until the motion's first strictly future target crossing, or
-// Infinity. The same per-regime roots the solvers in solver.ts anchor with.
+// Infinity. Anchors each regime's constants exactly as its solver does.
 function firstCrossing(config: SpringDefinition, position: number, velocity: number): number {
   const { naturalFrequency, dampingRatio } = config
+  const sigma = dampingRatio * naturalFrequency
 
   if (dampingRatio < 1) {
-    // Zeros of c1*cos(wd*t) + c2*sin(wd*t) fall at wd*t = atan2(-c1, c2)
-    // (mod pi), and the first lies in (0, pi].
     const wd = naturalFrequency * Math.sqrt(1 - dampingRatio ** 2)
-    const c2 = (velocity + dampingRatio * naturalFrequency * position) / wd
-    let theta = Math.atan2(-position, c2) % Math.PI
-    if (theta <= 0) theta += Math.PI
-    return theta / wd
+    return underdampedCrossingAngle(position, (velocity + sigma * position) / wd) / wd
   }
-
   if (dampingRatio === 1) {
-    // (c1 + c2*t) * exp(-wn*t) has one root, -c1/c2. NaN (a rest state)
-    // fails the strictly-future test and becomes Infinity.
-    const t = -position / (velocity + naturalFrequency * position)
-    return t > 0 ? t : Infinity
+    return criticalCrossing(position, velocity + naturalFrequency * position)
   }
-
-  // c1*sinh(wd*t) + c2*cosh(wd*t) crosses zero where tanh(wd*t) = -c2/c1,
-  // strictly future only when the velocity term dominates with the
-  // opposite sign. Otherwise atanh yields NaN or <= 0, which becomes Infinity.
   const wd = naturalFrequency * Math.sqrt(dampingRatio ** 2 - 1)
-  const theta = Math.atanh(
-    (-position * wd) / (velocity + dampingRatio * naturalFrequency * position),
-  )
-  return theta > 0 ? theta / wd : Infinity
+  return overdampedCrossingAngle(velocity + sigma * position, position * wd) / wd
 }
 
 /** Creates a config with stiffness (`tension`) and friction (`damping`) set directly. */
@@ -543,26 +588,26 @@ export function defineSpring(input: Exact<TensionRatioOptions>): SpringDefinitio
 export function defineSpring(input: Exact<TensionBounceOptions>): SpringDefinition
 /**
  * Creates a config from friction and motion character. Tension is
- * derived as `damping^2 / (4 * dampingRatio^2 * mass)`. `dampingRatio`
- * must be greater than 0.
+ * derived as `damping^2 / (4 * dampingRatio^2 * mass)`. `damping` and
+ * `dampingRatio` must be greater than 0.
  */
 export function defineSpring(input: Exact<DampingRatioOptions>): SpringDefinition
 /**
  * Creates a config from friction and bounciness, deriving tension.
- * `bounce` must be less than 1, since the derived tension grows without
- * limit as it nears 1.
+ * `damping` must be greater than 0. `bounce` must be less than 1, since
+ * the derived tension grows without limit as it nears 1.
  */
 export function defineSpring(input: Exact<DampingBounceOptions>): SpringDefinition
 /**
  * Creates a config from all three physical parameters. Mass is derived
  * as `damping^2 / (4 * dampingRatio^2 * tension)` and cannot be
- * provided. `dampingRatio` must be greater than 0.
+ * provided. `damping` and `dampingRatio` must be greater than 0.
  */
 export function defineSpring(input: Exact<TensionDampingRatioOptions>): SpringDefinition
 /**
  * Creates a config from tension, damping, and bounce. Mass is derived and
- * cannot be provided. `bounce` must be less than 1, since the derived
- * mass grows without limit as it nears 1.
+ * cannot be provided. `damping` must be greater than 0. `bounce` must be
+ * less than 1, since the derived mass grows without limit as it nears 1.
  */
 export function defineSpring(input: Exact<TensionDampingBounceOptions>): SpringDefinition
 /**
@@ -609,7 +654,7 @@ export function defineSpring(input: Exact<TensionBounceDurationOptions>): Spring
 /**
  * Tunes a spring of the given friction to rest at `duration` ms. Mass is
  * derived to meet the timing, then tension from mass. Mass cannot be
- * provided, and `dampingRatio` must be greater than 0.
+ * provided, and `damping` and `dampingRatio` must be greater than 0.
  *
  * The timing assumes the motion starts `displacement` (default 1) away
  * from the target. Pass your animation's range for accurate timing.
@@ -618,7 +663,8 @@ export function defineSpring(input: Exact<DampingDurationOptions>): SpringDefini
 /**
  * Tunes a spring of the given friction to rest at `duration` ms, with
  * `bounce` setting how oscillatory the settling motion is. Mass is
- * derived to meet the timing and cannot be provided.
+ * derived to meet the timing and cannot be provided. `damping` must be
+ * greater than 0.
  *
  * The timing assumes the motion starts `displacement` (default 1) away
  * from the target. Pass your animation's range for accurate timing.

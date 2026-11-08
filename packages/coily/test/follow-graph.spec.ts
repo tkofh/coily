@@ -23,7 +23,7 @@ function idsOf(motions: readonly Motion[]): number[] {
 }
 
 function makeMotion(): Motion {
-  return new SpringMotion(SpringDefinition.default, 0, 0)
+  return new SpringMotion(new MotionSet(), SpringDefinition.default, 0, 0)
 }
 
 function link(graph: FollowGraph, follower: Motion, ...leaders: Motion[]): FollowEdge {

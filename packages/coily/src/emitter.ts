@@ -1,3 +1,5 @@
+import { NO_ERROR, joinErrors } from './util.ts'
+
 type Handler = () => void
 
 type EventType = 'update' | 'start' | 'stop' | 'dispose'
@@ -35,6 +37,12 @@ export class Emitter {
     this.#dispose.length = 0
   }
 
+  /**
+   * Calls every handler for `type`. One that throws doesn't stop the rest,
+   * because internal subscribers (a `settled` promise, a composite's
+   * channel hooks) share the list with user code. The errors rethrow after
+   * the last handler, per `joinErrors`.
+   */
   emit(type: EventType) {
     const list = this.#list(type)
     // A snapshot keeps mid-emit (un)subscribes from shifting the iteration.
@@ -42,9 +50,15 @@ export class Emitter {
     if (list.length === 1) {
       list[0]!()
     } else if (list.length > 1) {
+      let error: unknown = NO_ERROR
       for (const handler of list.slice()) {
-        handler()
+        try {
+          handler()
+        } catch (caught) {
+          error = joinErrors(error, caught)
+        }
       }
+      if (error !== NO_ERROR) throw error
     }
   }
 

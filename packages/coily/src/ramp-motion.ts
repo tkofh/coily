@@ -19,7 +19,6 @@ import { invariant } from './util.ts'
  * position. Between phases, reads use the formula.
  */
 export class RampMotion extends Motion {
-  readonly #motions: MotionSet
   readonly #emitter = new Emitter()
   /** Whether reduced motion applies: false for a `'nonmotion'` ramp. */
   readonly #reduces: boolean
@@ -46,8 +45,7 @@ export class RampMotion extends Motion {
   #stepped = 0
 
   constructor(motions: MotionSet, from: number, rate: number, target: number, purpose: Purpose) {
-    super()
-    this.#motions = motions
+    super(motions)
     this.#reduces = purpose === 'motion'
     this.#anchorValue = from
     this.#anchorTime = motions.time
@@ -65,8 +63,8 @@ export class RampMotion extends Motion {
   }
 
   get value(): number {
-    if (this.#phase !== 0 && this.#phase === this.#motions.advancing) return this.#stepped
-    return this.#at(this.#motions.time)
+    if (this.#phase !== 0 && this.#phase === this.owner.advancing) return this.#stepped
+    return this.#at(this.owner.time)
   }
 
   get target(): number {
@@ -100,10 +98,10 @@ export class RampMotion extends Motion {
     this.#beginWrite()
     if (value === this.value) return
     this.#anchorValue = value
-    this.#anchorTime = this.#motions.time
+    this.#anchorTime = this.owner.time
     // Under reduced motion a write rests where it lands, as a spring's
     // does. An endless ramp resumes from here when reduced motion ends.
-    if (this.#reduces && this.#motions.reduced && Number.isFinite(this.#target)) {
+    if (this.#reduces && this.owner.reduced && Number.isFinite(this.#target)) {
       this.#target = value
     }
     this.#emitter.emit('update')
@@ -115,7 +113,7 @@ export class RampMotion extends Motion {
     this.#reanchor()
     this.#target = target
     const endless = !Number.isFinite(target)
-    if (this.#reduces && this.#motions.reduced) {
+    if (this.#reduces && this.owner.reduced) {
       this.#held = endless
       if (!endless && this.#anchorValue !== target) {
         this.#anchorValue = target
@@ -137,7 +135,7 @@ export class RampMotion extends Motion {
   jumpTo(value: number) {
     this.#beginWrite()
     this.#anchorValue = value
-    this.#anchorTime = this.#motions.time
+    this.#anchorTime = this.owner.time
     this.#target = value
     this.#held = false
     this.#emitter.emit('update')
@@ -156,7 +154,7 @@ export class RampMotion extends Motion {
       if (Number.isFinite(this.#target)) {
         if (this.value !== this.#target) {
           this.#anchorValue = this.#target
-          this.#anchorTime = this.#motions.time
+          this.#anchorTime = this.owner.time
           this.#emitter.emit('update')
         }
       } else if (!this.#held) {
@@ -171,10 +169,10 @@ export class RampMotion extends Motion {
   }
 
   advance(h: number) {
-    const phase = this.#motions.advancing
+    const phase = this.owner.advancing
     if (this.#phase !== phase) {
       this.#phase = phase
-      this.#stepped = this.#at(this.#motions.time)
+      this.#stepped = this.#at(this.owner.time)
     }
     const speed = this.#speed()
     const remaining = this.#target - this.#stepped
@@ -189,10 +187,14 @@ export class RampMotion extends Motion {
     // steps reached into the anchor for the formula to see.
     if (this.#stepped === this.#target && this.#anchorValue !== this.#target) {
       this.#anchorValue = this.#target
-      this.#anchorTime = this.#motions.time
+      this.#anchorTime = this.owner.time
     }
     this.#phase = 0
     this.#emitter.emit('update')
+    this.#sync()
+  }
+
+  reconcile() {
     this.#sync()
   }
 
@@ -261,7 +263,7 @@ export class RampMotion extends Motion {
   }
 
   #reanchor() {
-    const time = this.#motions.time
+    const time = this.owner.time
     this.#anchorValue = this.#at(time)
     this.#anchorTime = time
   }
@@ -300,16 +302,16 @@ export class RampMotion extends Motion {
     const watched =
       this.#updateListeners > 0 || (this.#stopListeners > 0 && Number.isFinite(this.#target))
     const ticking = moving && watched
-    if (ticking !== this.#motions.has(this)) {
-      if (ticking) this.#motions.add(this)
-      else this.#motions.remove(this)
+    if (ticking !== this.owner.has(this)) {
+      if (ticking) this.owner.add(this)
+      else this.owner.remove(this)
     }
 
     const reducible = this.#reduces && !this.#disposed && (moving || this.#held)
     if (reducible !== this.#reducible) {
       this.#reducible = reducible
-      if (reducible) this.#motions.reducible.add(this)
-      else this.#motions.reducible.delete(this)
+      if (reducible) this.owner.reducible.add(this)
+      else this.owner.reducible.delete(this)
     }
 
     if (moving !== this.#running) {

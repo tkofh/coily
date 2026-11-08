@@ -29,16 +29,18 @@ export interface LinearEasingOptions {
    */
   readonly displacement?: number
   /**
-   * The largest output error allowed in the piecewise-linear
-   * approximation, in progress units (0 at the start, 1 at the target). A
-   * smaller value keeps more stops.
+   * The largest output error allowed in the emitted easing, in progress
+   * units (0 at the start, 1 at the target), counting simplification and
+   * rounding of the stops. A smaller value keeps more stops at more
+   * decimal places. Must be greater than 0.
    * @default 0.0025
    */
   readonly maxError?: number
   /**
    * The longest duration to generate, in ms. It cuts off configs with so
    * little damping (friction) that they take very long to settle. A
-   * `'loop'` easing ignores the cap and lasts one half period.
+   * `'loop'` easing ignores the cap and lasts one half period. Must be
+   * finite and greater than 0.
    * @default 10000
    */
   readonly maxDuration?: number
@@ -51,7 +53,13 @@ interface EasingBase {
   readonly duration: number
   /** Number of stops in the easing (diagnostic). */
   readonly stops: number
-  /** The largest error of `easing` against the dense samples (diagnostic). */
+  /**
+   * The largest error of `easing`, as written, against the spring's exact
+   * curve, in progress units (diagnostic). It counts rounding of the
+   * stops and is measured at twice the density the easing was fit at, so
+   * it includes error between the fitted samples. Within the requested
+   * `maxError` unless that budget needs more than 400,000 samples.
+   */
   readonly maxError: number
 }
 
@@ -78,6 +86,11 @@ export type LinearEasing = SettlingEasing | LoopingEasing
 interface Point {
   x: number // input fraction, 0..1
   y: number // progress (output), 0 -> 1, may exceed 1 on overshoot
+  /**
+   * The left limit at a step: a stop the fit keeps, but no input reads,
+   * since `linear()` returns the later of two stops at one position.
+   */
+  limit?: boolean
 }
 
 function pickSolver(config: SpringDefinition, state: State) {
@@ -91,46 +104,78 @@ function pickSolver(config: SpringDefinition, state: State) {
   return solver
 }
 
-// Walks the real solver over `spanSec`, sampling (input-fraction, progress).
-// `scale` maps displacement to progress: 1 for a settle (target-relative,
-// overshoots past 1), 0.5 for a loop (full-swing-relative, lands on 1 at the
-// far extreme). With `stopAtRest`, it stops early once the state rests.
+// Walks the real solver over `spanSec` in steps of `dt` seconds, sampling
+// (input-fraction, progress). `scale` maps displacement to progress: 1 for
+// a settle (target-relative, overshoots past 1), 0.5 for a loop
+// (full-swing-relative, lands on 1 at the far extreme).
 function walk(
   config: SpringDefinition,
   displacement: number,
   spanSec: number,
   scale: number,
-  stopAtRest: boolean,
-  velocity = 0,
+  velocity: number,
+  dt: number,
 ): Point[] {
   const state = new State(config, displacement, velocity)
   const solver = pickSolver(config, state)
-
-  // Resolve oscillation and early curvature: a fraction of the natural
-  // period, and enough samples across the span for the loop's short window.
-  const period = (2 * Math.PI) / config.naturalFrequency
-  const dt = Math.max(1e-4, Math.min(period / 48, spanSec / 160))
 
   const points: Point[] = [{ x: 0, y: 0 }]
   let t = 0
   // Advance by the clamped step so the final sample lands exactly on the
   // span instead of overshooting into a near-duplicate stop.
-  while (spanSec - t > 1e-9) {
+  while (spanSec - t > 1e-12 * spanSec) {
     const step = Math.min(dt, spanSec - t)
     solver.tick(step)
     t += step
     points.push({ x: t / spanSec, y: (1 - state.position / displacement) * scale })
-    if (stopAtRest && state.isResting) break
   }
+  points[points.length - 1]!.x = 1
   return points
 }
 
-function buildEasing(points: ReadonlyArray<Point>, maxError: number) {
-  const simplified = simplify(points, maxError)
-  return {
-    easing: format(simplified),
-    stops: simplified.length,
-    maxError: reconstructionError(points, simplified),
+// The sample count past which tightening stops. The base step alone stays
+// under it for the default 10 s cap.
+const MAX_SAMPLES = 400_000
+
+// The first sampling step, in seconds: a fraction of the natural period
+// for oscillation and early curvature, and at least 160 samples across
+// the span, with no absolute floor so short easings keep their shape.
+function baseStep(config: SpringDefinition, spanSec: number): number {
+  const period = (2 * Math.PI) / config.naturalFrequency
+  return Math.max(spanSec / 1e5, Math.min(period / 48, spanSec / 160))
+}
+
+/**
+ * Fits a `linear()` easing to a curve within `maxError`, counting every
+ * source of error in the string it returns: Douglas-Peucker simplification,
+ * the curve's bend between samples, and rounding of stop values and
+ * percentages. The curve is sampled at twice the fitting density, and the
+ * serialized stops are measured against those samples. A fit over budget
+ * retries with a halved step, a halved simplification tolerance, and one
+ * more decimal place, until it fits or reaches `MAX_SAMPLES`.
+ */
+function fitEasing(
+  sample: (dt: number) => Point[],
+  dt: number,
+  maxError: number,
+): Pick<EasingBase, 'easing' | 'stops' | 'maxError'> {
+  // Half the budget simplifies. Serialization and the bend between
+  // samples share the rest.
+  let epsilon = maxError / 2
+  let valuePlaces = Math.max(5, Math.ceil(Math.log10(4 / maxError)))
+  for (;;) {
+    const fine = sample(dt / 2)
+    // The last two samples stay: they are the step onto the target.
+    const coarse = fine.filter((_, i) => i % 2 === 0 || i >= fine.length - 2)
+    const simplified = simplify(coarse, epsilon)
+    const stops = round(simplified, valuePlaces, percentPlaces(simplified, maxError))
+    const error = polylineError(fine, stops)
+    if (error <= maxError || fine.length * 2 > MAX_SAMPLES) {
+      return { easing: format(stops), stops: stops.length, maxError: error }
+    }
+    dt /= 2
+    epsilon /= 2
+    valuePlaces++
   }
 }
 
@@ -141,20 +186,22 @@ function buildSettle(
   maxError: number,
   velocity = 0,
 ): SettlingEasing {
-  const points = walk(config, displacement, durationMs / 1000, 1, true, velocity)
-
-  // Rest is a fixpoint, so the tail lands exactly on the target. An
-  // oscillating spring can rest up to one pulse before the time bound, so
-  // an early stop pads a flat segment out to the reported duration.
-  const last = points[points.length - 1]!
-  if (1 - last.x > 1e-6) {
+  const span = durationMs / 1000
+  const sample = (dt: number) => {
+    const points = walk(config, displacement, span, 1, velocity, dt)
+    // The duration bounds the rest, where a live spring snaps onto its
+    // target, so the easing steps there: two stops at 100%, which rounds
+    // exactly. The curve before it follows the unsnapped motion, which a
+    // live spring can cut short up to a pulse early, inside the threshold.
+    points[points.length - 1]!.limit = true
     points.push({ x: 1, y: 1 })
-  } else {
-    last.x = 1
-    last.y = 1
+    return points
   }
-
-  return { mode: 'settle', duration: durationMs, ...buildEasing(points, maxError) }
+  return {
+    mode: 'settle',
+    duration: durationMs,
+    ...fitEasing(sample, baseStep(config, span), maxError),
+  }
 }
 
 function buildLoop(
@@ -163,19 +210,21 @@ function buildLoop(
   maxError: number,
 ): LoopingEasing {
   const halfSec = Math.PI / config.naturalFrequency
-  const points = walk(config, displacement, halfSec, 0.5, false)
-
-  // The far swing extreme is exactly 1 by construction. Snap off cos residue.
-  const last = points[points.length - 1]!
-  last.x = 1
-  last.y = 1
+  const sample = (dt: number) => {
+    const points = walk(config, displacement, halfSec, 0.5, 0, dt)
+    // The far swing extreme is exactly 1 by construction. Snap off cos residue.
+    const last = points[points.length - 1]!
+    last.x = 1
+    last.y = 1
+    return points
+  }
 
   return {
     mode: 'loop',
     duration: halfSec * 1000,
     direction: 'alternate',
     iterations: 'infinite',
-    ...buildEasing(points, maxError),
+    ...fitEasing(sample, baseStep(config, halfSec), maxError),
   }
 }
 
@@ -215,36 +264,68 @@ function simplify(points: ReadonlyArray<Point>, epsilon: number): Point[] {
   return points.filter((_, i) => keep[i])
 }
 
-function trim(value: number, places: number): string {
-  return Number(value.toFixed(places)).toString()
+// Percent decimals that keep rounding a stop's position within an eighth
+// of the budget on the steepest segment, and at least 2.
+function percentPlaces(points: readonly Point[], maxError: number): number {
+  let slope = 0
+  for (let i = 1; i < points.length; i++) {
+    const dx = points[i]!.x - points[i - 1]!.x
+    if (dx > 0) slope = Math.max(slope, Math.abs(points[i]!.y - points[i - 1]!.y) / dx)
+  }
+  // A position rounds by up to 0.5 * 10^-(places + 2) of the input.
+  const needed = Math.ceil(Math.log10((4 * slope) / maxError)) - 2
+  return Number.isFinite(needed) ? Math.max(2, needed) : 2
 }
 
-function format(points: ReadonlyArray<Point>): string {
-  const stops = points.map((point, i) => {
-    const output = trim(point.y, 5)
-    // The browser infers 0% for the first stop and 100% for the last.
-    if (i === 0 || i === points.length - 1) return output
-    return `${output} ${trim(point.x * 100, 2)}%`
+function trim(value: number, places: number): number {
+  return Number(value.toFixed(places))
+}
+
+// The stops exactly as `format` writes them. The browser infers the first
+// stop at 0% and the last at 100%.
+function round(points: readonly Point[], valuePlaces: number, percentPlaces: number): Point[] {
+  return points.map((point, i) => ({
+    x: i === 0 ? 0 : i === points.length - 1 ? 1 : trim(point.x * 100, percentPlaces) / 100,
+    y: trim(point.y, valuePlaces),
+  }))
+}
+
+function format(stops: readonly Point[]): string {
+  const parts = stops.map((stop, i) => {
+    const output = String(stop.y)
+    if (i === 0 || i === stops.length - 1) return output
+    // toPrecision drops the binary residue of dividing by 100 in `round`.
+    return `${output} ${Number((stop.x * 100).toPrecision(12))}%`
   })
-  return `linear(${stops.join(', ')})`
+  return `linear(${parts.join(', ')})`
 }
 
-// Worst output error of the simplified polyline against the dense samples.
-function reconstructionError(
-  dense: ReadonlyArray<Point>,
-  simplified: ReadonlyArray<Point>,
-): number {
+// Worst output error of the stops' polyline against the samples. Stops
+// can share a position, where `linear()` steps to the later one.
+function polylineError(samples: readonly Point[], stops: readonly Point[]): number {
   let worst = 0
   let j = 0
-  for (const point of dense) {
-    while (j < simplified.length - 2 && simplified[j + 1]!.x < point.x) j += 1
-    const a = simplified[j]!
-    const b = simplified[j + 1]!
+  for (const point of samples) {
+    if (point.limit) continue
+    while (j < stops.length - 2 && stops[j + 1]!.x <= point.x) j += 1
+    const a = stops[j]!
+    const b = stops[j + 1]!
     const dx = b.x - a.x
-    const f = dx === 0 ? 0 : (point.x - a.x) / dx
+    const f = dx === 0 ? 1 : Math.min(1, Math.max(0, (point.x - a.x) / dx))
     worst = Math.max(worst, Math.abs(point.y - (a.y + f * (b.y - a.y))))
   }
   return worst
+}
+
+function resolveLimits(options: LinearEasingOptions) {
+  const maxError = options.maxError ?? 0.0025
+  const maxDuration = options.maxDuration ?? 10000
+  invariant(Number.isFinite(maxError) && maxError > 0, 'maxError must be a finite number > 0')
+  invariant(
+    Number.isFinite(maxDuration) && maxDuration > 0,
+    'maxDuration must be a finite number of ms > 0',
+  )
+  return { maxError, maxDuration }
 }
 
 /**
@@ -261,8 +342,11 @@ export function springToLinear(
   options: LinearEasingOptions = {},
 ): LinearEasing {
   const displacement = options.displacement ?? 1
-  const maxError = options.maxError ?? 0.0025
-  const maxDuration = options.maxDuration ?? 10000
+  invariant(
+    Number.isFinite(displacement) && displacement !== 0,
+    'displacement must be a finite, nonzero number',
+  )
+  const { maxError, maxDuration } = resolveLimits(options)
 
   // Undamped reflection never rests either, but the loop shape doesn't fit
   // it, so it falls through to the clamp.
@@ -292,8 +376,11 @@ export function springFromState(
   state: SpringState,
   options: LinearEasingOptions = {},
 ): LinearEasing {
-  const maxError = options.maxError ?? 0.0025
-  const maxDuration = options.maxDuration ?? 10000
+  const { maxError, maxDuration } = resolveLimits(options)
+  invariant(
+    Number.isFinite(state.position) && Number.isFinite(state.velocity),
+    'springFromState needs a finite position and velocity',
+  )
   invariant(
     Math.abs(state.position) > 1e-9,
     'springFromState needs a nonzero position (the value and target must differ)',

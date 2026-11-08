@@ -105,7 +105,7 @@ Chains advance in dependency order. Each frame, a spring moves after the springs
 
 Following is accurate within a frame, too. A follower moves against the path its leader traveled during the frame, not one value sampled at the frame boundary. Sometimes one frame carries more motion than the system's `couplingTolerance` allows, which is 0.1 value units by default. The system then splits that frame into internal sub-steps. Dropped frames and targets that jump get these sub-steps automatically, and update events still fire once per frame. As a result, a chain keeps the same shape at 30fps as at 120fps. See [PRECISION.md](https://github.com/tkofh/coily/blob/main/PRECISION.md) for the model.
 
-Follow graphs can contain cycles. A retarget emits no `update`, so nothing loops within a frame. Mutual followers converge to a shared value, and that value is the same at any frame rate. A cycle has no order that puts every member after its leaders. Its members advance in creation order, and the edge that closes the loop chases one frame behind. When the maps in a cycle push the values apart, such as `(v) => v + 10` in both directions, the springs chase forever and never rest. The system stays awake until you break the cycle.
+Follow graphs can contain cycles. A retarget emits no `update`, so nothing loops within a frame. Mutual followers converge to a shared value, which shifts slightly with the frame rate (see [PRECISION.md](https://github.com/tkofh/coily/blob/main/PRECISION.md)). A cycle has no order that puts every member after its leaders. Its members advance in creation order, and the edge that closes the loop chases one frame behind. When the maps in a cycle push the values apart, such as `(v) => v + 10` in both directions, the springs chase forever and never rest. The system stays awake until you break the cycle.
 
 ### Composites
 
@@ -240,6 +240,14 @@ A renderless `<SpringValue :target="n">` component exposes `{ value, velocity, i
 
 `useSpringPool()` is for imperative work: a changing set of springs that you create and dispose at any time, such as particles or per-item effects. It returns `createSpring` bound to the provided system. When the component's scope ends, the pool disposes every spring created through it, so no pooled spring outlives its component. You can still dispose a spring yourself before that.
 
+Pooled springs are class instances with private fields, which Vue's deep reactive proxies cannot reach. Keep them in a `shallowRef` or `shallowReactive`, or wrap each in `markRaw`, before storing them in reactive state:
+
+```ts
+const pool = useSpringPool()
+const particles = shallowRef<Spring[]>([])
+particles.value = [...particles.value, pool.createSpring(0)]
+```
+
 ## Nuxt
 
 ```ts
@@ -252,7 +260,7 @@ export default defineNuxtConfig({
 })
 ```
 
-The module provides one spring system for the whole app and starts it on the client. It auto-imports `useSpring`, `useRamp`, `useSpringSystem`, `useSpringPool`, `defineSpring`, `mapSpring`, `velocityOf`, `accelerationOf`, and `targetOf`, and registers the `SpringValue` component. The `coily` key also accepts the system options `fps`, `lagThreshold`, `adjustedLag`, and `couplingTolerance`.
+The module provides one spring system for the whole app and starts it on the client. With `reducedMotion: 'user'`, a server-rendered page hydrates exactly as the server rendered it, then applies the user's preference and starts animating. It auto-imports `useSpring`, `useRamp`, `useSpringSystem`, `useSpringPool`, `defineSpring`, `mapSpring`, `velocityOf`, `accelerationOf`, and `targetOf`, and registers the `SpringValue` component. The `coily` key also accepts the system options `fps`, `lagThreshold`, `adjustedLag`, and `couplingTolerance`.
 
 ## CSS
 

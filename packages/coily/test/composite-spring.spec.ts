@@ -844,3 +844,39 @@ describe('CompositeSpring: dispose', () => {
     expect(follower.value.x).toBeCloseTo(100, 0)
   })
 })
+
+describe('shape keys that strings alone cannot tell apart', () => {
+  test('a dotted key and a nested path keep their own purposes', () => {
+    const system = createSpringSystem({ reducedMotion: 'always' })
+    const spring = system.createSpring({ 'a.b': 0, a: { b: 0 } }, undefined, {
+      purpose: { 'a.b': 'nonmotion', a: { b: 'motion' } },
+    })
+    spring.target = { 'a.b': 10, a: { b: 10 } }
+    // The 'motion' channel snaps under reduced motion. The other animates.
+    expect(spring.value.a.b).toBe(10)
+    expect(spring.value['a.b']).toBe(0)
+  })
+
+  test('a parsed __proto__ channel stays an own channel of every mirror', () => {
+    const system = createSpringSystem({ reducedMotion: 'never' })
+    const shape = JSON.parse('{"__proto__": 1, "x": { "__proto__": 2 }}') as Record<string, never>
+    const spring = system.createSpring(shape)
+    for (const view of [spring.value, spring.target, spring.velocity]) {
+      expect(Object.keys(view)).toEqual(['__proto__', 'x'])
+      expect(Object.getPrototypeOf(view)).toBe(Object.prototype)
+    }
+    expect(JSON.stringify(spring.value)).toBe('{"__proto__":1,"x":{"__proto__":2}}')
+
+    spring.target = JSON.parse('{"__proto__": 5}')
+    for (let i = 0; i < 600 && !spring.isResting; i++) system.advance(16)
+    expect(Object.getOwnPropertyDescriptor(spring.value, '__proto__')?.value).toBe(5)
+  })
+
+  test('an array with holes is rejected with its path', () => {
+    const system = createSpringSystem()
+    // eslint-disable-next-line no-sparse-arrays
+    expect(() => system.createSpring({ list: [1, , 3] } as never)).toThrow(
+      "Invalid value at 'list.1': arrays must not have holes",
+    )
+  })
+})

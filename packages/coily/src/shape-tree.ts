@@ -4,6 +4,22 @@ function joinPath(path: string, key: string | number): string {
   return path ? `${path}.${key}` : String(key)
 }
 
+// `carrier[key] = value` on a plain object sets its prototype when the key
+// is `__proto__`, as a parsed JSON shape can have. A defined own property
+// keeps the channel, and later assignments write it.
+function setOwn(carrier: Record<string | number, unknown>, key: string | number, value: unknown) {
+  if (key === '__proto__') {
+    Object.defineProperty(carrier, key, {
+      value,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    })
+  } else {
+    carrier[key] = value
+  }
+}
+
 export function describePath(path: string): string {
   return path ? `'${path}'` : 'the root'
 }
@@ -141,7 +157,7 @@ export class LeafNode<L> implements ShapeTreeNode<L> {
     carrier: Record<string | number, unknown>,
     key: string | number,
   ): void {
-    carrier[key] = read(this.leaf)
+    setOwn(carrier, key, read(this.leaf))
     slots.push({ leaf: this.leaf, key, carrier })
   }
 
@@ -191,7 +207,7 @@ export class ListNode<L> implements ShapeTreeNode<L> {
     key: string | number,
   ): void {
     const mine: unknown[] = []
-    carrier[key] = mine
+    setOwn(carrier, key, mine)
     // Sound because every key written through this carrier is a number.
     const slotcarrier = mine as unknown as Record<string | number, unknown>
     for (let i = 0; i < this.children.length; i++) {
@@ -268,7 +284,7 @@ export class RecordNode<L> implements ShapeTreeNode<L> {
     key: string | number,
   ): void {
     const mine: Record<string, unknown> = {}
-    carrier[key] = mine
+    setOwn(carrier, key, mine)
     for (const [childKey, child] of this.children) {
       child.mirror(read, slots, mine, childKey)
     }
@@ -359,6 +375,12 @@ function buildContainer<L>(
 ): ShapeTreeNode<L> {
   if (isArray(shape)) {
     invariant(shape.length > 0, () => parser.empty(path))
+    for (let i = 0; i < shape.length; i++) {
+      invariant(
+        i in shape,
+        () => `Invalid value at '${joinPath(path, i)}': arrays must not have holes`,
+      )
+    }
     return new ListNode(
       shape.map((child, i) => buildChild(child, joinPath(path, i), parser, leaves)),
       path,

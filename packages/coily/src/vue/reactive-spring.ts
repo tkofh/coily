@@ -6,15 +6,27 @@ import {
   customRef,
   getCurrentScope,
   onScopeDispose,
+  toRaw,
   toValue,
   watchSyncEffect,
 } from 'vue'
 import { SpringDefinition, type SpringDefinitionOptions } from '../config.ts'
 import type { TargetedSource, TargetedSourceApi } from '../kinematic-source.ts'
-import { SpringSourceSymbol } from '../spring-source.ts'
+import { SpringSourceSymbol, isSpringSource } from '../spring-source.ts'
 import type { SpringSystem } from '../system.ts'
 import { injectLocal } from './local.ts'
 import { SpringSystemKey } from './system.ts'
+
+/**
+ * `toValue`, with a core source unwrapped from any Vue proxy. A `ref` or
+ * `reactive` container deep-proxies a `Spring` or `Ramp`, and their brand
+ * getters read private fields, which a proxy cannot reach. Plain shapes
+ * stay proxied, so effects still track their nested channels.
+ */
+export function toSourceValue<T>(target: MaybeRefOrGetter<T>): T {
+  const value = toValue(target)
+  return isSpringSource(value) ? toRaw(value) : value
+}
 
 /**
  * Config for a scalar `useSpring`: a `SpringDefinition`, any option shape
@@ -116,7 +128,7 @@ export function resolveSpringConfig(
 export function createReactiveSpringRef<V, W, C>(
   spring: SpringLike<V, W, C>,
   config: ComputedRef<C | undefined>,
-  instanceKey: symbol,
+  instanceKey: symbol | null,
 ): ReactiveSpringRef<V, W> {
   watchSyncEffect(() => {
     spring.config = config.value ?? null
@@ -200,7 +212,7 @@ export function createReactiveSpringRef<V, W, C>(
   Object.defineProperty(ref, 'settled', {
     get: () => spring.settled,
   })
-  Object.defineProperty(ref, instanceKey, { value: spring })
+  if (instanceKey !== null) Object.defineProperty(ref, instanceKey, { value: spring })
   // Followers get the backing spring's api, so their reads skip the
   // tracked getter.
   Object.defineProperty(ref, SpringSourceSymbol, { value: spring[SpringSourceSymbol] })

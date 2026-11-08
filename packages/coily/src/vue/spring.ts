@@ -1,6 +1,5 @@
-import { type MaybeRef, type MaybeRefOrGetter, toValue, watchSyncEffect } from 'vue'
+import { type MaybeRef, type MaybeRefOrGetter, watchSyncEffect } from 'vue'
 import type { CompositeSpring, Shape } from '../composite-spring.ts'
-import type { Spring } from '../spring.ts'
 import type { SpringOptions, CompositeSpringOptions } from '../system.ts'
 import { type SpringSource, SpringSourceSymbol, isSpringSource } from '../spring-source.ts'
 import {
@@ -9,6 +8,7 @@ import {
   createReactiveSpringRef,
   injectSpringSystem,
   resolveSpringConfig,
+  toSourceValue,
 } from './reactive-spring.ts'
 import {
   type AnyShape,
@@ -25,23 +25,13 @@ import {
  */
 export interface SpringRef extends ReactiveSpringRef<number> {}
 
-// Brands a SpringRef with its backing Spring, so useSpring(ref) can chain
-// from it without exposing the instance on the public type.
-const SpringInstanceKey = Symbol('spring')
-
-interface SpringRefWithInstance extends SpringRef {
-  readonly [SpringInstanceKey]: Spring
-}
-
-function hasSpringInstance(value: unknown): value is SpringRefWithInstance {
-  return typeof value === 'object' && value !== null && SpringInstanceKey in value
-}
-
 /**
  * Creates a scalar spring and returns it as a `SpringRef`. The target is
  * a number to animate toward or a `SpringSource` to follow (another
  * `useSpring` ref, a `mapSpring` result, or a pooled `Spring`), or a ref
- * or getter of either.
+ * or getter of either. A pooled `Spring` or `Ramp` inside a deep `ref` or
+ * `reactive` is followed through Vue's proxy, but hold it in a
+ * `shallowRef` or `markRaw` anyway: see `SpringPool`.
  *
  * A changed reactive number retargets the spring, which keeps its
  * momentum. A getter of a source re-follows when its own dependencies
@@ -138,17 +128,11 @@ export function useSpring(
   config?: unknown,
   options?: unknown,
 ): SpringRef | CompositeSpringRef<AnyShape> {
-  if (hasSpringInstance(target)) {
-    return createLinkedSpringRef(
-      target,
-      config as UseSpringConfig,
-      options as SpringOptions | undefined,
-    )
-  }
-  // A `RampRef` or `CompositeSpringRef` is also a ref. Unwrapping it would
-  // retarget to its value on every update instead of following it.
+  // A `SpringRef`, `RampRef`, or `CompositeSpringRef` is also a ref.
+  // Unwrapping it would retarget to its value on every update instead of
+  // following it.
   const follow = isSpringSource(target) ? () => target : (target as MaybeRefOrGetter<unknown>)
-  const resolved = toValue(follow)
+  const resolved = toSourceValue(follow)
   if (
     typeof resolved === 'number' ||
     (isSpringSource(resolved) && typeof resolved[SpringSourceSymbol].value === 'number')
@@ -177,29 +161,17 @@ function createSpringRef(
   const resolvedConfig = resolveSpringConfig(config)
   // A source starts the spring at rest on its current value. The effect
   // below attaches the follow.
-  const initial = toValue(target)
+  const initial = toSourceValue(target)
   const spring = system.createSpring(
     typeof initial === 'number' ? initial : initial[SpringSourceSymbol].value,
     resolvedConfig.value,
     options,
   )
-  const ref = createReactiveSpringRef(spring, resolvedConfig, SpringInstanceKey)
+  const ref = createReactiveSpringRef(spring, resolvedConfig, null)
 
   watchSyncEffect(() => {
-    spring.target = toValue(target)
+    spring.target = toSourceValue(target)
   })
 
   return ref
-}
-
-function createLinkedSpringRef(
-  leaderRef: SpringRefWithInstance,
-  config: UseSpringConfig | undefined,
-  options: SpringOptions | undefined,
-): SpringRef {
-  const system = injectSpringSystem()
-  const leader = leaderRef[SpringInstanceKey]
-  const resolvedConfig = resolveSpringConfig(config)
-  const spring = system.createSpring(leader, resolvedConfig.value, options)
-  return createReactiveSpringRef(spring, resolvedConfig, SpringInstanceKey)
 }

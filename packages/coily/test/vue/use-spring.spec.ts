@@ -1,7 +1,22 @@
 import { describe, expect, test } from 'vitest'
-import { defineComponent, h, nextTick, ref, watchEffect, watchSyncEffect } from 'vue'
+import {
+  defineComponent,
+  h,
+  nextTick,
+  reactive,
+  ref,
+  shallowRef,
+  watchEffect,
+  watchSyncEffect,
+} from 'vue'
 import { mount } from '@vue/test-utils'
-import { createSpringSystem, mapSpring, targetOf, velocityOf } from '../../src/index.ts'
+import {
+  type SpringSource,
+  createSpringSystem,
+  mapSpring,
+  targetOf,
+  velocityOf,
+} from '../../src/index.ts'
 import { SpringSystemKey } from '../../src/vue/system.ts'
 import { useSpring, type SpringRef } from '../../src/vue/spring.ts'
 import type { MaybeRefOrGetter } from 'vue'
@@ -440,5 +455,118 @@ describe('useSpring', () => {
     const valueAtUnmount = spring.value
     system.advance(16)
     expect(spring.value).toBe(valueAtUnmount)
+  })
+})
+
+describe('useSpring: core sources behind Vue proxies', () => {
+  function mountWith(system: ReturnType<typeof createSpringSystem>, setup: () => SpringRef) {
+    let follower!: SpringRef
+    mount(
+      defineComponent({
+        setup() {
+          follower = setup()
+          return {}
+        },
+        render: () => h('div'),
+      }),
+      { global: { provide: { [SpringSystemKey as symbol]: system } } },
+    )
+    return follower
+  }
+
+  const containers = {
+    ref: <T>(value: T) => {
+      const box = ref(value)
+      return () => box.value
+    },
+    shallowRef: <T>(value: T) => {
+      const box = shallowRef(value)
+      return () => box.value
+    },
+    'reactive getter': <T>(value: T) => {
+      const state = reactive({ leader: value })
+      return () => state.leader
+    },
+  }
+
+  for (const [kind, contain] of Object.entries(containers)) {
+    test(`follows a core spring in a ${kind}`, () => {
+      const system = createSpringSystem({ reducedMotion: 'never' })
+      const leader = system.createSpring(5)
+      const read = contain(leader)
+      const follower = mountWith(system, () => useSpring(read as () => SpringSource))
+      expect(follower.value).toBe(5)
+
+      leader.target = 50
+      for (let i = 0; i < 2000 && !(leader.isResting && follower.isResting.value); i++) {
+        system.advance(16)
+      }
+      expect(follower.value).toBe(50)
+    })
+
+    test(`follows a core ramp in a ${kind}`, () => {
+      const system = createSpringSystem({ reducedMotion: 'never' })
+      const ramp = system.createRamp(0, { rate: 1000, target: 40 })
+      const follower = mountWith(system, () => useSpring(contain(ramp) as never))
+      for (let i = 0; i < 2000 && !(ramp.isResting && follower.isResting.value); i++) {
+        system.advance(16)
+      }
+      expect(follower.value).toBe(40)
+    })
+  }
+
+  test('ref() holding a core spring follows instead of retargeting per frame', () => {
+    const system = createSpringSystem({ reducedMotion: 'never' })
+    const raw = system.createSpring(0)
+    const leader = ref(raw)
+    let reads = 0
+    const follower = mountWith(system, () =>
+      useSpring(() => {
+        reads++
+        return leader.value
+      }),
+    )
+    const before = reads
+    // Core methods read private fields, so writes go through the raw spring.
+    raw.target = 100
+    for (let i = 0; i < 2000 && !(raw.isResting && follower.isResting.value); i++) {
+      system.advance(16)
+    }
+    expect(reads).toBe(before)
+    expect(follower.value).toBe(100)
+  })
+
+  test('a getter switches between proxied core leaders', () => {
+    const system = createSpringSystem({ reducedMotion: 'never' })
+    const state = reactive({ a: system.createSpring(10), b: system.createSpring(20) })
+    const second = ref(false)
+    const follower = mountWith(system, () => useSpring(() => (second.value ? state.b : state.a)))
+    expect(follower.value).toBe(10)
+    second.value = true
+    for (let i = 0; i < 2000 && !follower.isResting.value; i++) system.advance(16)
+    expect(follower.value).toBe(20)
+  })
+
+  test('a ref of a core composite is followed channel by channel', () => {
+    const system = createSpringSystem({ reducedMotion: 'never' })
+    const raw = system.createSpring({ x: 1, y: 2 })
+    const leader = ref(raw)
+    let follower!: { value: { x: number; y: number }; isResting: { value: boolean } }
+    mount(
+      defineComponent({
+        setup() {
+          // `ref` unwraps the composite's type into a plain object type.
+          follower = useSpring((() => leader.value) as never) as never
+          return {}
+        },
+        render: () => h('div'),
+      }),
+      { global: { provide: { [SpringSystemKey as symbol]: system } } },
+    )
+    raw.target = { x: 10, y: 20 }
+    for (let i = 0; i < 2000 && !(raw.isResting && follower.isResting.value); i++) {
+      system.advance(16)
+    }
+    expect(follower.value).toEqual({ x: 10, y: 20 })
   })
 })

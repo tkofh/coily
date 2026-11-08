@@ -4,6 +4,7 @@ export {
   type SpringSystemOptions,
   type SpringOptions,
   type CompositeSpringOptions,
+  type ReducedMotionMode,
 } from './system.ts'
 export type { Spring, SpringTarget, Purpose } from './spring.ts'
 export type { Ramp, RampOptions } from './ramp.ts'

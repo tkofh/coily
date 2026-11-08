@@ -495,3 +495,102 @@ describe("reduced motion: 'user' media query", () => {
     expect(spring.value).toBeLessThan(100)
   })
 })
+
+describe('reduced motion: changing the mode', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function stubQuery(matches: boolean) {
+    const listeners = new Set<(event: { matches: boolean }) => void>()
+    vi.stubGlobal('window', {
+      matchMedia: () => ({
+        matches,
+        addEventListener: (_: string, l: (event: { matches: boolean }) => void) => listeners.add(l),
+        removeEventListener: (_: string, l: (event: { matches: boolean }) => void) =>
+          listeners.delete(l),
+      }),
+    })
+    return {
+      listeners,
+      set(next: boolean) {
+        for (const listener of listeners) listener({ matches: next })
+      },
+    }
+  }
+
+  test("'always' finishes in-flight motion, and 'never' animates again", () => {
+    const system = createSpringSystem({ reducedMotion: 'never' })
+    const spring = system.createSpring(0, config)
+    const stops = vi.fn()
+    spring.onStop(stops)
+    spring.target = 100
+    system.advance(16)
+
+    system.reducedMotion = 'always'
+    expect(system.reducedMotion).toBe(true)
+    expect(spring.value).toBe(100)
+    expect(stops).toHaveBeenCalledOnce()
+
+    system.reducedMotion = 'never'
+    spring.target = 0
+    expect(spring.value).toBe(100)
+    system.advance(16)
+    expect(spring.value).toBeLessThan(100)
+    expect(spring.value).toBeGreaterThan(0)
+  })
+
+  test("an endless ramp holds under 'always' and resumes under 'never'", () => {
+    const system = createSpringSystem({ reducedMotion: 'never' })
+    const ramp = system.createRamp(0, { rate: 100, target: Infinity })
+    system.advance(1000)
+    system.reducedMotion = 'always'
+    system.advance(1000)
+    expect(ramp.value).toBe(100)
+    system.reducedMotion = 'never'
+    system.advance(1000)
+    expect(ramp.value).toBe(200)
+  })
+
+  test("'user' reads the preference and follows it until the mode changes", () => {
+    const query = stubQuery(true)
+    const system = createSpringSystem({ reducedMotion: 'never' })
+    expect(query.listeners.size).toBe(0)
+
+    system.reducedMotion = 'user'
+    expect(system.reducedMotion).toBe(true)
+    expect(query.listeners.size).toBe(1)
+    query.set(false)
+    expect(system.reducedMotion).toBe(false)
+
+    // Leaving 'user' stops listening, so the OS no longer overrides it.
+    system.reducedMotion = 'always'
+    expect(query.listeners.size).toBe(0)
+    query.set(false)
+    expect(system.reducedMotion).toBe(true)
+
+    // Re-entering 'user' never stacks listeners.
+    system.reducedMotion = 'user'
+    system.reducedMotion = 'user'
+    expect(query.listeners.size).toBe(1)
+    system.dispose()
+    expect(query.listeners.size).toBe(0)
+  })
+
+  test("'user' without a window means no reduced motion", () => {
+    const system = createSpringSystem({ reducedMotion: 'always' })
+    system.reducedMotion = 'user'
+    expect(system.reducedMotion).toBe(false)
+  })
+
+  test('rejects an unknown mode and any change after dispose', () => {
+    const system = createSpringSystem()
+    expect(() => {
+      system.reducedMotion = 'sometimes' as never
+    }).toThrow("reducedMotion must be 'user', 'always', or 'never'")
+    system.dispose()
+    expect(() => {
+      system.reducedMotion = 'always'
+    }).toThrow('Cannot change reducedMotion on a disposed spring system')
+  })
+})

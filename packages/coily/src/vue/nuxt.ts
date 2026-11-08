@@ -1,5 +1,6 @@
 import { addComponent, addImports, addPluginTemplate, defineNuxtModule } from '@nuxt/kit'
 import type { NuxtModule } from '@nuxt/schema'
+import type { ReducedMotionMode } from '../system.ts'
 
 /**
  * Options for the `coily` key in `nuxt.config`, passed to the app-wide
@@ -41,10 +42,12 @@ export interface CoilyModuleOptions {
   /**
    * When springs snap to their targets instead of animating. `'user'`
    * follows the OS prefers-reduced-motion setting, including live
-   * changes. `'always'` and `'never'` force one behavior.
+   * changes. `'always'` and `'never'` force one behavior. Under `'user'`,
+   * a server-rendered page hydrates without the preference, as the server
+   * rendered it, and applies it once hydration finishes.
    * @default 'user'
    */
-  reducedMotion?: 'user' | 'always' | 'never'
+  reducedMotion?: ReducedMotionMode
 }
 
 function getPluginTemplate(options: CoilyModuleOptions) {
@@ -55,19 +58,35 @@ function getPluginTemplate(options: CoilyModuleOptions) {
   if (options.adjustedLag !== undefined) systemOptions.adjustedLag = options.adjustedLag
   if (options.couplingTolerance !== undefined)
     systemOptions.couplingTolerance = options.couplingTolerance
-  if (options.reducedMotion) systemOptions.reducedMotion = options.reducedMotion
-
-  const args = Object.keys(systemOptions).length > 0 ? JSON.stringify(systemOptions) : ''
+  const mode = JSON.stringify(options.reducedMotion ?? 'user')
 
   return `import { createSpringSystem } from 'coily'
 import { provideSpringSystem } from 'coily/vue'
 
 export default defineNuxtPlugin((nuxtApp) => {
   nuxtApp.hook('app:created', (vueApp) => {
-    const system = createSpringSystem(${args})
+    const mode = ${mode}
+    // The server reads no reduced-motion preference, so hydration must not
+    // either, or a ramp or retarget would render a different first value.
+    // The system holds still until hydration ends, then takes the mode.
+    const hydrating = import.meta.client && nuxtApp.isHydrating && mode === 'user'
+    const system = createSpringSystem({ ...${JSON.stringify(systemOptions)}, reducedMotion: hydrating ? 'never' : mode })
     provideSpringSystem(system, vueApp)
+    // The app owns the system: its ticker and its visibility and
+    // reduced-motion listeners end with it, including on a dev reload.
+    let unmounted = false
+    vueApp.onUnmount(() => {
+      unmounted = true
+      system.dispose()
+    })
 
-    if(import.meta.client) {
+    if (hydrating) {
+      nuxtApp.hooks.hookOnce('app:suspense:resolve', () => {
+        if (unmounted) return
+        system.reducedMotion = mode
+        system.start()
+      })
+    } else if (import.meta.client) {
       system.start()
     }
   })
@@ -75,9 +94,9 @@ export default defineNuxtPlugin((nuxtApp) => {
 }
 
 /**
- * The Nuxt module. It creates one spring system for the app and starts
- * it on the client only, so server rendering shows springs at their
- * initial values. The module auto-imports
+ * The Nuxt module. It creates one spring system for the app, starts it
+ * on the client only, so server rendering shows springs at their initial
+ * values, and disposes it when the app unmounts. The module auto-imports
  * `useSpring`, `useRamp`, `useSpringSystem`, `useSpringPool`,
  * `defineSpring`, `mapSpring`, `velocityOf`, `accelerationOf`, and
  * `targetOf`, and registers the `SpringValue` component. It does not

@@ -14,7 +14,7 @@ import { Spring, type Purpose } from './spring.ts'
 import { type SpringSource, SpringSourceSymbol, isSpringSource } from './spring-source.ts'
 import type { TargetedSource, TargetedSourceApi } from './kinematic-source.ts'
 import { registerBacking } from './follow-graph.ts'
-import { invariant, isNumber, isRecordOrArray, RESOLVED } from './util.ts'
+import { NO_ERROR, invariant, isNumber, isRecordOrArray, joinErrors, RESOLVED } from './util.ts'
 
 /**
  * Compile-time validation of a value shape: every channel must be a `number`,
@@ -214,19 +214,30 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
   readonly #flush = () => {
     if (this.#disposed) return
 
+    // A throwing update listener must not skip the lifecycle below: the
+    // channels have already settled, and no later flush would reconcile.
+    let error: unknown = NO_ERROR
     if (this.#dirty) {
       this.#dirty = false
-      this.#emitter.emit('update')
+      try {
+        this.#emitter.emit('update')
+      } catch (caught) {
+        error = caught
+      }
     }
 
-    if (this.#running) {
-      if (this.isResting) {
-        this.#running = false
-        this.#emitter.emit('stop')
+    try {
+      if (this.#running) {
+        if (this.isResting) {
+          this.#running = false
+          this.#emitter.emit('stop')
+        }
+      } else if (!this.isResting) {
+        this.#running = true
+        this.#emitter.emit('start')
       }
-    } else if (!this.isResting) {
-      this.#running = true
-      this.#emitter.emit('start')
+    } catch (caught) {
+      error = joinErrors(error, caught)
     }
 
     // Leaving rest and returning within one batch emits neither `start` nor
@@ -237,6 +248,7 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
       this.#resolveSettled = null
       resolve()
     }
+    if (error !== NO_ERROR) throw error
   }
 
   constructor(
@@ -253,24 +265,27 @@ export class CompositeSpring<in out T extends object> implements TargetedSource<
     )
 
     // A channel's purpose has no setter, so it must resolve per channel
-    // before the springs exist. A throwaway tree of channel paths reuses
-    // `broadcast`'s cover, descend, and validation logic.
-    let purposeByPath: Map<string, Purpose> | null = null
+    // before the springs exist. A throwaway tree of leaf indices reuses
+    // `broadcast`'s cover, descend, and validation logic. Both trees parse
+    // `value` in the same depth-first order, so an index names one channel
+    // where a dot path can name two (`{ 'a.b': 0, a: { b: 0 } }`).
+    let purposes: Purpose[] | null = null
     if (purpose !== undefined) {
-      const byPath = new Map<string, Purpose>()
-      const paths = new ShapeTree(
+      const byLeaf: Purpose[] = []
+      let next = 0
+      const indices = new ShapeTree(
         value,
-        channelParser((_leafValue, path) => path),
+        channelParser(() => next++),
       )
-      paths.root.broadcast(purpose, resolvePurposeNode, (path, p) => byPath.set(path, p), 'purpose')
-      purposeByPath = byPath
+      indices.root.broadcast(purpose, resolvePurposeNode, (i, p) => (byLeaf[i] = p), 'purpose')
+      purposes = byLeaf
     }
 
+    let leaf = 0
     this.#tree = new ShapeTree(
       value,
       channelParser(
-        (leafValue, path) =>
-          new Spring(motions, leafValue, undefined, purposeByPath?.get(path) ?? 'motion'),
+        (leafValue) => new Spring(motions, leafValue, undefined, purposes?.[leaf++] ?? 'motion'),
       ),
     )
     if (config !== undefined) {

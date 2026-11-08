@@ -12,6 +12,42 @@ import type { State } from './state.ts'
 // velocity by `arrival`, re-anchors, and spends the rest of the step. A
 // tick that rests at a crossing ends there, leaving `SpringMotion` to snap.
 
+// First crossings, shared with `computeTimeRemaining` so the solvers and
+// the estimate cannot disagree about when a motion reaches its target.
+// Each takes the anchor constants of its regime's solver below.
+
+/**
+ * The first zero of c1*cos(u) + c2*sin(u) in (0, pi]: u = atan(-c1/c2),
+ * moved up by pi when not positive. Not atan2(-c1, c2) reduced mod pi:
+ * a root a hair past -pi rounds to -pi exactly, and the reduction then
+ * loses it to a whole half period. An anchor on the target (c1 = 0)
+ * yields pi, the return crossing.
+ */
+export function underdampedCrossingAngle(c1: number, c2: number): number {
+  const u = Math.atan(-c1 / c2)
+  return u > 0 ? u : u + Math.PI
+}
+
+/**
+ * The root of c1 + c2*t in seconds when strictly future, else Infinity.
+ * NaN (an anchor at rest) fails the test too.
+ */
+export function criticalCrossing(c1: number, c2: number): number {
+  const t = -c1 / c2
+  return t > 0 ? t : Infinity
+}
+
+/**
+ * The u = wd*t where c1*sinh(u) + c2*cosh(u) crosses zero, tanh(u) =
+ * -c2/c1, when strictly future: only when the velocity term dominates
+ * with the opposite sign. Otherwise atanh yields NaN or <= 0, and the
+ * result is Infinity.
+ */
+export function overdampedCrossingAngle(c1: number, c2: number): number {
+  const u = Math.atanh(-c2 / c1)
+  return u > 0 ? u : Infinity
+}
+
 /** dampingRatio < 1: decaying oscillation, x(t) = exp(-sigma*t) * (c1*cos(wd*t) + c2*sin(wd*t)). */
 export class UnderdampedSolver {
   #state: State
@@ -39,17 +75,12 @@ export class UnderdampedSolver {
     this.#c2 =
       (this.#state.velocity + this.#decayRate * this.#state.position) / this.#dampedFrequency
 
-    if (this.#arrival === 1) {
-      this.#crossing = Infinity
-    } else {
-      // Zeros of c1*cos(wd*t) + c2*sin(wd*t) fall at wd*t = atan2(-c1, c2)
-      // (mod pi), and the first lies in (0, pi]. An anchor on the target
-      // (c1 = 0) yields pi, the return crossing, so a spring flung from
-      // its target departs before arrival applies.
-      let theta = Math.atan2(-this.#c1, this.#c2) % Math.PI
-      if (theta <= 0) theta += Math.PI
-      this.#crossing = theta / this.#dampedFrequency
-    }
+    // A spring flung from its target crosses next on its return, so it
+    // departs before arrival applies.
+    this.#crossing =
+      this.#arrival === 1
+        ? Infinity
+        : underdampedCrossingAngle(this.#c1, this.#c2) / this.#dampedFrequency
   }
 
   tick(dt: number) {
@@ -112,15 +143,9 @@ export class CriticallyDampedSolver {
     this.#c1 = this.#state.position
     this.#c2 = this.#state.velocity + this.#naturalFrequency * this.#state.position
 
-    if (this.#arrival === 1) {
-      this.#crossing = Infinity
-    } else {
-      // (c1 + c2*t) has one root, -c1/c2, strictly future only when the
-      // velocity opposes the displacement hard enough to punch through.
-      // NaN (an anchor at rest) compares false and becomes Infinity.
-      const t = -this.#c1 / this.#c2
-      this.#crossing = t > 0 ? t : Infinity
-    }
+    // Strictly future only when the velocity opposes the displacement
+    // hard enough to punch through.
+    this.#crossing = this.#arrival === 1 ? Infinity : criticalCrossing(this.#c1, this.#c2)
   }
 
   tick(dt: number) {
@@ -155,8 +180,8 @@ export class CriticallyDampedSolver {
   }
 }
 
-/** The `wd * t` past which `OverdampedSolver` evaluates only its slow mode. */
-const TAIL = 20
+/** The `wd * t` past which overdamped motion evaluates only its slow mode. */
+export const TAIL = 20
 
 /** dampingRatio > 1: slow non-oscillating decay, x(t) = exp(-sigma*t) * (c1*sinh(wd*t) + c2*cosh(wd*t)) / wd. */
 export class OverdampedSolver {
@@ -164,6 +189,8 @@ export class OverdampedSolver {
 
   #dampedFrequency = 0
   #decayRate = 0
+  /** wd - sigma, negative. */
+  #slowRate = 0
   #arrival = 1
   #t = 0
   #c1 = 0
@@ -178,22 +205,20 @@ export class OverdampedSolver {
     if (config) {
       this.#decayRate = config.dampingRatio * config.naturalFrequency
       this.#dampedFrequency = config.naturalFrequency * Math.sqrt(config.dampingRatio ** 2 - 1)
+      // Rationalized, since sigma^2 - wd^2 = wn^2: the plain difference
+      // cancels to 0 near a ratio of 1e8 and freezes the spring.
+      const wn = config.naturalFrequency
+      this.#slowRate = -wn * (wn / (this.#decayRate + this.#dampedFrequency))
       this.#arrival = config.arrival
     }
     this.#t = 0
     this.#c1 = this.#state.velocity + this.#decayRate * this.#state.position
     this.#c2 = this.#state.position * this.#dampedFrequency
 
-    if (this.#arrival === 1) {
-      this.#crossing = Infinity
-    } else {
-      // c1*sinh(wd*t) + c2*cosh(wd*t) crosses zero where
-      // tanh(wd*t) = -c2/c1, strictly future only when the velocity term
-      // dominates with the opposite sign. Otherwise atanh yields NaN or
-      // <= 0, which becomes Infinity.
-      const theta = Math.atanh(-this.#c2 / this.#c1)
-      this.#crossing = theta > 0 ? theta / this.#dampedFrequency : Infinity
-    }
+    this.#crossing =
+      this.#arrival === 1
+        ? Infinity
+        : overdampedCrossingAngle(this.#c1, this.#c2) / this.#dampedFrequency
   }
 
   tick(dt: number) {
@@ -226,7 +251,7 @@ export class OverdampedSolver {
       // below an ulp, so the slow mode alone is exact and never overflows
       // the way sinh and cosh do near 710. It decays at sigma - wd, about
       // wn / (2 * dampingRatio), so a heavy spring reaches TAIL still moving.
-      const slowRate = wd - this.#decayRate
+      const slowRate = this.#slowRate
       const position = ((this.#c1 + this.#c2) / (2 * wd)) * Math.exp(slowRate * this.#t)
       this.#state.position = position
       this.#state.velocity = slowRate * position

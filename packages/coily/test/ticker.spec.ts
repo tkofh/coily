@@ -45,7 +45,7 @@ class FrameSource {
 
 /** A motion displaced far enough to stay active for the whole test. */
 function activeMotion() {
-  return new SpringMotion(SpringDefinition.default, 1e6, 0)
+  return new SpringMotion(new MotionSet(), SpringDefinition.default, 1e6, 0)
 }
 
 afterEach(() => {
@@ -407,7 +407,7 @@ describe('Ticker', () => {
     test('stops requesting frames once every motion rests', () => {
       const source = new FrameSource().install()
       const motions = new MotionSet()
-      motions.add(new SpringMotion(SpringDefinition.default, 1, 0))
+      motions.add(new SpringMotion(motions, SpringDefinition.default, 1, 0))
       const ticker = new Ticker(motions)
 
       ticker.start()
