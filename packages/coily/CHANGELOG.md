@@ -1,5 +1,114 @@
 # Change Log
 
+## 0.17.0
+
+### Minor Changes
+
+- d7f3b43: Duration configs near a `dampingRatio` of 1 rest at their `duration`. On
+  either side of 1, the tuning used a bound that loosened without limit, so
+  `{ duration: 500, dampingRatio: 1 + Number.EPSILON }` rested at 173 ms and
+  `0.9999` at 398 ms. Tuning and `timeRemaining` now use one bound that is
+  exact from rest at and above critical damping and continuous through 1.
+  Configs in that range move more softly than before. For overdamped springs,
+  `timeRemaining` reads closer to the actual rest time.
+- d7f3b43: `coily/css` easings meet their `maxError`, and the returned `maxError`
+  reports the error of the string as written.
+
+  - The budget now covers rounding of stop values and percentages and the
+    curve between samples. Tight budgets add stops and decimal places, and
+    very short durations keep their shape: a 0.1 ms spring returned
+    `linear(0, 1)` before. Most easings gain a few stops.
+  - A settling easing follows the spring to `duration`, then steps onto the
+    target at 100%, where a live spring snaps.
+  - `maxError` must be greater than 0, `maxDuration` finite and greater than
+    0, and `displacement` finite and nonzero. Each throws otherwise.
+
+- d7f3b43: A throwing listener no longer strands other listeners or a motion's
+  lifecycle.
+
+  - Every listener for an event runs, and every motion in a frame delivers
+    its events, even after one throws. `advance` then rethrows the error, or
+    an `AggregateError` of all of them, whose message leads with the first
+    error's.
+  - A spring, ramp, or composite whose last `update` listener throws still
+    emits `stop` and resolves `settled`. Before, it could rest with
+    `settled` pending forever.
+  - A follower that its leader wakes during a frame emits `start` after the
+    frame's motion, with the other events. Before, `start` fired mid-frame,
+    where a listener that disposed the follower made `advance` throw.
+  - Calling `advance` from a `mapSpring` callback or a `SpringSource` getter
+    throws. Listeners can still call it.
+
+- d7f3b43: `SpringSystem.reducedMotion` accepts a `ReducedMotionMode` (`'user'`,
+  `'always'`, or `'never'`) and applies it at once. Reads still return
+  whether reduced motion is on. Turning it on finishes in-flight motion, and
+  `'user'` starts following the OS setting. Use it for an in-app motion
+  setting, or to hydrate a server-rendered app: create the system with
+  `'never'`, mount, then assign `'user'`.
+
+  The Nuxt module does this for you. Under `'user'`, a server-rendered page
+  hydrates without the preference and without frames, as the server rendered
+  it, then applies the preference and starts. A ramp or retarget no longer
+  renders a different first value on a client that prefers reduced motion.
+
+- d7f3b43: `defineSpring` rejects inputs that resolve to unusable physics.
+
+  - `damping` must be greater than 0 in a config that derives tension or mass
+    from it: `{ damping, dampingRatio }`, `{ tension, damping, dampingRatio }`,
+    their `bounce` forms, and duration configs with `damping`. A damping of 0
+    derived a tension or mass of 0, and the spring's value became `NaN`.
+    `{ tension, damping: 0 }` still makes an undamped spring.
+  - Finite inputs whose derived mass, tension, frequency, or resting threshold
+    overflows or underflows throw, naming the parameter.
+
+### Patch Changes
+
+- d7f3b43: Assigning a config whose resting threshold already contains a spring's
+  remaining motion ends the motion at once, as `jumpTo` does: the value snaps
+  to the target and `update` and `stop` fire. Before, `isResting` and
+  `settled` reported rest while the value still differed from the target.
+- d7f3b43: A spring that follows a source from another `SpringSystem` now moves only
+  when its own system advances. It retargets from the source's updates, as
+  it would follow a custom `SpringSource`. Before, advancing the leader's
+  system could move the follower, and its own next frame jumped it back.
+- d7f3b43: Correct and extend the docs.
+
+  - `useSpringPool` and `useSpring` say to hold core springs and ramps in a
+    `shallowRef` or `shallowReactive`, or wrap them in `markRaw`. A deep
+    `ref` or `reactive` proxy cannot reach their private fields.
+  - Mutual followers settle on a shared value that shifts slightly with the
+    frame rate. The README said the value was the same at any frame rate.
+  - PRECISION.md separates closed-form evaluation, which has no integration
+    error, from floating-point evaluation error. It also describes the rest
+    time bounds now in use and states the conditions behind each accuracy
+    figure.
+
+- d7f3b43: A spring with a very large damping ratio keeps creeping toward its target.
+  Near a ratio of 1e8, its slow decay rate rounded to 0, which froze the
+  spring and made `timeRemaining` `Infinity`. Ratios from about 1e4 up also
+  gain accuracy.
+- d7f3b43: An `arrival` spring a hair from its target stops on it. With the target one
+  representable value away and velocity toward it, rounding pushed the
+  crossing a whole half period later: `'stop'` overshot visibly and a negative
+  `arrival` crossed instead of rebounding. The solvers and `timeRemaining` now
+  share one crossing calculation.
+- d7f3b43: The Nuxt module disposes its spring system when the app unmounts, so the
+  frame loop and the visibility and reduced-motion listeners end with the
+  app, including on a development reload.
+- d7f3b43: Composite shapes handle keys that their dot paths cannot tell apart.
+
+  - A key containing a dot no longer shares its `purpose` with the nested
+    path it spells: in `{ 'a.b': 0, a: { b: 0 } }`, each channel keeps its own.
+  - A `__proto__` key from parsed JSON stays an own channel of `value`,
+    `target`, and `velocity`, instead of setting the mirror's prototype.
+  - An array with holes throws with the hole's path.
+
+- d7f3b43: `useSpring` follows a core `Spring`, `Ramp`, or `CompositeSpring` held in a
+  `ref` or `reactive` container, or returned by a getter that reads one.
+  These threw a private-field error, because Vue's deep proxy cannot reach
+  the class's private fields. Writes to the core object still go through
+  the object itself rather than the proxy.
+
 ## 0.16.0
 
 ### Minor Changes
